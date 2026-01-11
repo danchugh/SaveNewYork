@@ -205,6 +205,42 @@ function checkCollisions() {
         }
     }
 
+    // Player projectiles vs mini-boss
+    if (enemyManager.miniBoss && enemyManager.miniBoss.active) {
+        for (const proj of playerProjectiles) {
+            if (!proj.active) continue;
+
+            const miniBoss = enemyManager.miniBoss;
+            const dist = Math.sqrt(
+                Math.pow(proj.x - miniBoss.x, 2) +
+                Math.pow(proj.y - miniBoss.y, 2)
+            );
+
+            if (dist < proj.radius + miniBoss.width / 2) {
+                proj.active = false;
+                miniBoss.takeDamage();
+                game.score += Math.floor(75 * DayCycle.getScoreMultiplier());
+                break;
+            }
+        }
+
+        // Player vs mini-boss
+        if (player.state === 'flying') {
+            const playerBounds = getPlayerBounds(player);
+            const miniBoss = enemyManager.miniBoss;
+            const miniBossBounds = {
+                x: miniBoss.x - miniBoss.width / 2,
+                y: miniBoss.y - miniBoss.height / 2,
+                width: miniBoss.width,
+                height: miniBoss.height
+            };
+
+            if (rectIntersects(playerBounds, miniBossBounds)) {
+                player.die();
+            }
+        }
+    }
+
     // Enemy projectiles vs player
     const enemyProjectiles = projectileManager.getEnemyProjectiles();
     if (player.state === 'flying') {

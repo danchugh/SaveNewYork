@@ -751,10 +751,280 @@ class Boss {
     }
 }
 
+class MiniBoss {
+    constructor(type) {
+        this.type = type;  // 'charger' or 'gunner'
+        this.x = CONFIG.CANVAS_WIDTH / 2;
+        this.y = CONFIG.SKY_TOP + 80;
+        this.width = 40;
+        this.height = 30;
+        this.health = 8;
+        this.maxHealth = 8;
+        this.active = true;
+
+        if (type === 'charger') {
+            this.speed = 120;
+            this.chargeTimer = 0;
+            this.chargeInterval = 3;
+            this.isCharging = false;
+            this.chargeTarget = null;
+        } else {
+            // gunner
+            this.speed = 60;
+            this.fireTimer = 0;
+            this.fireInterval = 0.3;
+            this.burstCount = 0;
+            this.maxBurst = 5;
+            this.burstCooldown = 0;
+        }
+
+        this.direction = 1;
+        this.swoopPhase = Math.random() * Math.PI * 2;
+    }
+
+    update(deltaTime, playerX, playerY, projectileManager) {
+        if (this.type === 'charger') {
+            this.updateCharger(deltaTime);
+        } else {
+            this.updateGunner(deltaTime, playerX, playerY, projectileManager);
+        }
+    }
+
+    updateCharger(deltaTime) {
+        if (this.isCharging && this.chargeTarget) {
+            // Move toward target building at 2x speed
+            const targetX = this.chargeTarget.x + this.chargeTarget.width / 2;
+            const targetY = this.chargeTarget.y;
+            const dx = targetX - this.x;
+            const dy = targetY - this.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 20) {
+                this.x += (dx / dist) * this.speed * 2 * deltaTime;
+                this.y += (dy / dist) * this.speed * 2 * deltaTime;
+            } else {
+                // Reached target - destroy top blocks in each column
+                SoundManager.miniBossRam();
+                const building = this.chargeTarget.building;
+                for (let col = 0; col < building.widthBlocks; col++) {
+                    // Find and destroy the top block in this column
+                    for (let row = 0; row < building.heightBlocks; row++) {
+                        if (building.blocks[row] && building.blocks[row][col]) {
+                            building.destroyBlock(row, col);
+                            break;
+                        }
+                    }
+                }
+                this.isCharging = false;
+                this.chargeTarget = null;
+                this.chargeTimer = 0;
+            }
+        } else {
+            // Normal swoop movement - figure-8 pattern
+            this.swoopPhase += deltaTime * 2;
+            const swoopX = Math.sin(this.swoopPhase) * 100 * deltaTime;
+            const swoopY = Math.sin(this.swoopPhase * 2) * 50 * deltaTime;
+
+            this.x += this.direction * this.speed * deltaTime + swoopX;
+            this.y += swoopY;
+
+            // Bounce off screen edges
+            if (this.x > CONFIG.CANVAS_WIDTH - 80) {
+                this.x = CONFIG.CANVAS_WIDTH - 80;
+                this.direction = -1;
+            } else if (this.x < 80) {
+                this.x = 80;
+                this.direction = 1;
+            }
+
+            // Keep in vertical bounds
+            if (this.y < CONFIG.SKY_TOP + 50) {
+                this.y = CONFIG.SKY_TOP + 50;
+            } else if (this.y > CONFIG.STREET_Y - 80) {
+                this.y = CONFIG.STREET_Y - 80;
+            }
+
+            // Charge timer
+            this.chargeTimer += deltaTime;
+            if (this.chargeTimer >= this.chargeInterval) {
+                // Pick random building to charge at
+                const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+                if (buildings.length > 0) {
+                    const targetBuilding = buildings[Math.floor(Math.random() * buildings.length)];
+                    // Find top of building
+                    let topRow = targetBuilding.heightBlocks;
+                    for (let row = 0; row < targetBuilding.heightBlocks; row++) {
+                        for (let col = 0; col < targetBuilding.widthBlocks; col++) {
+                            if (targetBuilding.blocks[row] && targetBuilding.blocks[row][col]) {
+                                topRow = Math.min(topRow, row);
+                                break;
+                            }
+                        }
+                    }
+                    const pos = targetBuilding.getBlockWorldPosition(topRow, Math.floor(targetBuilding.widthBlocks / 2));
+                    this.chargeTarget = {
+                        building: targetBuilding,
+                        x: pos.x,
+                        y: pos.y,
+                        width: pos.width
+                    };
+                    this.isCharging = true;
+                    SoundManager.miniBossCharge();
+                }
+            }
+        }
+    }
+
+    updateGunner(deltaTime, playerX, playerY, projectileManager) {
+        // Circular swoop pattern
+        this.swoopPhase += deltaTime * 1.5;
+        const centerX = CONFIG.CANVAS_WIDTH / 2;
+        const centerY = CONFIG.SKY_TOP + 120;
+        const radiusX = 200;
+        const radiusY = 60;
+
+        this.x = centerX + Math.cos(this.swoopPhase) * radiusX;
+        this.y = centerY + Math.sin(this.swoopPhase) * radiusY;
+
+        // Burst fire at player
+        if (this.burstCooldown > 0) {
+            this.burstCooldown -= deltaTime;
+        } else {
+            this.fireTimer += deltaTime;
+            if (this.fireTimer >= this.fireInterval) {
+                this.fireTimer = 0;
+                this.burstCount++;
+
+                // Fire at player
+                const angle = Math.atan2(playerY - this.y, playerX - this.x) * 180 / Math.PI;
+                projectileManager.add(this.x, this.y + 15, angle, 180, false);
+                SoundManager.miniBossShoot();
+
+                if (this.burstCount >= this.maxBurst) {
+                    this.burstCount = 0;
+                    this.burstCooldown = 2; // 2 second cooldown after burst
+                }
+            }
+        }
+    }
+
+    takeDamage() {
+        this.health--;
+        if (this.health <= 0) {
+            this.active = false;
+            SoundManager.miniBossDefeat();
+            return true; // Mini-boss defeated
+        }
+        SoundManager.miniBossHit();
+        return false;
+    }
+
+    render(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Body color based on type
+        const bodyColor = this.type === 'charger' ? '#dc2626' : '#7c3aed';
+        const wingColor = this.type === 'charger' ? '#ef4444' : '#a855f7';
+
+        // Wing flapping animation
+        const wingFlap = Math.sin(Date.now() / 100) * 10;
+
+        // Left wing
+        ctx.fillStyle = wingColor;
+        ctx.beginPath();
+        ctx.moveTo(-10, 0);
+        ctx.quadraticCurveTo(-25, -15 + wingFlap, -35, -8 + wingFlap);
+        ctx.quadraticCurveTo(-28, 3, -15, 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Right wing
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.quadraticCurveTo(25, -15 - wingFlap, 35, -8 - wingFlap);
+        ctx.quadraticCurveTo(28, 3, 15, 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Body (ellipse)
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.width / 2, this.height / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(-8, -5, 5, 0, Math.PI * 2);
+        ctx.arc(8, -5, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pupils (charger=black, gunner=red)
+        ctx.fillStyle = this.type === 'charger' ? '#000' : '#ef4444';
+        ctx.beginPath();
+        ctx.arc(-8, -5, 2.5, 0, Math.PI * 2);
+        ctx.arc(8, -5, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Type-specific features
+        if (this.type === 'charger') {
+            // Horns
+            ctx.fillStyle = '#991b1b';
+            ctx.beginPath();
+            ctx.moveTo(-10, -12);
+            ctx.lineTo(-15, -25);
+            ctx.lineTo(-5, -15);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(10, -12);
+            ctx.lineTo(15, -25);
+            ctx.lineTo(5, -15);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            // Gunner cannon below body
+            ctx.fillStyle = '#4b5563';
+            ctx.fillRect(-6, 10, 12, 10);
+            ctx.fillStyle = '#374151';
+            ctx.beginPath();
+            ctx.arc(0, 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+
+        // Health bar above
+        const barWidth = 60;
+        const barHeight = 6;
+        const barX = this.x - barWidth / 2;
+        const barY = this.y - 30;
+
+        ctx.fillStyle = '#333';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
+        ctx.fillStyle = '#fbbf24'; // Yellow fill
+        ctx.fillRect(barX, barY, barWidth * (this.health / this.maxHealth), barHeight);
+
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+        // "MINI-BOSS" label
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('MINI-BOSS', this.x, barY - 4);
+    }
+}
+
 class EnemyManager {
     constructor() {
         this.enemies = [];
         this.boss = null;
+        this.miniBoss = null;
+        this.pendingMiniBoss = null;
         this.waveNumber = 0;
         this.maxWaves = 5;  // 5 waves before final boss
         this.enemiesRemainingInWave = 0;
@@ -774,6 +1044,8 @@ class EnemyManager {
     reset() {
         this.enemies = [];
         this.boss = null;
+        this.miniBoss = null;
+        this.pendingMiniBoss = null;
         this.waveNumber = 0;
         this.enemiesRemainingInWave = 0;
         this.spawnTimer = 0;
@@ -898,7 +1170,12 @@ class EnemyManager {
             this.waveBreakTimer += deltaTime;
             if (this.waveBreakTimer >= 2) {
                 this.betweenWaves = false;
-                if (this.waveNumber >= this.maxWaves) {
+                if (this.pendingMiniBoss) {
+                    this.miniBoss = new MiniBoss(this.pendingMiniBoss);
+                    this.pendingMiniBoss = null;
+                    SoundManager.miniBossAppear();
+                    console.log(`MINI-BOSS SPAWNED: ${this.miniBoss.type.toUpperCase()}`);
+                } else if (this.waveNumber >= this.maxWaves) {
                     this.spawnBoss();
                 } else {
                     this.startWave(this.waveNumber + 1);
@@ -907,13 +1184,26 @@ class EnemyManager {
             return;
         }
 
+        // Update mini-boss if present
+        if (this.miniBoss && this.miniBoss.active) {
+            this.miniBoss.update(deltaTime, playerX, playerY, projectileManager);
+        }
+
+        // Check mini-boss defeat
+        if (this.miniBoss && !this.miniBoss.active) {
+            this.miniBoss = null;
+            this.betweenWaves = true;
+            this.waveBreakTimer = 0;
+            console.log('Mini-boss defeated! Next wave incoming...');
+        }
+
         // Update boss if present
         if (this.boss && this.boss.active) {
             this.boss.update(deltaTime, playerX, playerY, projectileManager);
         }
 
-        // Spawn enemies (respecting max concurrent limit)
-        if (this.enemiesRemainingInWave > 0 && !this.boss) {
+        // Spawn enemies (respecting max concurrent limit) - don't spawn during mini-boss
+        if (this.enemiesRemainingInWave > 0 && !this.boss && !this.miniBoss) {
             this.spawnTimer += deltaTime;
             // Faster spawn rate for quicker waves
             const spawnRate = Math.max(0.8, 1.8 - this.waveNumber * 0.2);
@@ -929,18 +1219,28 @@ class EnemyManager {
         // Remove dead enemies
         this.enemies = this.enemies.filter(e => e.active);
 
-        // Check wave completion
-        if (!this.boss && this.enemiesRemainingInWave <= 0 && this.enemies.length === 0 && !this.waveComplete) {
+        // Check wave completion - don't trigger if mini-boss is active
+        if (!this.boss && !this.miniBoss && this.enemiesRemainingInWave <= 0 && this.enemies.length === 0 && !this.waveComplete) {
             this.waveComplete = true;
             this.betweenWaves = true;
             this.waveBreakTimer = 0;
             DayCycle.advance();
             console.log(`Wave ${this.waveNumber} complete!`);
+
+            // Schedule mini-boss after waves 2 and 4
+            if (this.waveNumber === 2) {
+                this.pendingMiniBoss = 'charger';
+            } else if (this.waveNumber === 4) {
+                this.pendingMiniBoss = 'gunner';
+            }
         }
     }
 
     render(ctx) {
         this.enemies.forEach(e => e.render(ctx));
+        if (this.miniBoss && this.miniBoss.active) {
+            this.miniBoss.render(ctx);
+        }
         if (this.boss && this.boss.active) {
             this.boss.render(ctx);
         }

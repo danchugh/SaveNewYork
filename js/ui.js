@@ -50,6 +50,11 @@ function renderHUD(ctx, player, buildingManager, enemyManager, score) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 20px monospace';
         ctx.fillText('!! BOSS BATTLE !!', CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
+    } else if (enemyManager.miniBoss && enemyManager.miniBoss.active) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 18px monospace';
+        const type = enemyManager.miniBoss.type.toUpperCase();
+        ctx.fillText(`!! MINI-BOSS: ${type} !!`, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
     } else if (enemyManager.betweenWaves) {
         ctx.fillText(`WAVE ${enemyManager.waveNumber + 1} INCOMING...`, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
     } else {

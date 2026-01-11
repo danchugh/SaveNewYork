@@ -242,5 +242,38 @@ const SoundManager = {
         // Ground impact explosion
         this.playNoise(0.3, 0.5);
         this.playTone(50, 0.2, 'sawtooth', 0.5);
+    },
+
+    miniBossAppear() {
+        this.playTone(150, 0.3, 'sawtooth', 0.4);
+        setTimeout(() => this.playTone(200, 0.3, 'sawtooth', 0.4), 200);
+        setTimeout(() => this.playTone(250, 0.4, 'sawtooth', 0.5), 400);
+    },
+
+    miniBossHit() {
+        this.playTone(150, 0.1, 'square', 0.4);
+        this.playNoise(0.08, 0.4);
+    },
+
+    miniBossDefeat() {
+        this.playNoise(0.5, 0.6);
+        this.playTone(300, 0.2, 'square', 0.5);
+        setTimeout(() => this.playTone(400, 0.2, 'square', 0.5), 150);
+        setTimeout(() => this.playTone(500, 0.3, 'square', 0.6), 300);
+    },
+
+    miniBossCharge() {
+        this.playTone(80, 0.3, 'sawtooth', 0.5);
+        this.playNoise(0.2, 0.3);
+    },
+
+    miniBossRam() {
+        this.playNoise(0.4, 0.7);
+        this.playTone(50, 0.3, 'sawtooth', 0.6);
+    },
+
+    miniBossShoot() {
+        this.playTone(500, 0.05, 'square', 0.3);
+        this.playTone(400, 0.05, 'square', 0.25);
     }
 };
