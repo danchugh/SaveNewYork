@@ -43,6 +43,7 @@ function initGame() {
     enemyManager.reset();
     enemyManager.startWave(1);
     civilianManager.reset();
+    DayCycle.reset();
     game.score = 0;
     game.state = GameState.PLAYING;
 }
@@ -93,7 +94,7 @@ function checkCollisions() {
             if (dist < proj.radius + enemy.width / 2) {
                 enemy.die();
                 proj.active = false;
-                game.score += 100;
+                game.score += Math.floor(100 * DayCycle.getScoreMultiplier());
                 break;
             }
         }
@@ -390,7 +391,7 @@ function renderTitle() {
 
 function renderGame() {
     // Draw sky
-    ctx.fillStyle = CONFIG.COLORS.SKY;
+    ctx.fillStyle = DayCycle.getSkyColor();
     ctx.fillRect(0, CONFIG.SKY_TOP, CONFIG.CANVAS_WIDTH, CONFIG.STREET_Y - CONFIG.SKY_TOP);
 
     // Draw buildings
@@ -409,7 +410,7 @@ function renderGame() {
     projectileManager.render(ctx);
 
     // Draw street
-    ctx.fillStyle = CONFIG.COLORS.STREET;
+    ctx.fillStyle = DayCycle.getStreetColor();
     ctx.fillRect(0, CONFIG.STREET_Y, CONFIG.CANVAS_WIDTH, CONFIG.SUBWAY_TOP - CONFIG.STREET_Y);
 
     // Draw subway background
