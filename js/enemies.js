@@ -1,6 +1,9 @@
 const EnemyType = {
-    STANDARD: 'standard',    // Normal building attacker
-    AGGRESSIVE: 'aggressive' // Faster, more erratic, quicker attacks
+    STANDARD: 'standard',    // Normal building attacker (purple)
+    AGGRESSIVE: 'aggressive', // Faster, more erratic, quicker attacks (red)
+    TANK: 'tank',            // Slow, tough, destroys more blocks (green)
+    SPLITTER: 'splitter',    // Splits into 2 when killed (cyan)
+    BOMBER: 'bomber'         // Kamikaze dive at player (orange)
 };
 
 const EnemyState = {
@@ -19,12 +22,35 @@ class Enemy {
 
         this.width = 16;
         this.height = 16;
+        this.health = 1;
+        this.blocksToDestroy = 1;
+
+        // Bomber-specific properties
+        this.divingAtPlayer = false;
+        this.diveTimer = 0;
 
         // Type-based stats (reduced attack times for faster building damage)
         if (type === EnemyType.AGGRESSIVE) {
             this.speed = 90;
             this.attackTimeMin = 0.8;
             this.attackTimeMax = 2;
+        } else if (type === EnemyType.TANK) {
+            this.speed = 40;
+            this.health = 3;
+            this.width = 24;
+            this.height = 24;
+            this.blocksToDestroy = 2;
+            this.attackTimeMin = 0.5;
+            this.attackTimeMax = 1.5;
+        } else if (type === EnemyType.SPLITTER) {
+            this.speed = 70;
+            this.attackTimeMin = 2;
+            this.attackTimeMax = 5;
+        } else if (type === EnemyType.BOMBER) {
+            this.speed = 100;
+            this.attackTimeMin = 999;
+            this.attackTimeMax = 999;
+            this.diveTimer = 3 + Math.random() * 4; // 3-7 seconds before diving
         } else {
             this.speed = 60;
             this.attackTimeMin = 1.5;
@@ -81,6 +107,37 @@ class Enemy {
     }
 
     updateFlying(deltaTime) {
+        // Bomber diving behavior
+        if (this.type === EnemyType.BOMBER) {
+            if (!this.divingAtPlayer) {
+                // Count down to dive
+                this.diveTimer -= deltaTime;
+                if (this.diveTimer <= 0) {
+                    this.divingAtPlayer = true;
+                    SoundManager.bomberDive();
+                }
+            }
+
+            if (this.divingAtPlayer) {
+                // Dive toward player at 2x speed
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0) {
+                    this.x += (dx / dist) * this.speed * 2 * deltaTime;
+                    this.y += (dy / dist) * this.speed * 2 * deltaTime;
+                }
+
+                // Check if hit ground
+                if (this.y > CONFIG.STREET_Y) {
+                    this.state = EnemyState.DEAD;
+                    this.active = false;
+                    SoundManager.bomberCrash();
+                }
+                return; // Skip normal flying behavior when diving
+            }
+        }
+
         // Update flight phase for swooping motion
         this.flightPhase += deltaTime * this.swoopFrequency;
 
@@ -90,8 +147,8 @@ class Enemy {
             this.directionChangeTimer = 0;
             this.directionChangeInterval = 0.2 + Math.random() * 0.6;
 
-            // Decide behavior: random wander or seek building
-            if (Math.random() < 0.4) {
+            // Decide behavior: random wander or seek building (bombers don't seek buildings)
+            if (Math.random() < 0.4 && this.type !== EnemyType.BOMBER) {
                 // Seek a building edge block
                 const edges = buildingManager.getAllEdgeBlocks();
                 if (edges.length > 0) {
@@ -199,7 +256,29 @@ class Enemy {
         if (this.attackTimer >= this.attackDuration) {
             // Destroy the block
             if (this.targetBlock) {
-                this.targetBlock.building.destroyBlock(this.targetBlock.row, this.targetBlock.col);
+                const building = this.targetBlock.building;
+                const row = this.targetBlock.row;
+                const col = this.targetBlock.col;
+                building.destroyBlock(row, col);
+
+                // Tank destroys multiple blocks
+                if (this.blocksToDestroy > 1) {
+                    // Try to destroy an adjacent block
+                    const adjacentOffsets = [
+                        { r: 0, c: -1 }, { r: 0, c: 1 },
+                        { r: -1, c: 0 }, { r: 1, c: 0 }
+                    ];
+                    for (const offset of adjacentOffsets) {
+                        const adjRow = row + offset.r;
+                        const adjCol = col + offset.c;
+                        if (adjRow >= 0 && adjRow < building.heightBlocks &&
+                            adjCol >= 0 && adjCol < building.widthBlocks &&
+                            building.blocks[adjRow]?.[adjCol]) {
+                            building.destroyBlock(adjRow, adjCol);
+                            break; // Only destroy one extra block
+                        }
+                    }
+                }
             }
 
             // Fly off to find new target
@@ -299,7 +378,23 @@ class Enemy {
     }
 
     die() {
-        if (this.type === EnemyType.AGGRESSIVE) {
+        if (this.type === EnemyType.SPLITTER) {
+            // Splitter dies and spawns 2 standard enemies
+            this.state = EnemyState.DEAD;
+            this.active = false;
+            this.spawnSplitEnemies();
+            SoundManager.enemySplit();
+        } else if (this.type === EnemyType.TANK) {
+            // Tank takes multiple hits
+            this.health--;
+            if (this.health <= 0) {
+                this.state = EnemyState.DEAD;
+                this.active = false;
+                SoundManager.tankDeath();
+            } else {
+                SoundManager.tankHit();
+            }
+        } else if (this.type === EnemyType.AGGRESSIVE) {
             // Red enemies fall instead of dying instantly
             this.state = EnemyState.FALLING;
             this.fallSpeed = 0;
@@ -309,6 +404,12 @@ class Enemy {
             this.active = false;
             SoundManager.enemyDeath();
         }
+    }
+
+    spawnSplitEnemies() {
+        const offset = 20;
+        enemyManager.enemies.push(new Enemy(this.x - offset, this.y, EnemyType.STANDARD));
+        enemyManager.enemies.push(new Enemy(this.x + offset, this.y, EnemyType.STANDARD));
     }
 
     render(ctx) {
@@ -325,37 +426,105 @@ class Enemy {
         }
 
         // Color based on type (darker when falling/dead)
-        let color = this.type === EnemyType.AGGRESSIVE ? '#dc2626' : '#9333ea';
+        let color;
+        switch (this.type) {
+            case EnemyType.AGGRESSIVE:
+                color = '#dc2626'; // Red
+                break;
+            case EnemyType.TANK:
+                color = '#16a34a'; // Green
+                break;
+            case EnemyType.SPLITTER:
+                color = '#06b6d4'; // Cyan
+                break;
+            case EnemyType.BOMBER:
+                color = '#f97316'; // Orange
+                break;
+            default:
+                color = '#9333ea'; // Purple (standard)
+        }
         if (this.state === EnemyState.FALLING) {
             color = '#7f1d1d'; // Dark red when falling
         }
 
-        // Draw body (bat-like oval)
+        // Bomber flame trail when diving
+        if (this.type === EnemyType.BOMBER && this.divingAtPlayer) {
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.moveTo(0, -this.height / 2);
+            ctx.lineTo(-6, -this.height - 8 - Math.random() * 6);
+            ctx.lineTo(0, -this.height - 4);
+            ctx.lineTo(6, -this.height - 8 - Math.random() * 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.moveTo(0, -this.height / 2);
+            ctx.lineTo(-3, -this.height - 4 - Math.random() * 4);
+            ctx.lineTo(0, -this.height);
+            ctx.lineTo(3, -this.height - 4 - Math.random() * 4);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw body (bat-like oval, larger for tank)
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.ellipse(0, 0, this.width / 2, this.height / 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
 
+        // Tank armor plates (stroke around body)
+        if (this.type === EnemyType.TANK) {
+            ctx.strokeStyle = '#15803d';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, this.width / 2, this.height / 2.5, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            // Additional armor lines
+            ctx.beginPath();
+            ctx.moveTo(-this.width / 3, -this.height / 4);
+            ctx.lineTo(this.width / 3, -this.height / 4);
+            ctx.stroke();
+        }
+
         // Draw wings (flapping animation - faster when aggressive)
-        const flapSpeed = this.type === EnemyType.AGGRESSIVE ? 80 : 100;
+        let flapSpeed = 100;
+        if (this.type === EnemyType.AGGRESSIVE) flapSpeed = 80;
+        if (this.type === EnemyType.BOMBER && this.divingAtPlayer) flapSpeed = 50;
         const wingFlap = Math.sin(Date.now() / flapSpeed) * 8;
+
+        const wingScale = this.type === EnemyType.TANK ? 1.5 : 1.0;
 
         ctx.fillStyle = color;
         // Left wing
         ctx.beginPath();
-        ctx.moveTo(-4, 0);
-        ctx.quadraticCurveTo(-12, -10 + wingFlap, -18, -5 + wingFlap);
-        ctx.quadraticCurveTo(-14, 2, -8, 3);
+        ctx.moveTo(-4 * wingScale, 0);
+        ctx.quadraticCurveTo(-12 * wingScale, -10 + wingFlap, -18 * wingScale, -5 + wingFlap);
+        ctx.quadraticCurveTo(-14 * wingScale, 2, -8 * wingScale, 3);
         ctx.closePath();
         ctx.fill();
 
         // Right wing
         ctx.beginPath();
-        ctx.moveTo(4, 0);
-        ctx.quadraticCurveTo(12, -10 - wingFlap, 18, -5 - wingFlap);
-        ctx.quadraticCurveTo(14, 2, 8, 3);
+        ctx.moveTo(4 * wingScale, 0);
+        ctx.quadraticCurveTo(12 * wingScale, -10 - wingFlap, 18 * wingScale, -5 - wingFlap);
+        ctx.quadraticCurveTo(14 * wingScale, 2, 8 * wingScale, 3);
         ctx.closePath();
         ctx.fill();
+
+        // Splitter sparkle effect
+        if (this.type === EnemyType.SPLITTER) {
+            const sparkleTime = Date.now() / 100;
+            ctx.fillStyle = '#fff';
+            for (let i = 0; i < 3; i++) {
+                const angle = sparkleTime + i * 2.1;
+                const sx = Math.cos(angle) * 10;
+                const sy = Math.sin(angle) * 8;
+                ctx.beginPath();
+                ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
 
         // Draw eyes
         if (this.state === EnemyState.FALLING) {
@@ -377,17 +546,18 @@ class Enemy {
             ctx.lineTo(5, -4);
             ctx.stroke();
         } else {
-            // Normal beady eyes
+            // Normal beady eyes (adjusted for tank size)
+            const eyeScale = this.type === EnemyType.TANK ? 1.3 : 1.0;
             ctx.fillStyle = '#fff';
             ctx.beginPath();
-            ctx.arc(-3, -2, 2.5, 0, Math.PI * 2);
-            ctx.arc(3, -2, 2.5, 0, Math.PI * 2);
+            ctx.arc(-3 * eyeScale, -2 * eyeScale, 2.5 * eyeScale, 0, Math.PI * 2);
+            ctx.arc(3 * eyeScale, -2 * eyeScale, 2.5 * eyeScale, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.fillStyle = '#000';
             ctx.beginPath();
-            ctx.arc(-3, -2, 1.2, 0, Math.PI * 2);
-            ctx.arc(3, -2, 1.2, 0, Math.PI * 2);
+            ctx.arc(-3 * eyeScale, -2 * eyeScale, 1.2 * eyeScale, 0, Math.PI * 2);
+            ctx.arc(3 * eyeScale, -2 * eyeScale, 1.2 * eyeScale, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -406,6 +576,21 @@ class Enemy {
             ctx.beginPath();
             ctx.ellipse(0, 6, 2, 3, 0, 0, Math.PI * 2);
             ctx.fill();
+        }
+
+        // Tank health indicator dots above
+        if (this.type === EnemyType.TANK && this.health > 0) {
+            const dotSpacing = 8;
+            const startX = -((this.health - 1) * dotSpacing) / 2;
+            for (let i = 0; i < this.health; i++) {
+                ctx.fillStyle = '#4ade80';
+                ctx.beginPath();
+                ctx.arc(startX + i * dotSpacing, -this.height / 2 - 8, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#166534';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
         }
 
         // Show attack progress if attacking
@@ -583,6 +768,7 @@ class EnemyManager {
         // Progressive difficulty
         this.maxConcurrentEnemies = 1;
         this.aggressiveRatio = 0;
+        this.availableTypes = [EnemyType.STANDARD];
     }
 
     reset() {
@@ -597,11 +783,19 @@ class EnemyManager {
         this.waveBreakTimer = 0;
         this.maxConcurrentEnemies = 1;
         this.aggressiveRatio = 0;
+        this.availableTypes = [EnemyType.STANDARD];
     }
 
     startWave(waveNum) {
         this.waveNumber = waveNum;
         this.waveComplete = false;
+
+        // Progressive type unlocking
+        this.availableTypes = [EnemyType.STANDARD];
+        if (waveNum >= 2) this.availableTypes.push(EnemyType.AGGRESSIVE);
+        if (waveNum >= 3) this.availableTypes.push(EnemyType.SPLITTER);
+        if (waveNum >= 4) this.availableTypes.push(EnemyType.BOMBER);
+        if (waveNum >= 5) this.availableTypes.push(EnemyType.TANK);
 
         // Shorter waves - faster paced gameplay
         switch (waveNum) {
@@ -631,16 +825,44 @@ class EnemyManager {
                 this.enemiesRemainingInWave = 12 + (waveNum - 4) * 3;
         }
 
-        console.log(`Wave ${waveNum} started! ${this.enemiesRemainingInWave} enemies, max ${this.maxConcurrentEnemies} at once.`);
+        console.log(`Wave ${waveNum} started! ${this.enemiesRemainingInWave} enemies, max ${this.maxConcurrentEnemies} at once. Types: ${this.availableTypes.join(', ')}`);
+    }
+
+    pickEnemyType() {
+        // Weighted random selection based on available types
+        // Weights: STANDARD=50%, AGGRESSIVE=20%, SPLITTER=15%, BOMBER=10%, TANK=5%
+        const weights = {
+            [EnemyType.STANDARD]: 50,
+            [EnemyType.AGGRESSIVE]: 20,
+            [EnemyType.SPLITTER]: 15,
+            [EnemyType.BOMBER]: 10,
+            [EnemyType.TANK]: 5
+        };
+
+        // Calculate total weight of available types
+        let totalWeight = 0;
+        for (const type of this.availableTypes) {
+            totalWeight += weights[type];
+        }
+
+        // Random selection
+        let random = Math.random() * totalWeight;
+        for (const type of this.availableTypes) {
+            random -= weights[type];
+            if (random <= 0) {
+                return type;
+            }
+        }
+
+        return EnemyType.STANDARD; // Fallback
     }
 
     spawnEnemy() {
         if (this.enemiesRemainingInWave <= 0) return;
         if (this.enemies.length >= this.maxConcurrentEnemies) return;
 
-        // Determine enemy type based on wave difficulty
-        const isAggressive = Math.random() < this.aggressiveRatio;
-        const type = isAggressive ? EnemyType.AGGRESSIVE : EnemyType.STANDARD;
+        // Determine enemy type using weighted random selection
+        const type = this.pickEnemyType();
 
         // Spawn from screen edge (left, right, or top like original)
         const side = Math.floor(Math.random() * 3);

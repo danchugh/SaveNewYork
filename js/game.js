@@ -92,9 +92,29 @@ function checkCollisions() {
             );
 
             if (dist < proj.radius + enemy.width / 2) {
+                const wasAlive = enemy.active && enemy.state !== EnemyState.DEAD;
+                const wasTankAlive = enemy.type === EnemyType.TANK && enemy.health > 0;
+
                 enemy.die();
                 proj.active = false;
-                game.score += Math.floor(100 * DayCycle.getScoreMultiplier());
+
+                // Calculate score based on enemy type
+                let baseScore = 100; // Default score
+                if (enemy.type === EnemyType.TANK) {
+                    if (wasTankAlive && enemy.health > 0) {
+                        // Tank took a hit but still alive
+                        baseScore = 50;
+                    } else if (wasTankAlive && enemy.health <= 0) {
+                        // Tank was killed (final hit bonus)
+                        baseScore = 300;
+                    }
+                } else if (enemy.type === EnemyType.BOMBER) {
+                    baseScore = 150;
+                } else if (enemy.type === EnemyType.SPLITTER) {
+                    baseScore = 75;
+                }
+
+                game.score += Math.floor(baseScore * DayCycle.getScoreMultiplier());
                 break;
             }
         }
