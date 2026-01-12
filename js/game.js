@@ -44,6 +44,7 @@ function initGame() {
     enemyManager.startWave(1);
     civilianManager.reset();
     DayCycle.reset();
+    BackgroundManager.reset();
     game.score = 0;
     game.state = GameState.PLAYING;
 }
@@ -323,6 +324,7 @@ function update(deltaTime) {
             enemyManager.update(game.deltaTime, player.x, player.y, projectileManager);
             buildingManager.update(game.deltaTime);
             civilianManager.update(game.deltaTime);
+            BackgroundManager.update(game.deltaTime);
 
             // Check civilian rescue
             const rescued = civilianManager.checkRescue(player.x, player.y, player.state);
@@ -449,6 +451,9 @@ function renderGame() {
     // Draw sky
     ctx.fillStyle = DayCycle.getSkyColor();
     ctx.fillRect(0, CONFIG.SKY_TOP, CONFIG.CANVAS_WIDTH, CONFIG.STREET_Y - CONFIG.SKY_TOP);
+
+    // Draw background (behind buildings)
+    BackgroundManager.render(ctx);
 
     // Draw buildings
     buildingManager.render(ctx);
