@@ -275,5 +275,91 @@ const SoundManager = {
     miniBossShoot() {
         this.playTone(500, 0.05, 'square', 0.3);
         this.playTone(400, 0.05, 'square', 0.25);
+    },
+
+    // ========== AMBIENT SOUNDS ==========
+
+    // Ambient sound state
+    ambientInterval: null,
+    currentAmbient: null,
+
+    // Stop any playing ambient sound
+    stopAmbient() {
+        if (this.ambientInterval) {
+            clearInterval(this.ambientInterval);
+            this.ambientInterval = null;
+        }
+        this.currentAmbient = null;
+    },
+
+    // Cricket chirps for night/dusk
+    startCrickets() {
+        this.stopAmbient();
+        this.currentAmbient = 'crickets';
+
+        // Play cricket chirp pattern every 2-4 seconds
+        const playCricket = () => {
+            if (!this.enabled || !this.ctx) return;
+            this.resume();
+
+            // Quick high-pitched chirps (3 rapid chirps)
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    this.playTone(4000 + Math.random() * 1000, 0.05, 'sine', 0.08);
+                }, i * 60);
+            }
+        };
+
+        playCricket();  // Play immediately
+        this.ambientInterval = setInterval(playCricket, 2000 + Math.random() * 2000);
+    },
+
+    // Bird calls for day/dawn
+    startBirds() {
+        this.stopAmbient();
+        this.currentAmbient = 'birds';
+
+        const playBird = () => {
+            if (!this.enabled || !this.ctx) return;
+            this.resume();
+
+            // Chirping bird call - frequency sweep
+            const startFreq = 1500 + Math.random() * 500;
+            const endFreq = 2000 + Math.random() * 1000;
+
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(startFreq, this.ctx.currentTime);
+            osc.frequency.linearRampToValueAtTime(endFreq, this.ctx.currentTime + 0.1);
+            osc.frequency.linearRampToValueAtTime(startFreq, this.ctx.currentTime + 0.2);
+
+            gain.gain.setValueAtTime(0.06 * this.masterVolume, this.ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.08 * this.masterVolume, this.ctx.currentTime + 0.1);
+            gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.3);
+
+            osc.start(this.ctx.currentTime);
+            osc.stop(this.ctx.currentTime + 0.3);
+        };
+
+        playBird();  // Play immediately
+        this.ambientInterval = setInterval(playBird, 3000 + Math.random() * 4000);
+    },
+
+    // Update ambient based on time of day
+    updateAmbientForTime(timeOfDay) {
+        if (timeOfDay === 'night' || timeOfDay === 'dusk') {
+            if (this.currentAmbient !== 'crickets') {
+                this.startCrickets();
+            }
+        } else if (timeOfDay === 'day' || timeOfDay === 'dawn') {
+            if (this.currentAmbient !== 'birds') {
+                this.startBirds();
+            }
+        }
     }
 };

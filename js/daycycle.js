@@ -111,6 +111,9 @@ const DayCycle = {
         this.currentTime = this.cycleOrder[this.cycleIndex];
         this.transitionProgress = 0;  // Start transition
         console.log(`Time of day changing to: ${this.getDisplayName()}`);
+
+        // Update ambient sounds
+        SoundManager.updateAmbientForTime(this.currentTime);
     },
 
     /**
@@ -122,6 +125,9 @@ const DayCycle = {
         this.transitionProgress = 1;
         this.previousTime = null;
         this.sunMoonPhase = 0.5;
+
+        // Start initial ambient
+        SoundManager.updateAmbientForTime(this.currentTime);
     },
 
     /**
