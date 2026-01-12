@@ -1245,6 +1245,22 @@ class EnemyManager {
             this.boss.render(ctx);
         }
     }
+
+    // Returns the boss type that will appear after current wave ends
+    // Returns null if no boss coming, or if boss/mini-boss is currently active
+    getUpcomingBoss() {
+        // Don't show foreshadow if boss or mini-boss is active
+        if (this.boss || this.miniBoss) return null;
+
+        // Wave 1 -> charger coming after wave 2
+        if (this.waveNumber === 1) return 'charger';
+        // Wave 3 -> gunner coming after wave 4
+        if (this.waveNumber === 3) return 'gunner';
+        // Wave 5+ -> final boss coming
+        if (this.waveNumber >= 5) return 'boss';
+
+        return null;
+    }
 }
 
 const enemyManager = new EnemyManager();

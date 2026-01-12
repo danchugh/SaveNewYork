@@ -7,6 +7,11 @@ const BackgroundManager = {
     // Animation phase for subtle movement
     time: 0,
 
+    // Foreshadow animation state
+    foreshadowX: 480,
+    foreshadowDirection: 1,
+    foreshadowY: 0,
+
     // Mountain definitions [x, baseY, width, height, isVolcano]
     mountains: [
         { x: 50, width: 200, height: 180, isVolcano: false },
@@ -62,20 +67,135 @@ const BackgroundManager = {
 
     reset() {
         this.time = 0;
+        this.foreshadowX = 480;
+        this.foreshadowDirection = 1;
+        this.foreshadowY = 0;
         this.init();
     },
 
     update(deltaTime) {
         this.time += deltaTime;
+        this.updateForeshadow(deltaTime);
+    },
+
+    updateForeshadow(deltaTime) {
+        // Slow movement behind mountains
+        this.foreshadowX += this.foreshadowDirection * 30 * deltaTime;
+
+        // Bounce at edges (stay in mountain area)
+        if (this.foreshadowX > 700) this.foreshadowDirection = -1;
+        if (this.foreshadowX < 260) this.foreshadowDirection = 1;
+
+        // Slight vertical bob
+        this.foreshadowY = Math.sin(this.time * 2) * 10;
     },
 
     render(ctx) {
         // Render layers back to front
         this.renderMountains(ctx);
+        this.renderForeshadow(ctx);  // Boss foreshadow behind forest
         this.renderForest(ctx);
         this.renderValley(ctx);
         this.renderStream(ctx);
         this.renderGrass(ctx);
+    },
+
+    renderForeshadow(ctx) {
+        const upcomingBoss = enemyManager.getUpcomingBoss();
+        if (!upcomingBoss) return;
+
+        const baseY = 280 + this.foreshadowY;  // Behind mountains
+        const x = this.foreshadowX;
+
+        ctx.save();
+        ctx.globalAlpha = 0.6;  // Semi-transparent/distant
+
+        if (upcomingBoss === 'charger') {
+            // Small red charger with horns
+            ctx.fillStyle = '#dc2626';
+            ctx.beginPath();
+            ctx.ellipse(x, baseY, 15, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Horns
+            ctx.fillStyle = '#991b1b';
+            ctx.beginPath();
+            ctx.moveTo(x - 8, baseY - 6);
+            ctx.lineTo(x - 10, baseY - 16);
+            ctx.lineTo(x - 4, baseY - 8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(x + 8, baseY - 6);
+            ctx.lineTo(x + 10, baseY - 16);
+            ctx.lineTo(x + 4, baseY - 8);
+            ctx.closePath();
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(x - 4, baseY - 2, 3, 0, Math.PI * 2);
+            ctx.arc(x + 4, baseY - 2, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+        } else if (upcomingBoss === 'gunner') {
+            // Small purple gunner
+            ctx.fillStyle = '#7c3aed';
+            ctx.beginPath();
+            ctx.ellipse(x, baseY, 15, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Cannon
+            ctx.fillStyle = '#4c1d95';
+            ctx.fillRect(x - 3, baseY + 6, 6, 8);
+
+            // Eyes (red pupils)
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(x - 4, baseY - 2, 3, 0, Math.PI * 2);
+            ctx.arc(x + 4, baseY - 2, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(x - 4, baseY - 2, 1.5, 0, Math.PI * 2);
+            ctx.arc(x + 4, baseY - 2, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+
+        } else if (upcomingBoss === 'boss') {
+            // Large silhouette with glowing eyes
+            ctx.fillStyle = '#1a1a2e';
+            ctx.beginPath();
+            ctx.ellipse(x, baseY, 30, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Wings silhouette
+            ctx.beginPath();
+            ctx.moveTo(x - 15, baseY);
+            ctx.quadraticCurveTo(x - 50, baseY - 20, x - 55, baseY + 5);
+            ctx.quadraticCurveTo(x - 40, baseY + 10, x - 20, baseY + 5);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(x + 15, baseY);
+            ctx.quadraticCurveTo(x + 50, baseY - 20, x + 55, baseY + 5);
+            ctx.quadraticCurveTo(x + 40, baseY + 10, x + 20, baseY + 5);
+            ctx.closePath();
+            ctx.fill();
+
+            // Glowing red eyes
+            ctx.fillStyle = '#ef4444';
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(x - 10, baseY - 5, 4, 0, Math.PI * 2);
+            ctx.arc(x + 10, baseY - 5, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        ctx.restore();
     },
 
     renderMountains(ctx) {
