@@ -45,6 +45,10 @@ const WeatherManager = {
 
     // Start random weather with 20% chance
     startRandomWeather() {
+        // Clear existing particles when weather changes
+        this.rainParticles = [];
+        this.snowParticles = [];
+
         // 20% chance for weather
         if (Math.random() > 0.2) {
             this.currentWeather = WeatherType.CLEAR;
@@ -131,9 +135,9 @@ const WeatherManager = {
             this.currentWeather = WeatherType.CLEAR;
         }
 
-        // Update particles (to be implemented in Tasks 6-7)
-        // this.updateRain(deltaTime);
-        // this.updateSnow(deltaTime);
+        // Update particles
+        this.updateRain(deltaTime);
+        this.updateSnow(deltaTime);
         // this.updateLeaves(deltaTime);
         // this.updateLightning(deltaTime);
     },
@@ -141,9 +145,9 @@ const WeatherManager = {
     render(ctx) {
         if (this.intensity <= 0) return;
 
-        // Render particles (to be implemented in Tasks 6-8)
-        // this.renderRain(ctx);
-        // this.renderSnow(ctx);
+        // Render particles
+        this.renderRain(ctx);
+        this.renderSnow(ctx);
         // this.renderLeaves(ctx);
         // this.renderLightning(ctx);
 
@@ -158,5 +162,123 @@ const WeatherManager = {
     getDisplayName() {
         if (this.currentWeather === WeatherType.CLEAR) return '';
         return this.currentWeather.replace('_', ' + ').toUpperCase();
+    },
+
+    // Initialize rain particles
+    initRainParticles() {
+        this.rainParticles = [];
+        for (let i = 0; i < 150; i++) {
+            this.rainParticles.push({
+                x: Math.random() * CONFIG.CANVAS_WIDTH,
+                y: CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP),
+                speed: 300 + Math.random() * 200,  // 300-500 px/s
+                length: 10 + Math.random() * 10     // 10-20 px
+            });
+        }
+    },
+
+    // Initialize snow particles
+    initSnowParticles() {
+        this.snowParticles = [];
+        for (let i = 0; i < 80; i++) {
+            this.snowParticles.push({
+                x: Math.random() * CONFIG.CANVAS_WIDTH,
+                y: CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP),
+                speed: 50 + Math.random() * 50,    // 50-100 px/s
+                size: 2 + Math.random() * 2,        // 2-4 px
+                wobblePhase: Math.random() * Math.PI * 2,
+                wobbleSpeed: 2 + Math.random() * 2
+            });
+        }
+    },
+
+    // Update rain particles
+    updateRain(deltaTime) {
+        if (!this.hasRain()) return;
+
+        // Initialize if needed
+        if (this.rainParticles.length === 0) {
+            this.initRainParticles();
+        }
+
+        const windEffect = this.windStrength * this.windDirection * 0.5;
+
+        this.rainParticles.forEach(p => {
+            p.y += p.speed * deltaTime;
+            p.x += windEffect * deltaTime;
+
+            // Reset when off screen
+            if (p.y > CONFIG.STREET_Y) {
+                p.y = CONFIG.SKY_TOP;
+                p.x = Math.random() * CONFIG.CANVAS_WIDTH;
+            }
+            // Wrap horizontally
+            if (p.x > CONFIG.CANVAS_WIDTH) p.x = 0;
+            if (p.x < 0) p.x = CONFIG.CANVAS_WIDTH;
+        });
+    },
+
+    // Update snow particles
+    updateSnow(deltaTime) {
+        if (!this.hasSnow()) return;
+
+        // Initialize if needed
+        if (this.snowParticles.length === 0) {
+            this.initSnowParticles();
+        }
+
+        const windEffect = this.windStrength * this.windDirection * 0.3;
+
+        this.snowParticles.forEach(p => {
+            p.wobblePhase += p.wobbleSpeed * deltaTime;
+
+            // Vertical fall + wobble
+            p.y += p.speed * deltaTime;
+            // Horizontal drift + wind + wobble
+            p.x += (Math.sin(p.wobblePhase) * 20 + windEffect) * deltaTime;
+
+            // Reset when off screen
+            if (p.y > CONFIG.STREET_Y) {
+                p.y = CONFIG.SKY_TOP;
+                p.x = Math.random() * CONFIG.CANVAS_WIDTH;
+            }
+            // Wrap horizontally
+            if (p.x > CONFIG.CANVAS_WIDTH) p.x = 0;
+            if (p.x < 0) p.x = CONFIG.CANVAS_WIDTH;
+        });
+    },
+
+    // Render rain
+    renderRain(ctx) {
+        if (!this.hasRain() || this.intensity <= 0) return;
+
+        ctx.strokeStyle = `rgba(200, 200, 255, ${this.intensity * 0.6})`;
+        ctx.lineWidth = 1;
+
+        // Calculate angle based on wind
+        const angle = Math.atan2(1, this.windDirection * this.windStrength * 0.01);
+
+        this.rainParticles.forEach(p => {
+            const endX = p.x + Math.cos(angle + Math.PI/2) * p.length * 0.3;
+            const endY = p.y + Math.sin(angle + Math.PI/2) * p.length;
+
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+        });
+    },
+
+    // Render snow
+    renderSnow(ctx) {
+        if (!this.hasSnow() || this.intensity <= 0) return;
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${this.intensity * 0.8})`;
+
+        this.snowParticles.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
     }
 };
