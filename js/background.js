@@ -254,6 +254,11 @@ const BackgroundManager = {
                 ctx.ellipse(m.x, baseY - m.height + 10, 15, 5, 0, 0, Math.PI * 2);
                 ctx.fillStyle = '#ff4400';
                 ctx.fill();
+
+                // Render volcano smoke (call VolcanoManager)
+                if (typeof VolcanoManager !== 'undefined') {
+                    VolcanoManager.renderSmoke(ctx);
+                }
             }
         });
     },

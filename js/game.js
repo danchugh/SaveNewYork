@@ -47,6 +47,7 @@ function initGame() {
     DayCycle.reset();
     BackgroundManager.reset();
     WeatherManager.reset();
+    VolcanoManager.reset();
     game.score = 0;
     game.state = GameState.PLAYING;
 }
@@ -288,6 +289,87 @@ function checkCollisions() {
         }
     }
 
+    // Volcanic rocks collisions
+    if (typeof VolcanoManager !== 'undefined') {
+        const rocks = VolcanoManager.getRocks();
+        const playerProjectiles = projectileManager.getPlayerProjectiles();
+
+        for (const rock of rocks) {
+            // Player projectiles vs rocks (can be shot)
+            for (const proj of playerProjectiles) {
+                if (!proj.active) continue;
+                const dist = Math.sqrt(Math.pow(proj.x - rock.x, 2) + Math.pow(proj.y - rock.y, 2));
+                if (dist < proj.radius + rock.size) {
+                    proj.active = false;
+                    VolcanoManager.destroyRock(rock);
+                    game.score += 25;
+                    break;
+                }
+            }
+
+            if (!rock.active) continue;
+
+            // Rock vs player
+            if (player.state === 'flying') {
+                const playerBounds = getPlayerBounds(player);
+                if (rock.x > playerBounds.x && rock.x < playerBounds.x + playerBounds.width &&
+                    rock.y > playerBounds.y && rock.y < playerBounds.y + playerBounds.height) {
+                    player.die();
+                    VolcanoManager.destroyRock(rock);
+                    SoundManager.rockImpact();
+                }
+            }
+
+            if (!rock.active) continue;
+
+            // Rock vs enemies
+            for (const enemy of enemyManager.enemies) {
+                if (!enemy.active) continue;
+                const dist = Math.sqrt(Math.pow(rock.x - enemy.x, 2) + Math.pow(rock.y - enemy.y, 2));
+                if (dist < rock.size + enemy.width / 2) {
+                    enemy.die();
+                    game.score += Math.floor(100 * DayCycle.getScoreMultiplier());
+                    VolcanoManager.destroyRock(rock);
+                    SoundManager.rockImpact();
+                    break;
+                }
+            }
+
+            if (!rock.active) continue;
+
+            // Rock vs buildings
+            for (const building of buildingManager.buildings) {
+                for (let row = 0; row < building.heightBlocks; row++) {
+                    for (let col = 0; col < building.widthBlocks; col++) {
+                        if (!building.blocks[row][col]) continue;
+                        const pos = building.getBlockWorldPosition(row, col);
+                        if (rock.x > pos.x && rock.x < pos.x + pos.width &&
+                            rock.y > pos.y && rock.y < pos.y + pos.height) {
+                            // Destroy 3 blocks near impact
+                            let destroyed = 0;
+                            for (let dr = -1; dr <= 1 && destroyed < 3; dr++) {
+                                for (let dc = -1; dc <= 1 && destroyed < 3; dc++) {
+                                    const nr = row + dr, nc = col + dc;
+                                    if (nr >= 0 && nr < building.heightBlocks &&
+                                        nc >= 0 && nc < building.widthBlocks &&
+                                        building.blocks[nr][nc]) {
+                                        building.destroyBlock(nr, nc);
+                                        destroyed++;
+                                    }
+                                }
+                            }
+                            VolcanoManager.destroyRock(rock);
+                            SoundManager.rockImpact();
+                            break;
+                        }
+                    }
+                    if (!rock.active) break;
+                }
+                if (!rock.active) break;
+            }
+        }
+    }
+
     // Check city destruction percentage
     if (buildingManager.getDestructionPercentage() >= CONFIG.CITY_DESTRUCTION_THRESHOLD) {
         game.finalWave = enemyManager.waveNumber;
@@ -329,6 +411,7 @@ function update(deltaTime) {
             BackgroundManager.update(game.deltaTime);
             DayCycle.update(game.deltaTime);
             WeatherManager.update(game.deltaTime);
+            VolcanoManager.update(game.deltaTime);
 
             // Process lightning damage
             if (typeof WeatherManager !== 'undefined') {
@@ -511,6 +594,9 @@ function renderGame() {
 
     // Draw enemies
     enemyManager.render(ctx);
+
+    // Draw volcanic rocks
+    VolcanoManager.renderRocks(ctx);
 
     // Draw player
     player.render(ctx);

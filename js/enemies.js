@@ -1101,6 +1101,11 @@ class EnemyManager {
 
         // Start random weather for this wave
         WeatherManager.startRandomWeather();
+
+        // Check for volcano eruption
+        if (typeof VolcanoManager !== 'undefined') {
+            VolcanoManager.checkEruption(waveNum);
+        }
     }
 
     pickEnemyType() {

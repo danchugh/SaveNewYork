@@ -254,6 +254,26 @@ const SoundManager = {
         }, 200);
     },
 
+    volcanoEruption() {
+        // Deep rumble
+        this.playNoise(1.5, 0.6);
+        this.playTone(40, 1.0, 'sawtooth', 0.5);
+        setTimeout(() => {
+            this.playNoise(1.0, 0.4);
+            this.playTone(30, 0.8, 'sawtooth', 0.4);
+        }, 500);
+    },
+
+    rockDestroyed() {
+        this.playNoise(0.15, 0.4);
+        this.playTone(200, 0.1, 'square', 0.3);
+    },
+
+    rockImpact() {
+        this.playNoise(0.3, 0.5);
+        this.playTone(80, 0.2, 'sawtooth', 0.4);
+    },
+
     miniBossAppear() {
         this.playTone(150, 0.3, 'sawtooth', 0.4);
         setTimeout(() => this.playTone(200, 0.3, 'sawtooth', 0.4), 200);
