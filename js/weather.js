@@ -48,6 +48,7 @@ const WeatherManager = {
         // Clear existing particles when weather changes
         this.rainParticles = [];
         this.snowParticles = [];
+        this.leafParticles = [];
 
         // 20% chance for weather
         if (Math.random() > 0.2) {
@@ -138,7 +139,7 @@ const WeatherManager = {
         // Update particles
         this.updateRain(deltaTime);
         this.updateSnow(deltaTime);
-        // this.updateLeaves(deltaTime);
+        this.updateLeaves(deltaTime);
         // this.updateLightning(deltaTime);
     },
 
@@ -148,7 +149,7 @@ const WeatherManager = {
         // Render particles
         this.renderRain(ctx);
         this.renderSnow(ctx);
-        // this.renderLeaves(ctx);
+        this.renderLeaves(ctx);
         // this.renderLightning(ctx);
 
         // For now, just show a subtle overlay to indicate weather is active
@@ -280,5 +281,91 @@ const WeatherManager = {
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
             ctx.fill();
         });
+    },
+
+    // Initialize leaf particles
+    initLeafParticles() {
+        this.leafParticles = [];
+        for (let i = 0; i < 30; i++) {
+            this.leafParticles.push({
+                x: Math.random() * CONFIG.CANVAS_WIDTH,
+                y: CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP),
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 10,
+                size: 4 + Math.random() * 4,
+                speedMultiplier: 0.8 + Math.random() * 0.4
+            });
+        }
+    },
+
+    // Update leaf particles
+    updateLeaves(deltaTime) {
+        if (!this.hasWind() || this.intensity <= 0) return;
+
+        // Initialize if needed
+        if (this.leafParticles.length === 0) {
+            this.initLeafParticles();
+        }
+
+        const windSpeed = this.windStrength * this.windDirection * this.intensity;
+
+        this.leafParticles.forEach(p => {
+            // Horizontal movement with wind
+            p.x += windSpeed * p.speedMultiplier * deltaTime;
+
+            // Slight vertical drift
+            p.y += Math.sin(p.rotation) * 20 * deltaTime;
+
+            // Tumble rotation
+            p.rotation += p.rotationSpeed * deltaTime;
+
+            // Reset when off screen (based on wind direction)
+            if (this.windDirection > 0 && p.x > CONFIG.CANVAS_WIDTH + 20) {
+                p.x = -20;
+                p.y = CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP);
+            } else if (this.windDirection < 0 && p.x < -20) {
+                p.x = CONFIG.CANVAS_WIDTH + 20;
+                p.y = CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP);
+            }
+
+            // Keep in vertical bounds
+            if (p.y < CONFIG.SKY_TOP) p.y = CONFIG.SKY_TOP;
+            if (p.y > CONFIG.STREET_Y) p.y = CONFIG.STREET_Y - 20;
+        });
+    },
+
+    // Render leaves
+    renderLeaves(ctx) {
+        if (!this.hasWind() || this.intensity <= 0) return;
+
+        this.leafParticles.forEach(p => {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+
+            // Draw leaf shape (simple oval)
+            ctx.fillStyle = `rgba(120, 180, 80, ${this.intensity * 0.8})`;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, p.size, p.size * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Leaf vein
+            ctx.strokeStyle = `rgba(80, 120, 50, ${this.intensity * 0.6})`;
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(-p.size, 0);
+            ctx.lineTo(p.size, 0);
+            ctx.stroke();
+
+            ctx.restore();
+        });
+    },
+
+    // Get wind effect for player (called by player.js)
+    getWindEffect() {
+        if (!this.hasWind() || this.intensity <= 0) {
+            return 0;
+        }
+        return this.windDirection * this.windStrength * this.intensity * 0.3;
     }
 };
