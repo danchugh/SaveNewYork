@@ -244,6 +244,16 @@ const SoundManager = {
         this.playTone(50, 0.2, 'sawtooth', 0.5);
     },
 
+    thunder() {
+        // Low rumble
+        this.playNoise(0.8, 0.5);
+        this.playTone(60, 0.5, 'sawtooth', 0.4);
+        setTimeout(() => {
+            this.playNoise(0.5, 0.3);
+            this.playTone(40, 0.4, 'sawtooth', 0.3);
+        }, 200);
+    },
+
     miniBossAppear() {
         this.playTone(150, 0.3, 'sawtooth', 0.4);
         setTimeout(() => this.playTone(200, 0.3, 'sawtooth', 0.4), 200);

@@ -330,6 +330,44 @@ function update(deltaTime) {
             DayCycle.update(game.deltaTime);
             WeatherManager.update(game.deltaTime);
 
+            // Process lightning damage
+            if (typeof WeatherManager !== 'undefined') {
+                const lightningDamage = WeatherManager.getPendingLightningDamage();
+                if (lightningDamage && lightningDamage.type === 'building') {
+                    const building = lightningDamage.building;
+                    let destroyed = 0;
+
+                    // Find blocks near strike point and destroy them
+                    for (let row = 0; row < building.heightBlocks && destroyed < lightningDamage.blocks; row++) {
+                        for (let col = 0; col < building.widthBlocks && destroyed < lightningDamage.blocks; col++) {
+                            if (building.blocks[row][col]) {
+                                const pos = building.getBlockWorldPosition(row, col);
+                                const dist = Math.abs(pos.x + pos.width/2 - lightningDamage.x);
+                                if (dist < 30) {
+                                    building.destroyBlock(row, col);
+                                    destroyed++;
+                                }
+                            }
+                        }
+                    }
+
+                    // Check if lightning hit any enemies
+                    if (typeof enemyManager !== 'undefined') {
+                        for (const enemy of enemyManager.enemies) {
+                            if (!enemy.active) continue;
+                            const dist = Math.sqrt(
+                                Math.pow(enemy.x - lightningDamage.x, 2) +
+                                Math.pow(enemy.y - lightningDamage.y, 2)
+                            );
+                            if (dist < 50) {
+                                enemy.die();
+                                game.score += Math.floor(100 * DayCycle.getScoreMultiplier());
+                            }
+                        }
+                    }
+                }
+            }
+
             // Check civilian rescue
             const rescued = civilianManager.checkRescue(player.x, player.y, player.state);
             game.score += rescued * 500;

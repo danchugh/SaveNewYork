@@ -26,9 +26,12 @@ const WeatherManager = {
     snowParticles: [],
     leafParticles: [],
 
-    // Lightning state (will be used in later tasks)
+    // Lightning state
     lightningTimer: 0,
     lightningActive: false,
+    lightningBolt: null,  // {x1, y1, x2, y2, segments: []}
+    lightningFlash: 0,    // Screen flash alpha
+    pendingDamage: null,  // {type: 'building'/'enemy', target, x, y}
 
     reset() {
         this.currentWeather = WeatherType.CLEAR;
@@ -41,6 +44,9 @@ const WeatherManager = {
         this.leafParticles = [];
         this.lightningTimer = 0;
         this.lightningActive = false;
+        this.lightningBolt = null;
+        this.lightningFlash = 0;
+        this.pendingDamage = null;
     },
 
     // Start random weather with 20% chance
@@ -140,7 +146,7 @@ const WeatherManager = {
         this.updateRain(deltaTime);
         this.updateSnow(deltaTime);
         this.updateLeaves(deltaTime);
-        // this.updateLightning(deltaTime);
+        this.updateLightning(deltaTime);
     },
 
     render(ctx) {
@@ -150,13 +156,15 @@ const WeatherManager = {
         this.renderRain(ctx);
         this.renderSnow(ctx);
         this.renderLeaves(ctx);
-        // this.renderLightning(ctx);
 
         // For now, just show a subtle overlay to indicate weather is active
         if (this.hasRain() || this.hasLightning()) {
             ctx.fillStyle = `rgba(100, 100, 120, ${this.intensity * 0.1})`;
             ctx.fillRect(0, CONFIG.SKY_TOP, CONFIG.CANVAS_WIDTH, CONFIG.STREET_Y - CONFIG.SKY_TOP);
         }
+
+        // Render lightning last so flash overlays everything
+        this.renderLightning(ctx);
     },
 
     // Get display name for HUD (optional)
@@ -367,5 +375,186 @@ const WeatherManager = {
             return 0;
         }
         return this.windDirection * this.windStrength * this.intensity * 0.3;
+    },
+
+    // Update lightning
+    updateLightning(deltaTime) {
+        if (!this.hasLightning() || this.intensity <= 0) return;
+
+        // Decrease flash
+        if (this.lightningFlash > 0) {
+            this.lightningFlash -= deltaTime * 5;
+        }
+
+        // Clear bolt after display time
+        if (this.lightningBolt && this.lightningBolt.displayTime !== undefined) {
+            this.lightningBolt.displayTime -= deltaTime;
+            if (this.lightningBolt.displayTime <= 0) {
+                this.lightningBolt = null;
+            }
+        }
+
+        // Timer for next strike
+        this.lightningTimer -= deltaTime;
+        if (this.lightningTimer <= 0) {
+            this.triggerLightning();
+            this.lightningTimer = 3 + Math.random() * 5;  // 3-8 seconds
+        }
+    },
+
+    // Trigger a lightning strike
+    triggerLightning() {
+        // 70% chance to hit building, 30% sky only
+        const hitBuilding = Math.random() < 0.7;
+
+        let targetX, targetY;
+        let targetBuilding = null;
+
+        if (hitBuilding && typeof buildingManager !== 'undefined') {
+            // Weight buildings by height (taller = more likely)
+            const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+            if (buildings.length > 0) {
+                // Calculate weights based on height
+                let totalWeight = 0;
+                const weights = buildings.map(b => {
+                    const weight = b.heightBlocks * b.heightBlocks;  // Square for more emphasis
+                    totalWeight += weight;
+                    return weight;
+                });
+
+                // Pick weighted random building
+                let roll = Math.random() * totalWeight;
+                for (let i = 0; i < buildings.length; i++) {
+                    roll -= weights[i];
+                    if (roll <= 0) {
+                        targetBuilding = buildings[i];
+                        break;
+                    }
+                }
+
+                if (targetBuilding) {
+                    // Find highest block
+                    for (let row = 0; row < targetBuilding.heightBlocks; row++) {
+                        for (let col = 0; col < targetBuilding.widthBlocks; col++) {
+                            if (targetBuilding.blocks[row][col]) {
+                                const pos = targetBuilding.getBlockWorldPosition(row, col);
+                                targetX = pos.x + pos.width / 2;
+                                targetY = pos.y;
+                                break;
+                            }
+                        }
+                        if (targetX !== undefined) break;
+                    }
+                }
+            }
+        }
+
+        // Default to sky if no building target
+        if (targetX === undefined) {
+            targetX = 100 + Math.random() * (CONFIG.CANVAS_WIDTH - 200);
+            targetY = CONFIG.SKY_TOP + 100 + Math.random() * 200;
+        }
+
+        // Generate bolt segments
+        const startX = targetX + (Math.random() - 0.5) * 100;
+        const startY = CONFIG.SKY_TOP;
+        const segments = this.generateBoltSegments(startX, startY, targetX, targetY);
+
+        this.lightningBolt = {
+            x1: startX,
+            y1: startY,
+            x2: targetX,
+            y2: targetY,
+            segments: segments,
+            displayTime: 0.2
+        };
+
+        this.lightningFlash = 1;
+
+        // Store pending damage for game.js to process
+        if (targetBuilding) {
+            this.pendingDamage = {
+                type: 'building',
+                building: targetBuilding,
+                x: targetX,
+                y: targetY,
+                blocks: 3 + Math.floor(Math.random() * 3)  // 3-5 blocks
+            };
+        }
+
+        // Play thunder (delayed)
+        setTimeout(() => {
+            if (typeof SoundManager !== 'undefined') {
+                SoundManager.thunder();
+            }
+        }, 300);
+    },
+
+    // Generate jagged bolt segments
+    generateBoltSegments(x1, y1, x2, y2) {
+        const segments = [];
+        const steps = 8;
+        let prevX = x1, prevY = y1;
+
+        for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            let x = x1 + (x2 - x1) * t;
+            let y = y1 + (y2 - y1) * t;
+
+            // Add randomness except for last segment
+            if (i < steps) {
+                x += (Math.random() - 0.5) * 60;
+                y += (Math.random() - 0.5) * 20;
+            }
+
+            segments.push({x1: prevX, y1: prevY, x2: x, y2: y});
+            prevX = x;
+            prevY = y;
+        }
+
+        return segments;
+    },
+
+    // Render lightning
+    renderLightning(ctx) {
+        // Screen flash
+        if (this.lightningFlash > 0) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${this.lightningFlash * 0.3})`;
+            ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+        }
+
+        // Bolt
+        if (this.lightningBolt && this.lightningBolt.segments) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#88f';
+            ctx.shadowBlur = 10;
+
+            this.lightningBolt.segments.forEach(seg => {
+                ctx.beginPath();
+                ctx.moveTo(seg.x1, seg.y1);
+                ctx.lineTo(seg.x2, seg.y2);
+                ctx.stroke();
+            });
+
+            // Thinner bright core
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#aaf';
+            this.lightningBolt.segments.forEach(seg => {
+                ctx.beginPath();
+                ctx.moveTo(seg.x1, seg.y1);
+                ctx.lineTo(seg.x2, seg.y2);
+                ctx.stroke();
+            });
+
+            ctx.shadowBlur = 0;
+        }
+    },
+
+    // Get and clear pending damage (called by game.js)
+    getPendingLightningDamage() {
+        const damage = this.pendingDamage;
+        this.pendingDamage = null;
+        return damage;
     }
 };
