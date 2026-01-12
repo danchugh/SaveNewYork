@@ -46,6 +46,7 @@ function initGame() {
     DayCycle.init();
     DayCycle.reset();
     BackgroundManager.reset();
+    WeatherManager.reset();
     game.score = 0;
     game.state = GameState.PLAYING;
 }
@@ -327,6 +328,7 @@ function update(deltaTime) {
             civilianManager.update(game.deltaTime);
             BackgroundManager.update(game.deltaTime);
             DayCycle.update(game.deltaTime);
+            WeatherManager.update(game.deltaTime);
 
             // Check civilian rescue
             const rescued = civilianManager.checkRescue(player.x, player.y, player.state);
@@ -462,6 +464,9 @@ function renderGame() {
 
     // Draw buildings
     buildingManager.render(ctx);
+
+    // Draw weather effects
+    WeatherManager.render(ctx);
 
     // Draw civilians
     civilianManager.render(ctx);

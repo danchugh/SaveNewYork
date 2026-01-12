@@ -1098,6 +1098,9 @@ class EnemyManager {
         }
 
         console.log(`Wave ${waveNum} started! ${this.enemiesRemainingInWave} enemies, max ${this.maxConcurrentEnemies} at once. Types: ${this.availableTypes.join(', ')}`);
+
+        // Start random weather for this wave
+        WeatherManager.startRandomWeather();
     }
 
     pickEnemyType() {
@@ -1225,6 +1228,7 @@ class EnemyManager {
             this.betweenWaves = true;
             this.waveBreakTimer = 0;
             DayCycle.advance();
+            WeatherManager.fadeOut();
             console.log(`Wave ${this.waveNumber} complete!`);
 
             // Schedule mini-boss after waves 2 and 4
