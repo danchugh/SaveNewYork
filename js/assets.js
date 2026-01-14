@@ -10,6 +10,7 @@ const AssetManager = {
 
     // Keys that require transparency processing (removal of black background)
     transparencyKeys: [
+        'player_p1', 'player_p2',
         'projectile_player', 'projectile_enemy',
         'enemy_drone', 'enemy_interceptor', 'enemy_gunship', 'enemy_carrier', 'enemy_missile',
         'boss_main', 'miniboss_charger', 'miniboss_gunner'
@@ -20,8 +21,8 @@ const AssetManager = {
         images: {
             // Phase 2 - Player & Projectiles
             // Using additive blend mode ('lighter') - black backgrounds become transparent
-            'player_p1': 'assets/player_p1.svg',
-            'player_p2': 'assets/player_p2.svg',
+            'player_p1': 'assets/player_p1.png',
+            'player_p2': 'assets/player_p2.png',
             'projectile_player': 'assets/projectile_player.png',
             'projectile_enemy': 'assets/projectile_enemy.png',
 
