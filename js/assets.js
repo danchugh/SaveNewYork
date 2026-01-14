@@ -175,6 +175,7 @@ const AssetManager = {
 
     /**
      * Process an image to make black pixels transparent (Chroma Key)
+     * Returns a canvas element (drawable with ctx.drawImage)
      */
     processTransparency(img) {
         const canvas = document.createElement('canvas');
@@ -202,8 +203,8 @@ const AssetManager = {
 
         ctx.putImageData(imageData, 0, 0);
 
-        const newImg = new Image();
-        newImg.src = canvas.toDataURL();
-        return newImg;
+        // Return the canvas directly - it's drawable just like an image
+        // and doesn't require async loading
+        return canvas;
     }
 };
