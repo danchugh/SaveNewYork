@@ -199,6 +199,10 @@ const AssetManager = {
             if (r < 15 && g < 15 && b < 15) {
                 data[i + 3] = 0; // Alpha = 0
             }
+            // Also remove white/near-white pixels (for sprites with white backgrounds)
+            if (r > 240 && g > 240 && b > 240) {
+                data[i + 3] = 0; // Alpha = 0
+            }
         }
 
         ctx.putImageData(imageData, 0, 0);
