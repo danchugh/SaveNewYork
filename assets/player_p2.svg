@@ -1,0 +1,20 @@
+<svg width="45" height="45" viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+  <!-- Body -->
+  <path d="M22.5 2 L28 15 L40 25 L40 30 L28 35 L22.5 42 L17 35 L5 30 L5 25 L17 15 Z" fill="#581c3c" stroke="#3b0a22" stroke-width="2"/>
+  
+  <!-- Wings -->
+  <path d="M5 25 L12 25 L12 35 L5 40 Z" fill="#702449"/>
+  <path d="M40 25 L33 25 L33 35 L40 40 Z" fill="#702449"/>
+  
+  <!-- Cockpit -->
+  <ellipse cx="22.5" cy="20" rx="4" ry="7" fill="#e90ea5" stroke="#f9a8d4" stroke-width="1"/>
+  
+  <!-- Engine Glows -->
+  <path d="M15 38 L12 45 L18 45 Z" fill="#f472b6" opacity="0.8"/>
+  <path d="M30 38 L27 45 L33 45 Z" fill="#f472b6" opacity="0.8"/>
+  
+  <!-- Details -->
+  <rect x="21.5" y="5" width="2" height="10" fill="#db2777" opacity="0.5"/>
+  <rect x="10" y="28" width="5" height="2" fill="#e90ea5"/>
+  <rect x="30" y="28" width="5" height="2" fill="#e90ea5"/>
+</svg>

@@ -222,5 +222,8 @@ const VolcanoManager = {
         if (typeof SoundManager !== 'undefined') {
             SoundManager.rockDestroyed();
         }
+        if (typeof EffectsManager !== 'undefined') {
+            EffectsManager.addSparks(rock.x, rock.y, '#ff6600');
+        }
     }
 };

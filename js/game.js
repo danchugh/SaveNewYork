@@ -8,6 +8,7 @@ const FRAME_TIME = 1000 / TARGET_FPS;
 // GAME STATE
 // ============================================
 const GameState = {
+    LOADING: 'loading',
     TITLE: 'title',
     PLAYING: 'playing',
     GAME_OVER: 'gameover',
@@ -15,13 +16,49 @@ const GameState = {
 };
 
 const game = {
-    state: GameState.TITLE,
+    state: GameState.LOADING,
     lastTime: 0,
     deltaTime: 0,
     score: 0,
+    nextBonusLifeAt: CONFIG.BONUS_LIFE_THRESHOLD,
     finalWave: 0,
     highScoreRank: 0
 };
+
+// Helper function to add score and check for bonus lives
+// In 2P mode, total combined score triggers bonus lives for all players
+function addScore(points, playerId = null) {
+    if (points <= 0) return;
+
+    // Add to game total (for combined tracking)
+    game.score += points;
+
+    // Also add to specific player if identified
+    if (playerId && typeof playerManager !== 'undefined') {
+        const p = playerManager.getPlayer(playerId);
+        if (p) p.score += points;
+    }
+
+    // Check for bonus lives based on combined score
+    while (game.score >= game.nextBonusLifeAt) {
+        // Award bonus life to all active players
+        for (const p of playerManager.getActivePlayers()) {
+            if (p.lives < CONFIG.MAX_LIVES) {
+                p.lives++;
+                console.log(`Bonus life awarded to P${p.id}! Lives: ${p.lives}`);
+            }
+        }
+
+        if (typeof SoundManager !== 'undefined') {
+            SoundManager.oneUp();
+        }
+        if (typeof EffectsManager !== 'undefined') {
+            EffectsManager.addTextPopup(CONFIG.CANVAS_WIDTH / 2, 80, '1UP!', '#00ff88');
+        }
+
+        game.nextBonusLifeAt += CONFIG.BONUS_LIFE_THRESHOLD;
+    }
+}
 
 // ============================================
 // CANVAS SETUP
@@ -34,11 +71,18 @@ canvas.height = CONFIG.CANVAS_HEIGHT;
 // Initialize input and sound
 input.init();
 SoundManager.init();
+if (typeof IntroManager !== 'undefined') IntroManager.init();
+
+// Number of players (1 or 2) - can be set from menu later
+let numPlayers = 1;
 
 // Initialize game
-function initGame() {
+function initGame(playerCount = 1) {
+    numPlayers = playerCount;
     buildingManager.init();
-    player.reset();
+    playerManager.init(numPlayers);
+    // Legacy compat - point player to P1
+    player = playerManager.getPlayer(1);
     projectileManager.clear();
     enemyManager.reset();
     enemyManager.startWave(1);
@@ -48,7 +92,11 @@ function initGame() {
     BackgroundManager.reset();
     WeatherManager.reset();
     VolcanoManager.reset();
+    EffectsManager.reset();
+    ConstructionManager.reset();
+    PowerupManager.reset();
     game.score = 0;
+    game.nextBonusLifeAt = CONFIG.BONUS_LIFE_THRESHOLD;
     game.state = GameState.PLAYING;
 }
 
@@ -118,34 +166,66 @@ function checkCollisions() {
                     baseScore = 75;
                 }
 
-                game.score += Math.floor(baseScore * DayCycle.getScoreMultiplier());
+                addScore(Math.floor(baseScore * DayCycle.getScoreMultiplier()));
                 break;
             }
         }
     }
 
-    // Player vs buildings (if flying)
-    if (player.state === 'flying') {
-        const playerBounds = getPlayerBounds(player);
+    // Players vs buildings (if flying and not in launch grace period)
+    for (const p of playerManager.getActivePlayers()) {
+        if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+        const playerBounds = getPlayerBounds(p);
 
         for (const building of buildingManager.buildings) {
-            for (let row = 0; row < building.heightBlocks; row++) {
-                for (let col = 0; col < building.widthBlocks; col++) {
+            let hitBuilding = false;
+            for (let row = 0; row < building.heightBlocks && !hitBuilding; row++) {
+                for (let col = 0; col < building.widthBlocks && !hitBuilding; col++) {
                     if (!building.blocks[row][col]) continue;
 
                     const blockPos = building.getBlockWorldPosition(row, col);
                     if (rectIntersects(playerBounds, blockPos)) {
-                        player.die();
-                        return;
+                        hitBuilding = true;
+                        const speedRatio = p.currentSpeed / CONFIG.PLAYER_MAX_SPEED;
+                        const totalDamage = 3 + Math.floor(speedRatio * 7);
+
+                        let destroyed = 0;
+                        for (let dr = -2; dr <= 2 && destroyed < totalDamage; dr++) {
+                            for (let dc = -2; dc <= 2 && destroyed < totalDamage; dc++) {
+                                const tr = row + dr;
+                                const tc = col + dc;
+                                if (tr >= 0 && tr < building.heightBlocks &&
+                                    tc >= 0 && tc < building.widthBlocks &&
+                                    building.blocks[tr][tc]) {
+                                    building.destroyBlock(tr, tc);
+                                    destroyed++;
+                                }
+                            }
+                        }
+
+                        if (typeof EffectsManager !== 'undefined') {
+                            EffectsManager.addExplosion(
+                                blockPos.x + blockPos.width / 2,
+                                blockPos.y + blockPos.height / 2,
+                                30, '#ff8800'
+                            );
+                        }
+
+                        const bounceX = (p.x < blockPos.x + blockPos.width / 2) ? -1 : 1;
+                        const bounceY = (p.y < blockPos.y + blockPos.height / 2) ? -1 : 1;
+                        p.takeDamage(bounceX, bounceY);
                     }
                 }
             }
         }
     }
 
-    // Player vs enemies
-    if (player.state === 'flying') {
-        const playerBounds = getPlayerBounds(player);
+    // Players vs enemies (if flying and not in launch grace period)
+    for (const p of playerManager.getActivePlayers()) {
+        if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+        const playerBounds = getPlayerBounds(p);
 
         for (const enemy of enemyManager.enemies) {
             if (!enemy.active) continue;
@@ -158,7 +238,10 @@ function checkCollisions() {
             };
 
             if (rectIntersects(playerBounds, enemyBounds)) {
-                player.die();
+                enemy.die();
+                const bounceX = (p.x < enemy.x) ? -1 : 1;
+                const bounceY = (p.y < enemy.y) ? -1 : 1;
+                p.takeDamage(bounceX, bounceY);
                 break;
             }
         }
@@ -178,7 +261,7 @@ function checkCollisions() {
             if (dist < proj.radius + boss.width / 2) {
                 proj.active = false;
                 const defeated = boss.takeDamage();
-                game.score += 50;
+                addScore(50);
                 SoundManager.bossHit();
 
                 if (defeated) {
@@ -192,9 +275,11 @@ function checkCollisions() {
             }
         }
 
-        // Player vs boss
-        if (player.state === 'flying') {
-            const playerBounds = getPlayerBounds(player);
+        // Players vs boss (with grace period protection)
+        for (const p of playerManager.getActivePlayers()) {
+            if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+            const playerBounds = getPlayerBounds(p);
             const boss = enemyManager.boss;
             const bossBounds = {
                 x: boss.x - boss.width / 2,
@@ -204,7 +289,10 @@ function checkCollisions() {
             };
 
             if (rectIntersects(playerBounds, bossBounds)) {
-                player.die();
+                boss.takeDamage();
+                const bounceX = (p.x < boss.x) ? -1 : 1;
+                const bounceY = (p.y < boss.y) ? -1 : 1;
+                p.takeDamage(bounceX, bounceY);
             }
         }
     }
@@ -223,14 +311,16 @@ function checkCollisions() {
             if (dist < proj.radius + miniBoss.width / 2) {
                 proj.active = false;
                 miniBoss.takeDamage();
-                game.score += Math.floor(75 * DayCycle.getScoreMultiplier());
+                addScore(Math.floor(75 * DayCycle.getScoreMultiplier()));
                 break;
             }
         }
 
-        // Player vs mini-boss
-        if (player.state === 'flying') {
-            const playerBounds = getPlayerBounds(player);
+        // Players vs mini-boss (with grace period protection)
+        for (const p of playerManager.getActivePlayers()) {
+            if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+            const playerBounds = getPlayerBounds(p);
             const miniBoss = enemyManager.miniBoss;
             const miniBossBounds = {
                 x: miniBoss.x - miniBoss.width / 2,
@@ -240,15 +330,19 @@ function checkCollisions() {
             };
 
             if (rectIntersects(playerBounds, miniBossBounds)) {
-                player.die();
+                const bounceX = (p.x < miniBoss.x) ? -1 : 1;
+                const bounceY = (p.y < miniBoss.y) ? -1 : 1;
+                p.takeDamage(bounceX, bounceY);
             }
         }
     }
 
-    // Enemy projectiles vs player
+    // Enemy projectiles vs players (with grace period protection)
     const enemyProjectiles = projectileManager.getEnemyProjectiles();
-    if (player.state === 'flying') {
-        const playerBounds = getPlayerBounds(player);
+    for (const p of playerManager.getActivePlayers()) {
+        if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+        const playerBounds = getPlayerBounds(p);
 
         for (const proj of enemyProjectiles) {
             if (!proj.active) continue;
@@ -257,7 +351,9 @@ function checkCollisions() {
                 { x: proj.x, y: proj.y, radius: proj.radius },
                 playerBounds
             )) {
-                player.die();
+                const bounceX = Math.cos(proj.angle * Math.PI / 180);
+                const bounceY = Math.sin(proj.angle * Math.PI / 180);
+                p.takeDamage(-bounceX, -bounceY);
                 proj.active = false;
                 break;
             }
@@ -302,19 +398,20 @@ function checkCollisions() {
                 if (dist < proj.radius + rock.size) {
                     proj.active = false;
                     VolcanoManager.destroyRock(rock);
-                    game.score += 25;
+                    addScore(25);
                     break;
                 }
             }
 
             if (!rock.active) continue;
 
-            // Rock vs player
-            if (player.state === 'flying') {
+            // Rock vs player (with grace period protection)
+            if (player.state === 'flying' && player.launchGraceTimer <= 0) {
                 const playerBounds = getPlayerBounds(player);
                 if (rock.x > playerBounds.x && rock.x < playerBounds.x + playerBounds.width &&
                     rock.y > playerBounds.y && rock.y < playerBounds.y + playerBounds.height) {
-                    player.die();
+                    // Bounce away from rock impact
+                    player.takeDamage(0, -1);
                     VolcanoManager.destroyRock(rock);
                     SoundManager.rockImpact();
                 }
@@ -328,7 +425,7 @@ function checkCollisions() {
                 const dist = Math.sqrt(Math.pow(rock.x - enemy.x, 2) + Math.pow(rock.y - enemy.y, 2));
                 if (dist < rock.size + enemy.width / 2) {
                     enemy.die();
-                    game.score += Math.floor(100 * DayCycle.getScoreMultiplier());
+                    addScore(Math.floor(100 * DayCycle.getScoreMultiplier()));
                     VolcanoManager.destroyRock(rock);
                     SoundManager.rockImpact();
                     break;
@@ -360,6 +457,9 @@ function checkCollisions() {
                             }
                             VolcanoManager.destroyRock(rock);
                             SoundManager.rockImpact();
+                            if (typeof EffectsManager !== 'undefined') {
+                                EffectsManager.addExplosion(rock.x, rock.y, 25, '#ff4400');
+                            }
                             break;
                         }
                     }
@@ -395,6 +495,9 @@ function checkCollisions() {
 function update(deltaTime) {
     switch (game.state) {
         case GameState.TITLE:
+            if (typeof IntroManager !== 'undefined') {
+                IntroManager.update(game.deltaTime);
+            }
             if (input.isKeyJustPressed(Keys.ENTER)) {
                 SoundManager.init(); // Ensure audio context is ready
                 SoundManager.gameStart();
@@ -403,15 +506,22 @@ function update(deltaTime) {
             }
             break;
         case GameState.PLAYING:
-            player.update(game.deltaTime);
+            // Update input state for all players
+            input.update();
+            playerManager.update(game.deltaTime);
             projectileManager.update(game.deltaTime);
-            enemyManager.update(game.deltaTime, player.x, player.y, projectileManager);
+            // Use P1 position for enemy targeting (could be improved for 2P)
+            const p1 = playerManager.getPlayer(1);
+            enemyManager.update(game.deltaTime, p1 ? p1.x : 0, p1 ? p1.y : 0, projectileManager);
             buildingManager.update(game.deltaTime);
             civilianManager.update(game.deltaTime);
+            ConstructionManager.update(game.deltaTime);
             BackgroundManager.update(game.deltaTime);
             DayCycle.update(game.deltaTime);
             WeatherManager.update(game.deltaTime);
             VolcanoManager.update(game.deltaTime);
+            EffectsManager.update(game.deltaTime);
+            PowerupManager.update(game.deltaTime);
 
             // Process lightning damage
             if (typeof WeatherManager !== 'undefined') {
@@ -425,13 +535,18 @@ function update(deltaTime) {
                         for (let col = 0; col < building.widthBlocks && destroyed < lightningDamage.blocks; col++) {
                             if (building.blocks[row][col]) {
                                 const pos = building.getBlockWorldPosition(row, col);
-                                const dist = Math.abs(pos.x + pos.width/2 - lightningDamage.x);
+                                const dist = Math.abs(pos.x + pos.width / 2 - lightningDamage.x);
                                 if (dist < 30) {
                                     building.destroyBlock(row, col);
                                     destroyed++;
                                 }
                             }
                         }
+                    }
+
+                    // Add lightning impact visual effect
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addLightningImpact(lightningDamage.x, lightningDamage.y);
                     }
 
                     // Check if lightning hit any enemies
@@ -444,16 +559,23 @@ function update(deltaTime) {
                             );
                             if (dist < 50) {
                                 enemy.die();
-                                game.score += Math.floor(100 * DayCycle.getScoreMultiplier());
+                                addScore(Math.floor(100 * DayCycle.getScoreMultiplier()));
                             }
                         }
                     }
                 }
             }
 
-            // Check civilian rescue
-            const rescued = civilianManager.checkRescue(player.x, player.y, player.state);
-            game.score += rescued * 500;
+            // Check civilian rescue and trigger construction crew
+            const rescueResult = civilianManager.checkRescue(player.x, player.y, player.state);
+            if (rescueResult.count > 0) {
+                addScore(rescueResult.count * 500);
+                // Trigger construction crew if building exists
+                if (rescueResult.building) {
+                    console.log('Triggering construction for building at x:', rescueResult.building.x);
+                    ConstructionManager.triggerRepair(rescueResult.building);
+                }
+            }
 
             checkCollisions();
             break;
@@ -469,6 +591,12 @@ function update(deltaTime) {
             break;
     }
 
+    // Check Hit Stop
+    if (EffectsManager.hitStopTimer > 0) {
+        EffectsManager.hitStopTimer -= game.deltaTime;
+        return; // Pause game updates
+    }
+
     // Clear just pressed at end of frame
     input.clearJustPressed();
 }
@@ -481,7 +609,9 @@ function render() {
     // Render based on state
     switch (game.state) {
         case GameState.TITLE:
-            renderTitle();
+            if (typeof IntroManager !== 'undefined') {
+                IntroManager.render(ctx);
+            }
             break;
         case GameState.PLAYING:
             renderGame();
@@ -495,87 +625,53 @@ function render() {
     }
 }
 
-function renderTitle() {
-    // Draw sky background
-    ctx.fillStyle = CONFIG.COLORS.SKY;
-    ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
 
-    // Draw building silhouettes (scaled for 960x720)
-    ctx.fillStyle = '#1a1a2e';
-    const silhouettes = [
-        { x: 80, w: 70, h: 220 },
-        { x: 180, w: 90, h: 450 },
-        { x: 310, w: 60, h: 300 },
-        { x: 420, w: 110, h: 520 },
-        { x: 580, w: 70, h: 340 },
-        { x: 700, w: 80, h: 250 },
-        { x: 820, w: 90, h: 380 }
-    ];
-    silhouettes.forEach(s => {
-        ctx.fillRect(s.x, CONFIG.CANVAS_HEIGHT - s.h, s.w, s.h);
-    });
 
-    // Title
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ef4444';
-    ctx.font = 'bold 72px monospace';
-    ctx.fillText('SAVE', CONFIG.CANVAS_WIDTH / 2, 160);
-    ctx.fillStyle = '#4ade80';
-    ctx.fillText('NEW YORK', CONFIG.CANVAS_WIDTH / 2, 240);
 
-    // Subtitle
-    ctx.fillStyle = '#fff';
-    ctx.font = '20px monospace';
-    ctx.fillText('Defend the city from alien invasion!', CONFIG.CANVAS_WIDTH / 2, 300);
-
-    // Controls
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '16px monospace';
-    ctx.fillText('LEFT / RIGHT - Turn', CONFIG.CANVAS_WIDTH / 2, 380);
-    ctx.fillText('UP / DOWN - Speed up / Slow down', CONFIG.CANVAS_WIDTH / 2, 405);
-    ctx.fillText('SPACE - Fire', CONFIG.CANVAS_WIDTH / 2, 430);
-    ctx.font = '14px monospace';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText('Fly over pads to refuel', CONFIG.CANVAS_WIDTH / 2, 465);
-
-    // High Scores
-    const highScores = HighScoreManager.getScores();
-    let startPromptY = 580;
-
-    if (highScores.length > 0) {
-        startPromptY = 640; // Move start prompt down if scores are shown
-
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 18px monospace';
-        ctx.fillText('HIGH SCORES', CONFIG.CANVAS_WIDTH / 2, 510);
-
-        ctx.font = '14px monospace';
-        const topScores = highScores.slice(0, 5);
-        topScores.forEach((entry, index) => {
-            const rank = index + 1;
-            const scoreText = `${rank}. ${entry.score.toString().padStart(6, ' ')}  Wave ${entry.wave}`;
-            ctx.fillStyle = index === 0 ? '#fbbf24' : '#fff';
-            ctx.fillText(scoreText, CONFIG.CANVAS_WIDTH / 2, 535 + index * 20);
-        });
-    }
-
-    // Start prompt (blinking)
-    if (Math.floor(Date.now() / 500) % 2 === 0) {
-        ctx.fillStyle = '#4ade80';
-        ctx.font = '24px monospace';
-        ctx.fillText('Press ENTER to Start', CONFIG.CANVAS_WIDTH / 2, startPromptY);
-    }
-
-    // Draw green border
-    ctx.strokeStyle = CONFIG.COLORS.BORDER;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, CONFIG.CANVAS_WIDTH - 4, CONFIG.CANVAS_HEIGHT - 4);
-}
 
 function renderGame() {
-    // Draw sky with smooth transitions
-    ctx.fillStyle = DayCycle.getSkyColorSmooth();
-    ctx.fillRect(0, CONFIG.SKY_TOP, CONFIG.CANVAS_WIDTH, CONFIG.STREET_Y - CONFIG.SKY_TOP);
+    // Apply Screen Shake
+    ctx.save();
+    ctx.translate(EffectsManager.shakeX, EffectsManager.shakeY);
+
+    // Draw sky with dramatic Contra-style gradient
+    const skyGradient = ctx.createLinearGradient(0, CONFIG.SKY_TOP, 0, CONFIG.STREET_Y);
+
+    // Get time-appropriate gradient colors
+    const isNight = DayCycle.currentTime === 'night';
+    const isDusk = DayCycle.currentTime === 'dusk';
+    const isDawn = DayCycle.currentTime === 'dawn';
+
+    if (isNight) {
+        skyGradient.addColorStop(0, '#0d0d1a');    // Almost black at top
+        skyGradient.addColorStop(0.3, '#1a1a2e');  // Deep purple-black
+        skyGradient.addColorStop(0.7, '#2d1f3d');  // Purple hint
+        skyGradient.addColorStop(1, '#1a1a2e');    // Back to dark
+    } else if (isDusk) {
+        skyGradient.addColorStop(0, '#2d1b4e');    // Deep purple at top
+        skyGradient.addColorStop(0.3, '#4a1942');  // Purple-red
+        skyGradient.addColorStop(0.6, '#7c2d12');  // Burnt orange
+        skyGradient.addColorStop(1, '#451a03');    // Dark brown at horizon
+    } else if (isDawn) {
+        skyGradient.addColorStop(0, '#3b1f5b');    // Purple at top
+        skyGradient.addColorStop(0.4, '#5b2c6f');  // Lighter purple
+        skyGradient.addColorStop(0.7, '#9d4edd');  // Bright purple
+        skyGradient.addColorStop(1, '#c77dff');    // Light purple-pink at horizon
+    } else {
+        // Day - moody atmospheric, not bright blue
+        skyGradient.addColorStop(0, '#3d5a73');    // Dark steel blue at top
+        skyGradient.addColorStop(0.4, '#5b7c99');  // Muted steel blue
+        skyGradient.addColorStop(0.8, '#8fa4b8');  // Lighter at middle
+        skyGradient.addColorStop(1, '#b8c9d6');    // Hazy at horizon
+    }
+
+    ctx.fillStyle = skyGradient;
+    ctx.fillRect(
+        -EffectsManager.shakeIntensity,
+        CONFIG.SKY_TOP - EffectsManager.shakeIntensity,
+        CONFIG.CANVAS_WIDTH + EffectsManager.shakeIntensity * 2,
+        CONFIG.STREET_Y - CONFIG.SKY_TOP + EffectsManager.shakeIntensity * 2
+    );
 
     // Draw celestial bodies (stars, sun/moon, clouds, fireflies)
     DayCycle.render(ctx);
@@ -598,28 +694,47 @@ function renderGame() {
     // Draw volcanic rocks
     VolcanoManager.renderRocks(ctx);
 
-    // Draw player
-    player.render(ctx);
+    // Draw powerups
+    PowerupManager.render(ctx);
+
+    // Draw players
+    playerManager.render(ctx);
 
     // Draw projectiles
     projectileManager.render(ctx);
 
-    // Draw street
+    // Draw visual effects (explosions, sparks, etc.)
+    EffectsManager.render(ctx);
+
+    // Draw street (extends to bottom of canvas)
     ctx.fillStyle = DayCycle.getStreetColor();
-    ctx.fillRect(0, CONFIG.STREET_Y, CONFIG.CANVAS_WIDTH, CONFIG.SUBWAY_TOP - CONFIG.STREET_Y);
+    ctx.fillRect(
+        -EffectsManager.shakeIntensity,
+        CONFIG.STREET_Y,
+        CONFIG.CANVAS_WIDTH + EffectsManager.shakeIntensity * 2,
+        CONFIG.CANVAS_HEIGHT - CONFIG.STREET_Y
+    );
 
-    // Draw subway background
-    ctx.fillStyle = CONFIG.COLORS.SUBWAY_BG;
-    ctx.fillRect(0, CONFIG.SUBWAY_TOP, CONFIG.CANVAS_WIDTH, CONFIG.SUBWAY_BOTTOM - CONFIG.SUBWAY_TOP);
+    // Draw sidewalk along base of buildings
+    const sidewalkColor = DayCycle.currentTime === 'night' ? '#374151' : '#9ca3af';
+    ctx.fillStyle = sidewalkColor;
+    ctx.fillRect(0, CONFIG.STREET_Y - 8, CONFIG.CANVAS_WIDTH, 8);
 
-    // Draw subway tunnel (decorative arch)
-    ctx.fillStyle = CONFIG.COLORS.SUBWAY_TUNNEL;
-    ctx.beginPath();
-    ctx.ellipse(CONFIG.CANVAS_WIDTH / 2, CONFIG.SUBWAY_BOTTOM, 280, 50, 0, Math.PI, 0);
-    ctx.fill();
+    // Curb line
+    ctx.fillStyle = DayCycle.currentTime === 'night' ? '#1f2937' : '#6b7280';
+    ctx.fillRect(0, CONFIG.STREET_Y - 2, CONFIG.CANVAS_WIDTH, 2);
 
-    // Draw refuel pads
-    ctx.fillStyle = CONFIG.COLORS.HUD_TEXT;
+    // Road lane markings (dashed yellow line)
+    ctx.fillStyle = '#fbbf24';
+    for (let x = 20; x < CONFIG.CANVAS_WIDTH; x += 60) {
+        ctx.fillRect(x, CONFIG.STREET_Y + 15, 30, 3);
+    }
+
+    // Draw construction crew (on street)
+    ConstructionManager.render(ctx);
+
+    // Draw refuel pads - Metallic/Industrial look
+    ctx.fillStyle = '#334155'; // Dark metal
     ctx.fillRect(
         CONFIG.REFUEL_PAD_LEFT.x - CONFIG.REFUEL_PAD_WIDTH / 2,
         CONFIG.REFUEL_PAD_LEFT.y - CONFIG.REFUEL_PAD_HEIGHT,
@@ -633,6 +748,25 @@ function renderGame() {
         CONFIG.REFUEL_PAD_HEIGHT
     );
 
+    // Pad warning stripes
+    ctx.fillStyle = '#f59e0b';
+    for (let i = 0; i < 3; i++) {
+        ctx.fillRect(
+            CONFIG.REFUEL_PAD_LEFT.x - CONFIG.REFUEL_PAD_WIDTH / 2 + 10 + i * 15,
+            CONFIG.REFUEL_PAD_LEFT.y - CONFIG.REFUEL_PAD_HEIGHT + 5,
+            5, 20
+        );
+        ctx.fillRect(
+            CONFIG.REFUEL_PAD_RIGHT.x - CONFIG.REFUEL_PAD_WIDTH / 2 + 10 + i * 15,
+            CONFIG.REFUEL_PAD_RIGHT.y - CONFIG.REFUEL_PAD_HEIGHT + 5,
+            5, 20
+        );
+    }
+
+    // Restore context (End Shake)
+    ctx.restore();
+
+    // Draw HUD (Static, not shaken)
     // Draw HUD background (top)
     ctx.fillStyle = CONFIG.COLORS.HUD_BG;
     ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.SKY_TOP);
@@ -645,8 +779,8 @@ function renderGame() {
     ctx.lineWidth = 4;
     ctx.strokeRect(2, 2, CONFIG.CANVAS_WIDTH - 4, CONFIG.CANVAS_HEIGHT - 4);
 
-    // Draw HUD
-    renderHUD(ctx, player, buildingManager, enemyManager, game.score);
+    // Draw HUD contents
+    renderHUD(ctx, buildingManager, enemyManager, playerManager.getTotalScore());
 }
 
 function renderGameOver() {
@@ -745,5 +879,46 @@ function gameLoop(currentTime) {
 // ============================================
 // START GAME
 // ============================================
-console.log('Save New York - Game Initialized');
-requestAnimationFrame(gameLoop);
+console.log('Save New York - Game Initializing...');
+
+// Load assets first, then start game loop
+function startGame() {
+    const loadingScreen = document.getElementById('loading-screen');
+    const loadingBar = document.getElementById('loading-bar');
+    const loadingText = document.getElementById('loading-text');
+
+    // Update loading bar periodically
+    const updateLoadingUI = () => {
+        if (game.state === GameState.LOADING) {
+            const progress = AssetManager.getProgress() * 100;
+            if (loadingBar) loadingBar.style.width = progress + '%';
+            if (loadingText) loadingText.textContent = `Loading... ${Math.floor(progress)}%`;
+            requestAnimationFrame(updateLoadingUI);
+        }
+    };
+    updateLoadingUI();
+
+    AssetManager.load().then(() => {
+        console.log('Assets loaded, starting game!');
+
+        // Hide loading screen
+        if (loadingScreen) {
+            loadingScreen.classList.add('hidden');
+            setTimeout(() => loadingScreen.style.display = 'none', 500);
+        }
+
+        // Switch to title state and start loop
+        game.state = GameState.TITLE;
+        if (typeof IntroManager !== 'undefined') IntroManager.reset();
+        console.log('Save New York - Game Initialized');
+        requestAnimationFrame(gameLoop);
+    }).catch(err => {
+        console.error('Failed to load assets:', err);
+        // Start anyway with fallback
+        game.state = GameState.TITLE;
+        if (loadingScreen) loadingScreen.style.display = 'none';
+        requestAnimationFrame(gameLoop);
+    });
+}
+
+startGame();

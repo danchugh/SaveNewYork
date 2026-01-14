@@ -1,21 +1,54 @@
+// ============================================
+// PLAYER SYSTEM - Supports 1-2 Players
+// ============================================
 const PlayerState = {
     DOCKED: 'docked',
     FLYING: 'flying',
     REFUELING: 'refueling',
-    EXPLODING: 'exploding'
+    EXPLODING: 'exploding',
+    DEAD: 'dead' // Out of lives
+};
+
+// Player color schemes
+const PlayerColors = {
+    1: {
+        body: '#1e293b',        // Slate 800
+        bodyHighlight: 'rgba(148, 163, 184, 0.3)',
+        wings: '#334155',       // Slate 700
+        cockpit: '#0ea5e9',     // Sky 500 (Blue)
+        engine: '#3b82f6',
+        engineCore: '#60a5fa',
+        engineHot: '#bfdbfe',
+        shield: '#00aaff'
+    },
+    2: {
+        body: '#3b1e29',        // Dark magenta
+        bodyHighlight: 'rgba(184, 148, 163, 0.3)',
+        wings: '#553341',       // Darker magenta
+        cockpit: '#e90ea5',     // Pink/Magenta
+        engine: '#f63b82',
+        engineCore: '#fa60a5',
+        engineHot: '#febfdb',
+        shield: '#ff00aa'
+    }
 };
 
 class Player {
-    constructor() {
+    constructor(playerId = 1) {
+        this.id = playerId;
+        this.colors = PlayerColors[playerId] || PlayerColors[1];
+        this.score = 0;
+        this.animTimer = 0;
         this.reset();
     }
 
     reset() {
-        // Spawn at random pad, pointing up
-        const pad = Math.random() < 0.5 ? CONFIG.REFUEL_PAD_LEFT : CONFIG.REFUEL_PAD_RIGHT;
+        // Spawn at assigned pad based on player ID
+        const pad = this.id === 1 ? CONFIG.REFUEL_PAD_LEFT : CONFIG.REFUEL_PAD_RIGHT;
+        this.assignedPad = pad; // Remember which pad this player uses
         this.x = pad.x;
         this.y = pad.y - CONFIG.REFUEL_PAD_HEIGHT - 15;
-        this.angle = -90; // -90 = pointing up (0 = right)
+        this.angle = -90;
         this.state = PlayerState.DOCKED;
 
         this.speed = CONFIG.PLAYER_SPEED;
@@ -31,19 +64,51 @@ class Player {
 
         this.refuelTimer = 0;
         this.explosionTimer = 0;
-
         this.fireCooldown = 0;
-        this.fireRate = 0.2; // seconds between shots
-
-        // Launch grace period - prevents immediate re-docking
+        this.fireRate = 0.15;
         this.launchGraceTimer = 0;
 
-        // Jet dimensions
-        this.width = 24;
-        this.height = 14;
+        this.width = 30;
+        this.height = 20;
+
+        this.shield = false;
+        this.invulnerable = false;
+        this.invulnerabilityTimer = 0;
+        this.bounceVx = 0;
+        this.bounceVy = 0;
+    }
+
+    // Get input state for this player from InputManager
+    getInput(action) {
+        return input.isPlayerActionDown(this.id, action);
+    }
+
+    getInputJustPressed(action) {
+        return input.isPlayerActionJustPressed(this.id, action);
     }
 
     update(deltaTime) {
+        this.animTimer += deltaTime;
+
+        if (this.state === PlayerState.DEAD) return;
+
+        if (this.invulnerable) {
+            this.invulnerabilityTimer -= deltaTime;
+            if (this.invulnerabilityTimer <= 0) {
+                this.invulnerable = false;
+                this.invulnerabilityTimer = 0;
+            }
+        }
+
+        if (this.bounceVx !== 0 || this.bounceVy !== 0) {
+            this.x += this.bounceVx * deltaTime;
+            this.y += this.bounceVy * deltaTime;
+            this.bounceVx *= 0.9;
+            this.bounceVy *= 0.9;
+            if (Math.abs(this.bounceVx) < 1) this.bounceVx = 0;
+            if (Math.abs(this.bounceVy) < 1) this.bounceVy = 0;
+        }
+
         switch (this.state) {
             case PlayerState.DOCKED:
                 this.updateDocked();
@@ -61,88 +126,82 @@ class Player {
     }
 
     updateDocked() {
-        // Wait for UP key to launch
-        if (input.isKeyJustPressed(Keys.UP)) {
+        if (this.getInputJustPressed(Actions.UP)) {
             this.state = PlayerState.FLYING;
             this.currentSpeed = this.speed;
-            this.launchGraceTimer = 0.5; // Half second grace period
-            console.log('Launched!');
+            this.launchGraceTimer = 0.5;
+            console.log(`Player ${this.id} launched!`);
+            if (typeof EffectsManager !== 'undefined') {
+                EffectsManager.addExplosion(this.x, this.y + 10, 10, '#ffffff');
+            }
         }
     }
 
     updateFlying(deltaTime) {
-        // Decrement launch grace timer
         if (this.launchGraceTimer > 0) {
             this.launchGraceTimer -= deltaTime;
         }
 
-        // Turn with left/right - INSTANT snappy response, no drag
-        if (input.isKeyDown(Keys.LEFT)) {
+        // Turn
+        if (this.getInput(Actions.LEFT)) {
             this.angle -= this.turnSpeed * deltaTime;
         }
-        if (input.isKeyDown(Keys.RIGHT)) {
+        if (this.getInput(Actions.RIGHT)) {
             this.angle += this.turnSpeed * deltaTime;
         }
 
-        // Normalize angle to 0-360
         while (this.angle < 0) this.angle += 360;
         while (this.angle >= 360) this.angle -= 360;
 
-        // Thrust control: UP to accelerate, DOWN to decelerate
-        if (input.isKeyDown(Keys.UP)) {
+        // Thrust
+        if (this.getInput(Actions.UP)) {
             this.currentSpeed += this.acceleration * deltaTime;
-        } else if (input.isKeyDown(Keys.DOWN)) {
+        } else if (this.getInput(Actions.DOWN)) {
             this.currentSpeed -= this.deceleration * deltaTime;
         }
 
-        // Clamp speed to min/max bounds - no gradual return, stays where you set it
         this.currentSpeed = Math.max(this.minSpeed, Math.min(this.maxSpeed, this.currentSpeed));
 
-        // Shoot with space
+        // Shoot
         this.fireCooldown -= deltaTime;
-        if (input.isKeyDown(Keys.SPACE) && this.fireCooldown <= 0) {
+        if (this.getInput(Actions.FIRE) && this.fireCooldown <= 0) {
             this.shoot();
             this.fireCooldown = this.fireRate;
         }
 
-        // Move forward in facing direction at current speed - NO DRAG
+        // Movement
         const radians = this.angle * (Math.PI / 180);
         this.x += Math.cos(radians) * this.currentSpeed * deltaTime;
         this.y += Math.sin(radians) * this.currentSpeed * deltaTime;
 
-        // Add wind effect (only when flying)
+        // Wind
         if (typeof WeatherManager !== 'undefined') {
-            const windEffect = WeatherManager.getWindEffect();
-            this.x += windEffect * deltaTime;
+            this.x += WeatherManager.getWindEffect() * deltaTime;
         }
 
-        // Drain fuel
+        // Fuel
         this.fuel -= CONFIG.FUEL_DRAIN_RATE * deltaTime;
 
-        // Screen wrap horizontal with kill walls
-        const WRAP_MARGIN = 40;   // How far off-screen before wrapping
-        const KILL_MARGIN = 100;  // How far off-screen before death
+        // Screen bounds
+        const WRAP_MARGIN = 40;
+        const KILL_MARGIN = 100;
 
-        // Kill walls - too far off screen = death
         if (this.x < -KILL_MARGIN || this.x > CONFIG.CANVAS_WIDTH + KILL_MARGIN) {
             this.die();
             return;
         }
 
-        // Screen wrap at smaller margin
         if (this.x < -WRAP_MARGIN) this.x = CONFIG.CANVAS_WIDTH + WRAP_MARGIN;
         if (this.x > CONFIG.CANVAS_WIDTH + WRAP_MARGIN) this.x = -WRAP_MARGIN;
 
-        // Clamp vertical (no wrap, just limits)
         if (this.y < CONFIG.SKY_TOP + 10) this.y = CONFIG.SKY_TOP + 10;
         if (this.y > CONFIG.STREET_Y - 10) this.y = CONFIG.STREET_Y - 10;
 
-        // Check for refuel pad collision (only after grace period)
+        // Refuel pads (exclusive)
         if (this.launchGraceTimer <= 0) {
             this.checkRefuelPads();
         }
 
-        // Check for out of fuel
         if (this.fuel <= 0) {
             this.die();
         }
@@ -150,8 +209,6 @@ class Player {
 
     updateRefueling(deltaTime) {
         this.refuelTimer += deltaTime;
-
-        // Refuel progress
         const refuelProgress = this.refuelTimer / CONFIG.REFUEL_TIME;
         this.fuel = Math.min(CONFIG.FUEL_MAX, CONFIG.FUEL_MAX * refuelProgress);
 
@@ -160,52 +217,55 @@ class Player {
             this.state = PlayerState.DOCKED;
             this.refuelTimer = 0;
             SoundManager.refuelComplete();
-            console.log('Refuel complete!');
         }
     }
 
     updateExploding(deltaTime) {
         this.explosionTimer += deltaTime;
-        if (this.explosionTimer >= 1) {
+        if (this.explosionTimer >= 1.5) {
             this.respawn();
         }
     }
 
     checkRefuelPads() {
-        const leftPad = CONFIG.REFUEL_PAD_LEFT;
-        const rightPad = CONFIG.REFUEL_PAD_RIGHT;
+        const pads = [CONFIG.REFUEL_PAD_LEFT, CONFIG.REFUEL_PAD_RIGHT];
         const padW = CONFIG.REFUEL_PAD_WIDTH;
         const padH = CONFIG.REFUEL_PAD_HEIGHT;
 
-        // Check left pad
-        if (this.x > leftPad.x - padW/2 && this.x < leftPad.x + padW/2 &&
-            this.y > leftPad.y - padH - 20 && this.y < leftPad.y) {
-            this.dock(leftPad);
-        }
+        for (const pad of pads) {
+            if (this.x > pad.x - padW / 2 && this.x < pad.x + padW / 2 &&
+                this.y > pad.y - padH - 20 && this.y < pad.y) {
 
-        // Check right pad
-        if (this.x > rightPad.x - padW/2 && this.x < rightPad.x + padW/2 &&
-            this.y > rightPad.y - padH - 20 && this.y < rightPad.y) {
-            this.dock(rightPad);
+                // Check if another player is using this pad
+                const padOccupied = playerManager.isRefuelPadOccupied(pad, this.id);
+                if (!padOccupied) {
+                    this.dock(pad);
+                }
+                break;
+            }
         }
     }
 
     dock(pad) {
         this.x = pad.x;
         this.y = pad.y - CONFIG.REFUEL_PAD_HEIGHT - 15;
-        this.angle = -90; // Point up
-        this.currentSpeed = this.speed; // Reset to default speed
+        this.angle = -90;
+        this.currentSpeed = this.speed;
         this.state = PlayerState.REFUELING;
         this.refuelTimer = 0;
         SoundManager.refuelStart();
-        console.log('Docking and refueling...');
+        console.log(`Player ${this.id} docking...`);
     }
 
     shoot() {
         const radians = this.angle * (Math.PI / 180);
         const bulletX = this.x + Math.cos(radians) * (this.width / 2 + 5);
         const bulletY = this.y + Math.sin(radians) * (this.width / 2 + 5);
-        projectileManager.add(bulletX, bulletY, this.angle, 450, true);
+        projectileManager.add(bulletX, bulletY, this.angle, 500, true, this.id);
+
+        if (typeof EffectsManager !== 'undefined') {
+            EffectsManager.addMuzzleFlash(bulletX, bulletY, this.angle);
+        }
         SoundManager.shoot();
     }
 
@@ -214,82 +274,247 @@ class Player {
         this.state = PlayerState.EXPLODING;
         this.explosionTimer = 0;
         SoundManager.playerDeath();
-        console.log('Player died! Lives remaining:', this.lives);
+
+        if (typeof EffectsManager !== 'undefined') {
+            EffectsManager.addExplosion(this.x, this.y, 40, '#ffffff');
+            EffectsManager.addExplosion(this.x, this.y, 60, this.colors.cockpit);
+            setTimeout(() => EffectsManager.addExplosion(this.x + 10, this.y - 10, 30, '#ffaa00'), 100);
+            setTimeout(() => EffectsManager.addExplosion(this.x - 10, this.y + 10, 30, '#ff0000'), 200);
+            EffectsManager.shake(15);
+            EffectsManager.hitStop(0.2);
+        }
+
+        console.log(`Player ${this.id} died! Lives: ${this.lives}`);
+    }
+
+    activateShield() {
+        if (this.shield) return false;
+        this.shield = true;
+        SoundManager.shieldCollect();
+        return true;
+    }
+
+    takeDamage(bounceX = 0, bounceY = 0) {
+        if (this.invulnerable) return false;
+
+        if (this.shield) {
+            this.shield = false;
+            this.invulnerable = true;
+            this.invulnerabilityTimer = 1.5;
+            this.bounceVx = bounceX * 200;
+            this.bounceVy = bounceY * 200;
+
+            SoundManager.shieldBreak();
+            if (typeof EffectsManager !== 'undefined') {
+                EffectsManager.addExplosion(this.x, this.y, 35, this.colors.shield);
+                EffectsManager.addExplosion(this.x, this.y, 25, '#ffffff');
+                EffectsManager.shake(8);
+            }
+            return false;
+        }
+
+        this.die();
+        return true;
     }
 
     respawn() {
         if (this.lives > 0) {
-            // Respawn at random pad
-            const pad = Math.random() < 0.5 ? CONFIG.REFUEL_PAD_LEFT : CONFIG.REFUEL_PAD_RIGHT;
-            this.x = pad.x;
-            this.y = pad.y - CONFIG.REFUEL_PAD_HEIGHT - 15;
+            // Respawn at assigned pad
+            this.x = this.assignedPad.x;
+            this.y = this.assignedPad.y - CONFIG.REFUEL_PAD_HEIGHT - 15;
             this.angle = -90;
             this.currentSpeed = this.speed;
             this.fuel = CONFIG.FUEL_MAX;
             this.state = PlayerState.DOCKED;
             this.explosionTimer = 0;
+        } else {
+            this.state = PlayerState.DEAD;
+            console.log(`Player ${this.id} is out of lives!`);
         }
     }
 
+    addScore(points) {
+        if (points <= 0) return;
+        this.score += points;
+
+        // Bonus life check (per player)
+        // This can be implemented with a nextBonusAt tracker per player
+    }
+
     render(ctx) {
+        if (this.state === PlayerState.EXPLODING || this.state === PlayerState.DEAD) return;
+
+        const c = this.colors;
+        const spriteKey = this.id === 1 ? 'player_p1' : 'player_p2';
+        const sprite = AssetManager.getImage(spriteKey);
+
+        // Shadow beneath player
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.ellipse(this.x, CONFIG.STREET_Y - 5, 20, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle * Math.PI / 180);
 
-        if (this.state === PlayerState.EXPLODING) {
-            // Draw explosion
-            ctx.fillStyle = '#ff6b35';
+        // Engine glow (behind sprite)
+        if (this.state === PlayerState.FLYING) {
+            const glowSize = 30 + Math.random() * 12;
+            const gradient = ctx.createRadialGradient(-25, 0, 2, -25, 0, glowSize);
+            gradient.addColorStop(0, this.id === 1 ? 'rgba(59, 130, 246, 0.8)' : 'rgba(236, 72, 153, 0.8)');
+            gradient.addColorStop(0.5, this.id === 1 ? 'rgba(59, 130, 246, 0.3)' : 'rgba(236, 72, 153, 0.3)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = gradient;
             ctx.beginPath();
-            ctx.arc(0, 0, 18 + this.explosionTimer * 25, 0, Math.PI * 2);
+            ctx.arc(-25, 0, glowSize, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#ffd700';
+
+            // Animated thrust flames
+            const thrust = 15 + Math.random() * 10;
+            ctx.fillStyle = this.id === 1 ? '#60a5fa' : '#f472b6';
             ctx.beginPath();
-            ctx.arc(0, 0, 10 + this.explosionTimer * 12, 0, Math.PI * 2);
+            ctx.moveTo(-30, -6);
+            ctx.lineTo(-30 - thrust, 0);
+            ctx.lineTo(-30, 6);
             ctx.fill();
+
+            ctx.fillStyle = this.id === 1 ? '#bfdbfe' : '#fbcfe8';
+            ctx.beginPath();
+            ctx.moveTo(-30, -3);
+            ctx.lineTo(-30 - thrust * 0.6, 0);
+            ctx.lineTo(-30, 3);
+            ctx.fill();
+        }
+
+        // Draw sprite or fallback to code
+        if (sprite) {
+            const spriteWidth = 45;
+            const spriteHeight = 45;
+            // Draw normally (solid) - removed additive blending
+            ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight / 2, spriteWidth, spriteHeight);
         } else {
-            // Draw jet body
-            ctx.fillStyle = '#e0e0e0';
+            // Fallback: draw simple placeholder
+            ctx.fillStyle = c.body;
             ctx.beginPath();
-            ctx.moveTo(this.width / 2, 0);              // Nose
-            ctx.lineTo(-this.width / 2, -this.height / 2); // Top wing
-            ctx.lineTo(-this.width / 3, 0);             // Back indent
-            ctx.lineTo(-this.width / 2, this.height / 2);  // Bottom wing
+            ctx.moveTo(15, 0);
+            ctx.lineTo(-5, -6);
+            ctx.lineTo(-12, -10);
+            ctx.lineTo(-15, 0);
+            ctx.lineTo(-12, 10);
+            ctx.lineTo(-5, 6);
             ctx.closePath();
             ctx.fill();
 
-            // Draw cockpit
-            ctx.fillStyle = '#4a90d9';
+            ctx.fillStyle = c.cockpit;
             ctx.beginPath();
-            ctx.ellipse(2, 0, 6, 4, 0, 0, Math.PI * 2);
+            ctx.ellipse(2, 0, 5, 3, 0, 0, Math.PI * 2);
             ctx.fill();
-
-            // Draw engine glow when flying
-            if (this.state === PlayerState.FLYING) {
-                // Glow intensity based on speed
-                const speedRatio = (this.currentSpeed - this.minSpeed) / (this.maxSpeed - this.minSpeed);
-                const glowSize = 6 + speedRatio * 10;
-
-                ctx.fillStyle = '#ff6b35';
-                ctx.beginPath();
-                ctx.moveTo(-this.width / 2, -4);
-                ctx.lineTo(-this.width / 2 - glowSize, 0);
-                ctx.lineTo(-this.width / 2, 4);
-                ctx.closePath();
-                ctx.fill();
-
-                // Inner flame
-                ctx.fillStyle = '#ffdd00';
-                ctx.beginPath();
-                ctx.moveTo(-this.width / 2, -2);
-                ctx.lineTo(-this.width / 2 - glowSize * 0.6, 0);
-                ctx.lineTo(-this.width / 2, 2);
-                ctx.closePath();
-                ctx.fill();
-            }
         }
 
         ctx.restore();
+
+        // Shield bubble (world coords)
+        if (this.shield) {
+            const pulse = Math.sin(this.animTimer * 4) * 0.1 + 0.9;
+            const radius = 35 * pulse;
+
+            ctx.save();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = c.shield;
+            ctx.strokeStyle = c.shield;
+            ctx.globalAlpha = 0.6;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.globalAlpha = 0.15;
+            ctx.fillStyle = c.shield;
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Invulnerability flicker
+        if (this.invulnerable && Math.floor(this.animTimer * 15) % 2 === 0) {
+            ctx.save();
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 30, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
     }
 }
 
-const player = new Player();
+// ============================================
+// PLAYER MANAGER - Handles 1 or 2 players
+// ============================================
+const playerManager = {
+    players: [],
+    numPlayers: 1, // Default to 1 player
+
+    init(numPlayers = 1) {
+        this.numPlayers = Math.min(2, Math.max(1, numPlayers));
+        this.players = [];
+
+        for (let i = 1; i <= this.numPlayers; i++) {
+            this.players.push(new Player(i));
+        }
+
+        console.log(`PlayerManager: Initialized with ${this.numPlayers} player(s)`);
+    },
+
+    reset() {
+        this.players.forEach(p => p.reset());
+    },
+
+    update(deltaTime) {
+        this.players.forEach(p => p.update(deltaTime));
+    },
+
+    render(ctx) {
+        this.players.forEach(p => p.render(ctx));
+    },
+
+    // Check if a refuel pad is occupied by another player
+    isRefuelPadOccupied(pad, excludePlayerId) {
+        for (const p of this.players) {
+            if (p.id === excludePlayerId) continue;
+            if (p.state === PlayerState.DOCKED || p.state === PlayerState.REFUELING) {
+                // Check if this player is at this pad
+                const atPad = Math.abs(p.x - pad.x) < 10;
+                if (atPad) return true;
+            }
+        }
+        return false;
+    },
+
+    // Get all active (non-dead) players
+    getActivePlayers() {
+        return this.players.filter(p => p.state !== PlayerState.DEAD);
+    },
+
+    // Check if all players are dead (game over condition)
+    allPlayersDead() {
+        return this.players.every(p => p.lives <= 0);
+    },
+
+    // Get player by ID
+    getPlayer(id) {
+        return this.players.find(p => p.id === id);
+    },
+
+    // Get combined score (for high score)
+    getTotalScore() {
+        return this.players.reduce((sum, p) => sum + p.score, 0);
+    }
+};
+
+// Legacy compatibility - create default player reference
+// This will be updated by game.js during init
+let player = null;

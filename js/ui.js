@@ -1,50 +1,65 @@
-function renderHUD(ctx, player, buildingManager, enemyManager, score) {
+function renderHUD(ctx, buildingManager, enemyManager, totalScore) {
     const hudY = 10;
     const bottomHudY = CONFIG.SUBWAY_BOTTOM + 10;
+    const players = playerManager.players;
+    const numPlayers = players.length;
 
-    ctx.font = '18px monospace';
+    ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'left';
 
-    // Top HUD - Left side: Fuel
-    ctx.fillStyle = CONFIG.COLORS.HUD_TEXT;
-    ctx.fillText(`FUEL`, 20, hudY + 18);
+    // === TOP HUD - PLAYER 1 (Left Side) ===
+    const p1 = players[0];
+    if (p1) {
+        renderPlayerHUD(ctx, p1, 20, hudY, 'P1', '#00d4aa');
+    }
 
-    // Fuel bar (next to label)
-    const fuelBarWidth = 120;
-    const fuelBarHeight = 10;
-    const fuelBarX = 80;
-    const fuelBarY = hudY + 8;
+    // === TOP HUD - PLAYER 2 (Right Side, if 2P mode) ===
+    if (numPlayers >= 2) {
+        const p2 = players[1];
+        if (p2) {
+            renderPlayerHUD(ctx, p2, CONFIG.CANVAS_WIDTH - 200, hudY, 'P2', '#ff00aa');
+        }
+    }
 
-    ctx.fillStyle = '#333';
-    ctx.fillRect(fuelBarX, fuelBarY, fuelBarWidth, fuelBarHeight);
-
-    const fuelPercent = player.fuel / CONFIG.FUEL_MAX;
-    const fuelColor = fuelPercent > 0.3 ? '#4ade80' : fuelPercent > 0.1 ? '#fbbf24' : '#ef4444';
-    ctx.fillStyle = fuelColor;
-    ctx.fillRect(fuelBarX, fuelBarY, fuelBarWidth * fuelPercent, fuelBarHeight);
-
-    ctx.strokeStyle = '#4ade80';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(fuelBarX, fuelBarY, fuelBarWidth, fuelBarHeight);
-
-    // Top HUD - Center: Score
+    // === CENTER HUD ===
+    // SCORE (combined or show both)
     ctx.textAlign = 'center';
-    ctx.fillStyle = CONFIG.COLORS.HUD_TEXT;
-    ctx.fillText(`SCORE: ${score || 0}`, CONFIG.CANVAS_WIDTH / 2, hudY + 18);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px monospace';
 
-    // Top HUD - Right side: Lives
-    ctx.textAlign = 'right';
-    ctx.fillText(`LIVES: ${player.lives}`, CONFIG.CANVAS_WIDTH - 20, hudY + 18);
+    if (numPlayers === 1) {
+        ctx.fillText('SCORE', CONFIG.CANVAS_WIDTH / 2 - 40, hudY + 16);
+        const scoreStr = String(totalScore || 0).padStart(6, '0');
+        ctx.fillText(scoreStr, CONFIG.CANVAS_WIDTH / 2 + 30, hudY + 16);
+    } else {
+        // 2P mode - show combined score in center
+        const combinedScore = playerManager.getTotalScore();
+        ctx.fillText('TOTAL', CONFIG.CANVAS_WIDTH / 2, hudY + 10);
+        const scoreStr = String(combinedScore || 0).padStart(6, '0');
+        ctx.fillText(scoreStr, CONFIG.CANVAS_WIDTH / 2, hudY + 24);
+    }
 
-    // Bottom HUD - City destruction
-    ctx.textAlign = 'left';
+    // WAVE (below score in 2P, or to the side in 1P)
+    if (numPlayers === 1) {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('WAVE', 200, hudY + 16);
+        ctx.fillText(`${enemyManager.waveNumber}-1`, 258, hudY + 16);
+
+        // DMG (for 1P mode, on right)
+        const destruction = Math.floor(buildingManager.getDestructionPercentage() * 100);
+        const dmgColor = destruction > 60 ? '#ff3300' : destruction > 30 ? '#ffaa00' : '#ffffff';
+        ctx.fillStyle = dmgColor;
+        ctx.fillText('DMG', CONFIG.CANVAS_WIDTH - 220, hudY + 16);
+        ctx.fillText(`${destruction}%`, CONFIG.CANVAS_WIDTH - 175, hudY + 16);
+    }
+
+    // === BOTTOM HUD ===
+    ctx.textAlign = 'center';
     const destruction = Math.floor(buildingManager.getDestructionPercentage() * 100);
-    const cityColor = destruction > 60 ? '#ef4444' : destruction > 30 ? '#fbbf24' : CONFIG.COLORS.HUD_TEXT;
-    ctx.fillStyle = cityColor;
-    ctx.fillText(`CITY DAMAGE: ${destruction}%`, 20, bottomHudY + 16);
+    const cityStatusColor = destruction > 60 ? '#ef4444' : destruction > 30 ? '#fbbf24' : CONFIG.COLORS.HUD_TEXT;
+    ctx.fillStyle = cityStatusColor;
 
-    // Bottom HUD - Wave indicator with time of day
-    ctx.textAlign = 'center';
     ctx.fillStyle = CONFIG.COLORS.HUD_TEXT;
     if (enemyManager.boss && enemyManager.boss.active) {
         ctx.fillStyle = '#ef4444';
@@ -58,7 +73,6 @@ function renderHUD(ctx, player, buildingManager, enemyManager, score) {
     } else if (enemyManager.betweenWaves) {
         ctx.fillText(`WAVE ${enemyManager.waveNumber + 1} INCOMING...`, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
     } else {
-        // Show wave with time of day and multiplier
         const multiplier = DayCycle.getScoreMultiplier();
         const timeDisplay = DayCycle.getDisplayName();
         let waveText = `WAVE ${enemyManager.waveNumber} - ${timeDisplay}`;
@@ -68,7 +82,7 @@ function renderHUD(ctx, player, buildingManager, enemyManager, score) {
         ctx.fillText(waveText, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
     }
 
-    // Bottom HUD - Right: Enemies remaining
+    // Enemies remaining (right side)
     ctx.textAlign = 'right';
     ctx.font = '18px monospace';
     ctx.fillStyle = CONFIG.COLORS.HUD_TEXT;
@@ -77,20 +91,106 @@ function renderHUD(ctx, player, buildingManager, enemyManager, score) {
         ctx.fillText(`ENEMIES: ${enemiesLeft}`, CONFIG.CANVAS_WIDTH - 20, bottomHudY + 16);
     }
 
-    // Refuel indicator (center screen overlay)
-    if (player.state === 'refueling') {
-        const refuelProgress = player.refuelTimer / CONFIG.REFUEL_TIME;
-        ctx.textAlign = 'center';
-        ctx.font = '24px monospace';
-        ctx.fillStyle = '#4ade80';
-        ctx.fillText(`REFUELING... ${Math.floor(refuelProgress * 100)}%`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2);
+    // DMG in 2P mode (bottom center)
+    if (numPlayers >= 2) {
+        ctx.textAlign = 'left';
+        const dmgColor = destruction > 60 ? '#ff3300' : destruction > 30 ? '#ffaa00' : '#ffffff';
+        ctx.fillStyle = dmgColor;
+        ctx.fillText(`CITY DMG: ${destruction}%`, 20, bottomHudY + 16);
     }
 
-    // Speed indicator (small, bottom left corner of play area)
-    ctx.textAlign = 'left';
-    ctx.font = '12px monospace';
-    ctx.fillStyle = '#ffffff88';
-    const speedPercent = Math.floor((player.currentSpeed / CONFIG.PLAYER_MAX_SPEED) * 100);
-    ctx.fillText(`SPD: ${speedPercent}%`, 20, CONFIG.STREET_Y - 10);
+    // Refuel indicators (for any player refueling)
+    for (const p of players) {
+        if (p.state === 'refueling') {
+            const refuelProgress = p.refuelTimer / CONFIG.REFUEL_TIME;
+            ctx.textAlign = 'center';
+            ctx.font = '20px monospace';
+            ctx.fillStyle = p.id === 1 ? '#00d4aa' : '#ff00aa';
+            const yOffset = p.id === 1 ? 0 : 30;
+            ctx.fillText(`P${p.id} REFUELING... ${Math.floor(refuelProgress * 100)}%`,
+                CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + yOffset);
+        }
+    }
 }
 
+// Helper function to render individual player HUD section
+function renderPlayerHUD(ctx, p, x, y, label, color) {
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 12px monospace';
+
+    // Player label
+    ctx.fillStyle = color;
+    ctx.fillText(label, x, y + 12);
+
+    // Fuel blocks
+    const fuelBlocks = 8;
+    const blockWidth = 8;
+    const blockHeight = 10;
+    const blockSpacing = 2;
+    const fuelBlockX = x + 25;
+    const fuelBlockY = y + 3;
+
+    const fuelPercent = p.fuel / CONFIG.FUEL_MAX;
+    const filledBlocks = Math.ceil(fuelPercent * fuelBlocks);
+
+    for (let i = 0; i < fuelBlocks; i++) {
+        const bx = fuelBlockX + i * (blockWidth + blockSpacing);
+
+        if (i < filledBlocks) {
+            if (fuelPercent > 0.6) {
+                ctx.fillStyle = '#ff8800';
+            } else if (fuelPercent > 0.3) {
+                ctx.fillStyle = '#ffaa00';
+            } else {
+                ctx.fillStyle = '#ff3300';
+            }
+        } else {
+            ctx.fillStyle = '#333333';
+        }
+
+        ctx.fillRect(bx, fuelBlockY, blockWidth, blockHeight);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, fuelBlockY, blockWidth, blockHeight);
+    }
+
+    // Lives (ship icons)
+    const shipBaseX = x + 120;
+    const shipY = y + 10;
+    const shipSpacing = 14;
+
+    for (let i = 0; i < p.lives; i++) {
+        const sx = shipBaseX + i * shipSpacing;
+
+        ctx.save();
+        ctx.translate(sx, shipY);
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, -4);
+        ctx.lineTo(-3, 4);
+        ctx.lineTo(0, 2);
+        ctx.lineTo(3, 4);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    // Shield indicator
+    if (p.shield) {
+        const shieldX = shipBaseX + p.lives * shipSpacing + 5;
+        ctx.fillStyle = p.colors.shield;
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = p.colors.shield;
+        ctx.beginPath();
+        ctx.arc(shieldX, shipY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('S', shieldX, shipY + 3);
+    }
+}

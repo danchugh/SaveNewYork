@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Building Tileset Slicer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        canvas {
+            border: 1px solid #444;
+            margin: 10px;
+            background: #000;
+            image-rendering: pixelated;
+        }
+
+        .tile-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .tile {
+            display: inline-block;
+            text-align: center;
+        }
+
+        .tile canvas {
+            border: 2px solid #666;
+        }
+
+        .tile-label {
+            font-size: 10px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background: #3a80c9;
+        }
+
+        #output {
+            margin-top: 20px;
+        }
+
+        .info {
+            color: #aaa;
+            margin: 10px 0;
+        }
+
+        h2 {
+            color: #4a90d9;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .instructions {
+            background: #252540;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🏢 Building Tileset Slicer</h1>
+
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <ol>
+            <li><strong>Load the building image</strong> using the file picker below</li>
+            <li>Click <strong>"Generate Tileset"</strong> to slice it into 16 tiles</li>
+            <li>Review the tiles in the preview</li>
+            <li>Click <strong>"Download Tileset PNG"</strong> to save</li>
+            <li>Copy the downloaded file to <code>assets/building_tileset.png</code></li>
+        </ol>
+    </div>
+
+    <div>
+        <input type="file" id="imageInput" accept="image/*">
+    </div>
+
+    <h2>Source Image</h2>
+    <canvas id="sourceCanvas"></canvas>
+    <p id="sourceInfo" class="info"></p>
+
+    <div>
+        <button onclick="generateTileset()">Generate Tileset</button>
+        <button onclick="downloadTileset()">Download Tileset PNG</button>
+    </div>
+
+    <h2>Tileset Output (4x4 Grid = 256x256px)</h2>
+    <canvas id="outputCanvas" width="256" height="256"></canvas>
+    <p id="tileInfo" class="info"></p>
+
+    <h2>Individual Tiles Preview</h2>
+    <div id="tilesPreview" class="tile-container"></div>
+
+    <h2>Tile Layout Reference</h2>
+    <table style="border-collapse: collapse; margin: 10px 0;">
+        <tr>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>0</strong>: Brick+Window (unlit)</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>1</strong>: Brick+Window (lit)</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>2</strong>: Brick only</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>3</strong>: Brick variant</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>4</strong>: Left edge (stone)</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>5</strong>: Right edge (stone)</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>6</strong>: Interior left</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>7</strong>: Interior right</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>8</strong>: Roof left</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>9</strong>: Roof center</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>10</strong>: Roof right</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>11</strong>: Roof ledge</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>12</strong>: Ground door</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>13</strong>: Ground window</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>14</strong>: Damaged</td>
+            <td style="border: 1px solid #444; padding: 8px;"><strong>15</strong>: Rubble</td>
+        </tr>
+    </table>
+
+    <script>
+        let sourceImage = null;
+        const TILE_SIZE = 64; // Output tile size (64x64 = 256x256 total)
+        const GRID_SIZE = 4;  // 4x4 grid
+
+        document.getElementById('imageInput').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const img = new Image();
+                    img.onload = function () {
+                        sourceImage = img;
+                        drawSourceImage();
+                        // Auto-generate when image loads
+                        setTimeout(generateTileset, 100);
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function drawSourceImage() {
+            const canvas = document.getElementById('sourceCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Scale down for display
+            const maxHeight = 500;
+            const scale = Math.min(1, maxHeight / sourceImage.height);
+
+            canvas.width = sourceImage.width * scale;
+            canvas.height = sourceImage.height * scale;
+
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+
+            // Draw grid overlay showing columns
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+            ctx.lineWidth = 2;
+            const colWidth = canvas.width / 2;
+            ctx.beginPath();
+            ctx.moveTo(colWidth, 0);
+            ctx.lineTo(colWidth, canvas.height);
+            ctx.stroke();
+
+            document.getElementById('sourceInfo').textContent =
+                `Original: ${sourceImage.width}x${sourceImage.height}px | ` +
+                `Estimated column width: ${Math.floor(sourceImage.width / 2)}px | ` +
+                `Row height: ${Math.floor(sourceImage.height / 8)}px`;
+        }
+
+        function generateTileset() {
+            if (!sourceImage) {
+                alert('Please load an image first!');
+                return;
+            }
+
+            const outputCanvas = document.getElementById('outputCanvas');
+            const ctx = outputCanvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            // Fill with black background
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+
+            const srcW = sourceImage.width;
+            const srcH = sourceImage.height;
+
+            // The building is 2 columns wide, approximately 8-9 rows tall
+            // Calculate slice dimensions
+            const colW = Math.floor(srcW / 2);
+            const rowH = Math.floor(srcH / 8);
+
+            // Tile extraction map: [sourceX, sourceY, description]
+            // Layout designed for building rendering code
+            const tiles = [
+                // Row 0: Window tiles (for middle sections of building)
+                { x: 0, y: rowH * 2, w: colW, h: rowH, name: 'Brick+Window L' },      // 0: Unlit window
+                { x: colW, y: rowH * 3, w: colW, h: rowH, name: 'Brick+Window R' },   // 1: Lit window  
+                { x: 0, y: rowH * 4, w: colW, h: rowH, name: 'Brick Plain L' },       // 2: Plain brick
+                { x: colW, y: rowH * 4, w: colW, h: rowH, name: 'Brick Plain R' },    // 3: Brick variant
+
+                // Row 1: Edge and interior tiles
+                { x: 0, y: rowH * 5, w: colW, h: rowH, name: 'Interior L' },          // 4: Left edge (will need stone override)
+                { x: colW, y: rowH * 5, w: colW, h: rowH, name: 'Interior R' },       // 5: Right edge
+                { x: 0, y: rowH * 6, w: colW, h: rowH, name: 'Interior 2L' },         // 6: Interior var 1
+                { x: colW, y: rowH * 6, w: colW, h: rowH, name: 'Interior 2R' },      // 7: Interior var 2
+
+                // Row 2: Roof tiles
+                { x: 0, y: 0, w: colW, h: rowH, name: 'Roof Left' },                  // 8: Roof left
+                { x: Math.floor(colW * 0.5), y: 0, w: colW, h: rowH, name: 'Roof Center' }, // 9: Roof center
+                { x: colW, y: 0, w: colW, h: rowH, name: 'Roof Right' },              // 10: Roof right
+                { x: 0, y: rowH, w: colW, h: rowH, name: 'Sub-roof ledge' },          // 11: Ledge below roof
+
+                // Row 3: Ground floor / damage
+                { x: Math.floor(colW * 0.5), y: srcH - rowH, w: colW, h: rowH, name: 'Door' },  // 12: Ground door
+                { x: colW, y: srcH - rowH, w: colW, h: rowH, name: 'Ground win' },              // 13: Ground window
+                { x: 0, y: rowH * 5, w: colW, h: rowH, name: 'Brick alt' },                     // 14: For damage (reuse)
+                { x: 0, y: rowH * 3, w: colW, h: rowH, name: 'Brick alt 2' },                   // 15: For rubble (reuse)
+            ];
+
+            // Extract tiles
+            const tilesPreview = document.getElementById('tilesPreview');
+            tilesPreview.innerHTML = '';
+
+            tiles.forEach((tile, index) => {
+                const destX = (index % GRID_SIZE) * TILE_SIZE;
+                const destY = Math.floor(index / GRID_SIZE) * TILE_SIZE;
+
+                // Draw to output canvas
+                ctx.drawImage(
+                    sourceImage,
+                    tile.x, tile.y, tile.w, tile.h,  // source rect
+                    destX, destY, TILE_SIZE, TILE_SIZE  // dest rect (64x64)
+                );
+
+                // Create preview tile
+                const tileCanvas = document.createElement('canvas');
+                tileCanvas.width = TILE_SIZE;
+                tileCanvas.height = TILE_SIZE;
+                tileCanvas.style.imageRendering = 'pixelated';
+                const tileCtx = tileCanvas.getContext('2d');
+                tileCtx.imageSmoothingEnabled = false;
+                tileCtx.drawImage(
+                    sourceImage,
+                    tile.x, tile.y, tile.w, tile.h,
+                    0, 0, TILE_SIZE, TILE_SIZE
+                );
+
+                const div = document.createElement('div');
+                div.className = 'tile';
+                div.appendChild(tileCanvas);
+                const label = document.createElement('div');
+                label.className = 'tile-label';
+                label.textContent = `${index}: ${tile.name}`;
+                div.appendChild(label);
+                tilesPreview.appendChild(div);
+            });
+
+            document.getElementById('tileInfo').textContent =
+                `✅ Tileset generated: ${outputCanvas.width}x${outputCanvas.height}px (${TILE_SIZE}px per tile)`;
+        }
+
+        function downloadTileset() {
+            const canvas = document.getElementById('outputCanvas');
+
+            const link = document.createElement('a');
+            link.download = 'building_tileset.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+
+</html>

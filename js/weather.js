@@ -5,11 +5,9 @@
 const WeatherType = {
     CLEAR: 'clear',
     RAIN: 'rain',
-    SNOW: 'snow',
     WIND: 'wind',
     LIGHTNING: 'lightning',
     RAIN_WIND: 'rain_wind',
-    SNOW_WIND: 'snow_wind',
     RAIN_LIGHTNING: 'rain_lightning'
 };
 
@@ -21,15 +19,17 @@ const WeatherManager = {
     windDirection: 1,  // 1 = right, -1 = left
     windStrength: 0,   // 0 to 100
 
-    // Particle arrays (will be used in later tasks)
+    // Particle arrays
     rainParticles: [],
-    snowParticles: [],
-    leafParticles: [],
+    mistParticles: [],
+
+    // Splashes
+    splashParticles: [],
 
     // Lightning state
     lightningTimer: 0,
     lightningActive: false,
-    lightningBolt: null,  // {x1, y1, x2, y2, segments: []}
+    lightningBolts: [], // Array of bolts
     lightningFlash: 0,    // Screen flash alpha
     pendingDamage: null,  // {type: 'building'/'enemy', target, x, y}
 
@@ -40,112 +40,92 @@ const WeatherManager = {
         this.windDirection = Math.random() < 0.5 ? -1 : 1;
         this.windStrength = 0;
         this.rainParticles = [];
-        this.snowParticles = [];
-        this.leafParticles = [];
+        this.mistParticles = [];
+        this.splashParticles = [];
         this.lightningTimer = 0;
         this.lightningActive = false;
-        this.lightningBolt = null;
+        this.lightningBolts = [];
         this.lightningFlash = 0;
         this.pendingDamage = null;
     },
 
-    // Start random weather with 20% chance
+    // Start random weather with 30% chance (More frequent for atmosphere)
     startRandomWeather() {
         // Clear existing particles when weather changes
         this.rainParticles = [];
-        this.snowParticles = [];
-        this.leafParticles = [];
+        this.mistParticles = [];
 
-        // 20% chance for weather
-        if (Math.random() > 0.2) {
+        // 30% chance for Clear
+        if (Math.random() < 0.3) {
             this.currentWeather = WeatherType.CLEAR;
             this.targetIntensity = 0;
             return;
         }
 
-        // Pick weighted random weather type
+        // Pick weighted random weather type (Heavier emphasis on bad weather)
         const roll = Math.random() * 100;
         let weather;
 
-        if (roll < 25) {
+        if (roll < 40) {
             weather = WeatherType.RAIN;
-        } else if (roll < 45) {
-            weather = WeatherType.SNOW;
         } else if (roll < 60) {
-            weather = WeatherType.WIND;
-        } else if (roll < 70) {
-            weather = WeatherType.LIGHTNING;
-        } else if (roll < 85) {
             weather = WeatherType.RAIN_WIND;
-        } else if (roll < 95) {
-            weather = WeatherType.SNOW_WIND;
-        } else {
+        } else if (roll < 80) {
             weather = WeatherType.RAIN_LIGHTNING;
+        } else {
+            weather = WeatherType.LIGHTNING; // Dry lightning
         }
 
         this.currentWeather = weather;
         this.targetIntensity = 1;
 
-        // Set wind if applicable
-        if (this.hasWind()) {
-            this.windDirection = Math.random() < 0.5 ? -1 : 1;
-            this.windStrength = 40 + Math.random() * 60;  // 40-100
-        } else {
-            this.windStrength = 0;
-        }
+        // Set wind
+        this.windDirection = Math.random() < 0.5 ? -1 : 1;
+        this.windStrength = 30 + Math.random() * 70;
 
         console.log(`Weather started: ${weather}, wind: ${this.windStrength}`);
     },
 
-    // Start fade out
     fadeOut() {
         this.targetIntensity = 0;
     },
 
-    // Check if current weather has rain
     hasRain() {
-        return this.currentWeather === WeatherType.RAIN ||
-               this.currentWeather === WeatherType.RAIN_WIND ||
-               this.currentWeather === WeatherType.RAIN_LIGHTNING;
+        return this.currentWeather.includes('rain');
     },
 
-    // Check if current weather has snow
-    hasSnow() {
-        return this.currentWeather === WeatherType.SNOW ||
-               this.currentWeather === WeatherType.SNOW_WIND;
-    },
-
-    // Check if current weather has wind
     hasWind() {
-        return this.currentWeather === WeatherType.WIND ||
-               this.currentWeather === WeatherType.RAIN_WIND ||
-               this.currentWeather === WeatherType.SNOW_WIND;
+        return this.currentWeather.includes('wind') || this.windStrength > 20;
     },
 
-    // Check if current weather has lightning
     hasLightning() {
-        return this.currentWeather === WeatherType.LIGHTNING ||
-               this.currentWeather === WeatherType.RAIN_LIGHTNING;
+        return this.currentWeather.includes('lightning');
+    },
+
+    // Get wind effect for player movement (returns pixels per second drift)
+    getWindEffect() {
+        if (this.intensity <= 0 || this.windStrength <= 0) return 0;
+        return this.windStrength * this.intensity * 0.5; // Scale down for playability
     },
 
     update(deltaTime) {
         // Smooth intensity transition
-        const fadeSpeed = 0.5;  // Takes 2 seconds to fully fade
+        const fadeSpeed = 0.5;
         if (this.intensity < this.targetIntensity) {
             this.intensity = Math.min(this.targetIntensity, this.intensity + fadeSpeed * deltaTime);
         } else if (this.intensity > this.targetIntensity) {
             this.intensity = Math.max(this.targetIntensity, this.intensity - fadeSpeed * deltaTime);
         }
 
-        // Clear weather when fully faded out
         if (this.intensity <= 0 && this.targetIntensity <= 0) {
             this.currentWeather = WeatherType.CLEAR;
+            return;
         }
 
         // Update particles
         this.updateRain(deltaTime);
-        this.updateSnow(deltaTime);
-        this.updateLeaves(deltaTime);
+        this.updateMist(deltaTime);
+        this.updateSplashes(deltaTime);
         this.updateLightning(deltaTime);
     },
 
@@ -153,408 +133,271 @@ const WeatherManager = {
         if (this.intensity <= 0) return;
 
         // Render particles
+        this.renderMist(ctx);
         this.renderRain(ctx);
-        this.renderSnow(ctx);
-        this.renderLeaves(ctx);
-
-        // For now, just show a subtle overlay to indicate weather is active
-        if (this.hasRain() || this.hasLightning()) {
-            ctx.fillStyle = `rgba(100, 100, 120, ${this.intensity * 0.1})`;
-            ctx.fillRect(0, CONFIG.SKY_TOP, CONFIG.CANVAS_WIDTH, CONFIG.STREET_Y - CONFIG.SKY_TOP);
-        }
+        this.renderSplashes(ctx);
 
         // Render lightning last so flash overlays everything
         this.renderLightning(ctx);
     },
 
-    // Get display name for HUD (optional)
-    getDisplayName() {
-        if (this.currentWeather === WeatherType.CLEAR) return '';
-        return this.currentWeather.replace('_', ' + ').toUpperCase();
-    },
+    // ===========================================
+    // RAIN SYSTEM
+    // ===========================================
 
-    // Initialize rain particles
     initRainParticles() {
         this.rainParticles = [];
-        for (let i = 0; i < 150; i++) {
+        // Layers: 0=close(fast), 1=mid, 2=far(slow)
+        // Option 2: Reduced from 400 to 200 particles
+        const density = 200;
+        for (let i = 0; i < density; i++) {
             this.rainParticles.push({
-                x: Math.random() * CONFIG.CANVAS_WIDTH,
-                y: CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP),
-                speed: 300 + Math.random() * 200,  // 300-500 px/s
-                length: 10 + Math.random() * 10     // 10-20 px
+                x: Math.random() * CONFIG.CANVAS_WIDTH * 1.5 - CONFIG.CANVAS_WIDTH * 0.25,
+                y: Math.random() * CONFIG.STREET_Y,
+                layer: Math.floor(Math.random() * 3),
+                len: 0
             });
         }
     },
 
-    // Initialize snow particles
-    initSnowParticles() {
-        this.snowParticles = [];
-        for (let i = 0; i < 80; i++) {
-            this.snowParticles.push({
-                x: Math.random() * CONFIG.CANVAS_WIDTH,
-                y: CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP),
-                speed: 50 + Math.random() * 50,    // 50-100 px/s
-                size: 2 + Math.random() * 2,        // 2-4 px
-                wobblePhase: Math.random() * Math.PI * 2,
-                wobbleSpeed: 2 + Math.random() * 2
-            });
-        }
-    },
-
-    // Update rain particles
     updateRain(deltaTime) {
         if (!this.hasRain()) return;
+        if (this.rainParticles.length === 0) this.initRainParticles();
 
-        // Initialize if needed
-        if (this.rainParticles.length === 0) {
-            this.initRainParticles();
-        }
-
-        const windEffect = this.windStrength * this.windDirection * 0.5;
+        // Wind angle calculation
+        const angle = Math.atan2(10, this.windStrength * this.windDirection * 0.1); // steep angle
+        const fallSpeed = 800;
 
         this.rainParticles.forEach(p => {
-            p.y += p.speed * deltaTime;
-            p.x += windEffect * deltaTime;
+            // Speed based on layer (0 is fastest/closest)
+            const speed = fallSpeed * (1 - p.layer * 0.2);
 
-            // Reset when off screen
+            p.x += Math.cos(angle) * speed * deltaTime;
+            p.y += Math.sin(angle) * speed * deltaTime;
+            p.len = 20 + speed * 0.05; // Streaks based on speed
+
+            // Reset
             if (p.y > CONFIG.STREET_Y) {
-                p.y = CONFIG.SKY_TOP;
-                p.x = Math.random() * CONFIG.CANVAS_WIDTH;
+                // Splash!
+                if (Math.random() > p.layer * 0.3) {
+                    this.addSplash(p.x, CONFIG.STREET_Y);
+                }
+                p.y = -50;
+                p.x = Math.random() * CONFIG.CANVAS_WIDTH * 1.5 - CONFIG.CANVAS_WIDTH * 0.25;
             }
-            // Wrap horizontally
-            if (p.x > CONFIG.CANVAS_WIDTH) p.x = 0;
-            if (p.x < 0) p.x = CONFIG.CANVAS_WIDTH;
         });
     },
 
-    // Update snow particles
-    updateSnow(deltaTime) {
-        if (!this.hasSnow()) return;
-
-        // Initialize if needed
-        if (this.snowParticles.length === 0) {
-            this.initSnowParticles();
-        }
-
-        const windEffect = this.windStrength * this.windDirection * 0.3;
-
-        this.snowParticles.forEach(p => {
-            p.wobblePhase += p.wobbleSpeed * deltaTime;
-
-            // Vertical fall + wobble
-            p.y += p.speed * deltaTime;
-            // Horizontal drift + wind + wobble
-            p.x += (Math.sin(p.wobblePhase) * 20 + windEffect) * deltaTime;
-
-            // Reset when off screen
-            if (p.y > CONFIG.STREET_Y) {
-                p.y = CONFIG.SKY_TOP;
-                p.x = Math.random() * CONFIG.CANVAS_WIDTH;
-            }
-            // Wrap horizontally
-            if (p.x > CONFIG.CANVAS_WIDTH) p.x = 0;
-            if (p.x < 0) p.x = CONFIG.CANVAS_WIDTH;
-        });
-    },
-
-    // Render rain
     renderRain(ctx) {
-        if (!this.hasRain() || this.intensity <= 0) return;
+        if (!this.hasRain()) return;
 
-        ctx.strokeStyle = `rgba(200, 200, 255, ${this.intensity * 0.6})`;
-        ctx.lineWidth = 1;
-
-        // Calculate angle based on wind
-        const angle = Math.atan2(1, this.windDirection * this.windStrength * 0.01);
+        const windX = Math.cos(Math.atan2(10, this.windStrength * this.windDirection * 0.1));
+        const windY = Math.sin(Math.atan2(10, this.windStrength * this.windDirection * 0.1));
 
         this.rainParticles.forEach(p => {
-            const endX = p.x + Math.cos(angle + Math.PI/2) * p.length * 0.3;
-            const endY = p.y + Math.sin(angle + Math.PI/2) * p.length;
+            // Option 1: Reduced opacity - max 60% instead of 90%
+            const alpha = (1 - p.layer * 0.2) * this.intensity * 0.7;
 
+            // Option 4: Softer blue-grey color instead of bright white-blue
+            ctx.strokeStyle = `rgba(160, 180, 200, ${Math.min(alpha, 0.6)})`;
+            // Option 3: Thinner line width - 1px instead of 2px
+            ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
-            ctx.lineTo(endX, endY);
+            ctx.lineTo(p.x + windX * p.len, p.y + windY * p.len);
             ctx.stroke();
         });
     },
 
-    // Render snow
-    renderSnow(ctx) {
-        if (!this.hasSnow() || this.intensity <= 0) return;
+    // ===========================================
+    // MIST SYSTEM
+    // ===========================================
 
-        ctx.fillStyle = `rgba(255, 255, 255, ${this.intensity * 0.8})`;
+    updateMist(deltaTime) {
+        // Add mist particles occasionally
+        if (this.mistParticles.length < 20) {
+            this.mistParticles.push({
+                x: (this.windDirection > 0 ? -100 : CONFIG.CANVAS_WIDTH + 100),
+                y: CONFIG.STREET_Y - 50 - Math.random() * 100,
+                vx: this.windDirection * (10 + Math.random() * 20),
+                size: 50 + Math.random() * 50,
+                life: 1,
+                alpha: Math.random() * 0.5
+            });
+        }
 
-        this.snowParticles.forEach(p => {
+        this.mistParticles.forEach(p => {
+            p.x += p.vx * deltaTime;
+            p.life -= deltaTime * 0.1;
+        });
+
+        this.mistParticles = this.mistParticles.filter(p => p.life > 0 && p.x > -200 && p.x < CONFIG.CANVAS_WIDTH + 200);
+    },
+
+    renderMist(ctx) {
+        this.mistParticles.forEach(p => {
+            const alpha = p.alpha * this.intensity * Math.min(1, p.life);
+            const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+            gradient.addColorStop(0, `rgba(200, 210, 220, ${alpha * 0.4})`);
+            gradient.addColorStop(1, 'rgba(200, 210, 220, 0)');
+
+            ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
             ctx.fill();
         });
     },
 
-    // Initialize leaf particles
-    initLeafParticles() {
-        this.leafParticles = [];
-        for (let i = 0; i < 30; i++) {
-            this.leafParticles.push({
-                x: Math.random() * CONFIG.CANVAS_WIDTH,
-                y: CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP),
-                rotation: Math.random() * Math.PI * 2,
-                rotationSpeed: (Math.random() - 0.5) * 10,
-                size: 4 + Math.random() * 4,
-                speedMultiplier: 0.8 + Math.random() * 0.4
-            });
-        }
-    },
+    // ===========================================
+    // SPLASH SYSTEM
+    // ===========================================
 
-    // Update leaf particles
-    updateLeaves(deltaTime) {
-        if (!this.hasWind() || this.intensity <= 0) return;
-
-        // Initialize if needed
-        if (this.leafParticles.length === 0) {
-            this.initLeafParticles();
-        }
-
-        const windSpeed = this.windStrength * this.windDirection * this.intensity;
-
-        this.leafParticles.forEach(p => {
-            // Horizontal movement with wind
-            p.x += windSpeed * p.speedMultiplier * deltaTime;
-
-            // Slight vertical drift
-            p.y += Math.sin(p.rotation) * 20 * deltaTime;
-
-            // Tumble rotation
-            p.rotation += p.rotationSpeed * deltaTime;
-
-            // Reset when off screen (based on wind direction)
-            if (this.windDirection > 0 && p.x > CONFIG.CANVAS_WIDTH + 20) {
-                p.x = -20;
-                p.y = CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP);
-            } else if (this.windDirection < 0 && p.x < -20) {
-                p.x = CONFIG.CANVAS_WIDTH + 20;
-                p.y = CONFIG.SKY_TOP + Math.random() * (CONFIG.STREET_Y - CONFIG.SKY_TOP);
-            }
-
-            // Keep in vertical bounds
-            if (p.y < CONFIG.SKY_TOP) p.y = CONFIG.SKY_TOP;
-            if (p.y > CONFIG.STREET_Y) p.y = CONFIG.STREET_Y - 20;
+    addSplash(x, y) {
+        if (this.splashParticles.length > 50) return; // Limit
+        this.splashParticles.push({
+            x: x,
+            y: y,
+            life: 0.2
         });
     },
 
-    // Render leaves
-    renderLeaves(ctx) {
-        if (!this.hasWind() || this.intensity <= 0) return;
+    updateSplashes(deltaTime) {
+        this.splashParticles.forEach(p => p.life -= deltaTime);
+        this.splashParticles = this.splashParticles.filter(p => p.life > 0);
+    },
 
-        this.leafParticles.forEach(p => {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.rotate(p.rotation);
-
-            // Draw leaf shape (simple oval)
-            ctx.fillStyle = `rgba(120, 180, 80, ${this.intensity * 0.8})`;
+    renderSplashes(ctx) {
+        ctx.fillStyle = `rgba(200, 220, 255, ${this.intensity * 0.6})`;
+        this.splashParticles.forEach(p => {
             ctx.beginPath();
-            ctx.ellipse(0, 0, p.size, p.size * 0.5, 0, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y - 2, 2, 0, Math.PI, true); // Semi circle up
             ctx.fill();
-
-            // Leaf vein
-            ctx.strokeStyle = `rgba(80, 120, 50, ${this.intensity * 0.6})`;
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(-p.size, 0);
-            ctx.lineTo(p.size, 0);
-            ctx.stroke();
-
-            ctx.restore();
         });
     },
 
-    // Get wind effect for player (called by player.js)
-    getWindEffect() {
-        if (!this.hasWind() || this.intensity <= 0) {
-            return 0;
-        }
-        return this.windDirection * this.windStrength * this.intensity * 0.3;
-    },
+    // ===========================================
+    // LIGHTNING SYSTEM
+    // ===========================================
 
-    // Update lightning
     updateLightning(deltaTime) {
         if (!this.hasLightning() || this.intensity <= 0) return;
 
-        // Decrease flash
-        if (this.lightningFlash > 0) {
-            this.lightningFlash -= deltaTime * 5;
-        }
+        // Flash decay
+        if (this.lightningFlash > 0) this.lightningFlash -= deltaTime * 5;
 
-        // Clear bolt after display time
-        if (this.lightningBolt && this.lightningBolt.displayTime !== undefined) {
-            this.lightningBolt.displayTime -= deltaTime;
-            if (this.lightningBolt.displayTime <= 0) {
-                this.lightningBolt = null;
-            }
-        }
+        // Bolt decay
+        this.lightningBolts = this.lightningBolts.filter(b => {
+            b.life -= deltaTime;
+            return b.life > 0;
+        });
 
-        // Timer for next strike
+        // Trigger logic
         this.lightningTimer -= deltaTime;
         if (this.lightningTimer <= 0) {
             this.triggerLightning();
-            this.lightningTimer = 3 + Math.random() * 5;  // 3-8 seconds
+            this.lightningTimer = 2 + Math.random() * 4;
         }
     },
 
-    // Trigger a lightning strike
     triggerLightning() {
-        // 70% chance to hit building, 30% sky only
-        const hitBuilding = Math.random() < 0.7;
+        const startX = Math.random() * CONFIG.CANVAS_WIDTH;
+        const startY = CONFIG.SKY_TOP; // Start high
+        const endY = CONFIG.STREET_Y;
+        const endX = startX + (Math.random() - 0.5) * 300;
 
-        let targetX, targetY;
-        let targetBuilding = null;
+        const mainBolt = this.generateBolt(startX, startY, endX, endY, 6);
+        this.lightningBolts.push({
+            segments: mainBolt,
+            life: 0.2, // Flash duration
+            width: 3
+        });
 
-        if (hitBuilding && typeof buildingManager !== 'undefined') {
-            // Weight buildings by height (taller = more likely)
-            const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
-            if (buildings.length > 0) {
-                // Calculate weights based on height
-                let totalWeight = 0;
-                const weights = buildings.map(b => {
-                    const weight = b.heightBlocks * b.heightBlocks;  // Square for more emphasis
-                    totalWeight += weight;
-                    return weight;
-                });
-
-                // Pick weighted random building
-                let roll = Math.random() * totalWeight;
-                for (let i = 0; i < buildings.length; i++) {
-                    roll -= weights[i];
-                    if (roll <= 0) {
-                        targetBuilding = buildings[i];
-                        break;
-                    }
-                }
-
-                if (targetBuilding) {
-                    // Find highest block
-                    for (let row = 0; row < targetBuilding.heightBlocks; row++) {
-                        for (let col = 0; col < targetBuilding.widthBlocks; col++) {
-                            if (targetBuilding.blocks[row][col]) {
-                                const pos = targetBuilding.getBlockWorldPosition(row, col);
-                                targetX = pos.x + pos.width / 2;
-                                targetY = pos.y;
-                                break;
-                            }
-                        }
-                        if (targetX !== undefined) break;
-                    }
-                }
-            }
+        // Add branches
+        for (let i = 0; i < 3; i++) {
+            // Pick a random point on main bolt to branch
+            const node = mainBolt[Math.floor(Math.random() * (mainBolt.length - 1))];
+            const branchEndX = node.x2 + (Math.random() - 0.5) * 200;
+            const branchEndY = node.y2 + 100 + Math.random() * 100;
+            const branch = this.generateBolt(node.x2, node.y2, branchEndX, branchEndY, 4);
+            this.lightningBolts.push({
+                segments: branch,
+                life: 0.15,
+                width: 1
+            });
         }
 
-        // Default to sky if no building target
-        if (targetX === undefined) {
-            targetX = 100 + Math.random() * (CONFIG.CANVAS_WIDTH - 200);
-            targetY = CONFIG.SKY_TOP + 100 + Math.random() * 200;
+        this.lightningFlash = 0.5; // Bright flash
+
+        // Thunder
+        if (typeof SoundManager !== 'undefined') SoundManager.thunder();
+
+        // Damage (Simplified: just hit random enemy or building near x)
+        this.checkLightningDamage(endX);
+    },
+
+    generateBolt(x1, y1, x2, y2, displace) {
+        if (displace < 2) {
+            return [{ x1, y1, x2, y2 }];
         }
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        const normalX = -(y2 - y1);
+        const normalY = (x2 - x1);
+        const dist = Math.sqrt(normalX * normalX + normalY * normalY);
 
-        // Generate bolt segments
-        const startX = targetX + (Math.random() - 0.5) * 100;
-        const startY = CONFIG.SKY_TOP;
-        const segments = this.generateBoltSegments(startX, startY, targetX, targetY);
+        // Offset normal
+        const offset = (Math.random() - 0.5) * displace * 20; // jaggedness
+        const discX = midX + (normalX / dist) * offset;
+        const discY = midY + (normalY / dist) * offset;
 
-        this.lightningBolt = {
-            x1: startX,
-            y1: startY,
-            x2: targetX,
-            y2: targetY,
-            segments: segments,
-            displayTime: 0.2
+        return [
+            ...this.generateBolt(x1, y1, discX, discY, displace / 2),
+            ...this.generateBolt(discX, discY, x2, y2, displace / 2)
+        ];
+    },
+
+    checkLightningDamage(x) {
+        // We'll let game.js check this if needed, or do it here
+        // Current game implementation checks WeatherManager.getPendingLightningDamage()
+        // Let's support that
+        this.pendingDamage = {
+            type: 'lightning_area',
+            x: x,
+            y: CONFIG.STREET_Y,
+            radius: 100
         };
-
-        this.lightningFlash = 1;
-
-        // Store pending damage for game.js to process
-        if (targetBuilding) {
-            this.pendingDamage = {
-                type: 'building',
-                building: targetBuilding,
-                x: targetX,
-                y: targetY,
-                blocks: 3 + Math.floor(Math.random() * 3)  // 3-5 blocks
-            };
-        }
-
-        // Play thunder (delayed)
-        setTimeout(() => {
-            if (typeof SoundManager !== 'undefined') {
-                SoundManager.thunder();
-            }
-        }, 300);
     },
 
-    // Generate jagged bolt segments
-    generateBoltSegments(x1, y1, x2, y2) {
-        const segments = [];
-        const steps = 8;
-        let prevX = x1, prevY = y1;
-
-        for (let i = 1; i <= steps; i++) {
-            const t = i / steps;
-            let x = x1 + (x2 - x1) * t;
-            let y = y1 + (y2 - y1) * t;
-
-            // Add randomness except for last segment
-            if (i < steps) {
-                x += (Math.random() - 0.5) * 60;
-                y += (Math.random() - 0.5) * 20;
-            }
-
-            segments.push({x1: prevX, y1: prevY, x2: x, y2: y});
-            prevX = x;
-            prevY = y;
-        }
-
-        return segments;
+    getPendingLightningDamage() {
+        const d = this.pendingDamage;
+        this.pendingDamage = null;
+        return d;
     },
 
-    // Render lightning
     renderLightning(ctx) {
-        // Screen flash
+        // Flash overlay
         if (this.lightningFlash > 0) {
-            ctx.fillStyle = `rgba(255, 255, 255, ${this.lightningFlash * 0.3})`;
+            ctx.fillStyle = `rgba(255, 255, 255, ${this.lightningFlash * 0.4})`;
             ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
         }
 
-        // Bolt
-        if (this.lightningBolt && this.lightningBolt.segments) {
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 3;
-            ctx.shadowColor = '#88f';
-            ctx.shadowBlur = 10;
+        // Bolts
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 10;
+        ctx.lineCap = 'round';
 
-            this.lightningBolt.segments.forEach(seg => {
-                ctx.beginPath();
+        this.lightningBolts.forEach(bolt => {
+            ctx.lineWidth = bolt.width;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(1, bolt.life * 10)})`;
+            ctx.beginPath();
+            bolt.segments.forEach(seg => {
                 ctx.moveTo(seg.x1, seg.y1);
                 ctx.lineTo(seg.x2, seg.y2);
-                ctx.stroke();
             });
+            ctx.stroke();
+        });
 
-            // Thinner bright core
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = '#aaf';
-            this.lightningBolt.segments.forEach(seg => {
-                ctx.beginPath();
-                ctx.moveTo(seg.x1, seg.y1);
-                ctx.lineTo(seg.x2, seg.y2);
-                ctx.stroke();
-            });
-
-            ctx.shadowBlur = 0;
-        }
-    },
-
-    // Get and clear pending damage (called by game.js)
-    getPendingLightningDamage() {
-        const damage = this.pendingDamage;
-        this.pendingDamage = null;
-        return damage;
+        ctx.shadowBlur = 0;
+        ctx.lineCap = 'butt';
     }
 };

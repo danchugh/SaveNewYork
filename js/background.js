@@ -1,425 +1,670 @@
 // ============================================
-// PARALLAX BACKGROUND SYSTEM
+// PARALLAX BACKGROUND SYSTEM - Contra Operation Galuga Style
 // ============================================
 
-// BackgroundManager - Parallax background with scenery
 const BackgroundManager = {
-    // Animation phase for subtle movement
     time: 0,
+    volcanoPulse: 0,
 
-    // Foreshadow animation state
-    foreshadowX: 480,
-    foreshadowDirection: 1,
-    foreshadowY: 0,
+    // Layer offsets for parallax
+    layer1Offset: 0,
+    layer2Offset: 0,
+    layer3Offset: 0,
 
-    // Mountain definitions [x, baseY, width, height, isVolcano]
-    mountains: [
-        { x: 50, width: 200, height: 180, isVolcano: false },
-        { x: 200, width: 280, height: 250, isVolcano: true },  // Volcano!
-        { x: 450, width: 220, height: 200, isVolcano: false },
-        { x: 650, width: 260, height: 220, isVolcano: false },
-        { x: 850, width: 180, height: 160, isVolcano: false }
-    ],
+    // Generated Elements
+    skyline: [],
+    ruins: [],
+    debris: [],
 
-    // Forest tree positions
-    trees: [], // Generated in init()
+    // Volcano image asset
+    volcanoImage: null,
+    volcanoImageLoaded: false,
 
-    // Stream waypoints
-    streamPoints: [],
+    // Volcano embers particle system
+    embers: [],
+    lavaFlows: [],
 
-    // Grass blade positions
-    grassBlades: [],
+    // Atmospheric ash particles (falling across entire scene)
+    ashParticles: [],
 
     init() {
-        // Generate trees (50-80 trees)
-        this.trees = [];
-        for (let i = 0; i < 70; i++) {
-            this.trees.push({
-                x: Math.random() * CONFIG.CANVAS_WIDTH,
-                y: 380 + Math.random() * 80,  // Mid-ground area
-                height: 20 + Math.random() * 40,
-                width: 10 + Math.random() * 15
-            });
-        }
-        // Sort by y for depth
-        this.trees.sort((a, b) => a.y - b.y);
+        // Load volcano image
+        this.volcanoImage = new Image();
+        this.volcanoImage.onload = () => {
+            this.volcanoImageLoaded = true;
+            console.log('Volcano image loaded');
+        };
+        this.volcanoImage.onerror = () => {
+            console.warn('Failed to load volcano image, using procedural fallback');
+        };
+        this.volcanoImage.src = 'assets/volcano_background.png';
 
-        // Generate stream waypoints (wavy path)
-        this.streamPoints = [];
-        for (let x = 0; x <= CONFIG.CANVAS_WIDTH; x += 40) {
-            this.streamPoints.push({
+        // Initialize lava flows (static paths down the volcano)
+        this.lavaFlows = [
+            { startX: 0, endX: -120, width: 8, speed: 1.2 },
+            { startX: 15, endX: 80, width: 6, speed: 1.0 },
+            { startX: -10, endX: -60, width: 5, speed: 0.9 },
+            { startX: 5, endX: 140, width: 7, speed: 1.1 },
+            { startX: -5, endX: -180, width: 4, speed: 0.8 },
+            { startX: 20, endX: 200, width: 5, speed: 1.3 },
+        ];
+
+        // Initialize ember particles
+        this.embers = [];
+        for (let i = 0; i < 25; i++) {
+            this.embers.push(this.createEmber());
+        }
+
+        // Initialize atmospheric ash particles
+        this.ashParticles = [];
+        for (let i = 0; i < 40; i++) {
+            this.ashParticles.push(this.createAshParticle());
+        }
+
+        // LAYER 1: Far distant city silhouettes
+        this.skyline = [];
+        let x = 0;
+        while (x < CONFIG.CANVAS_WIDTH * 1.5) {
+            const width = 30 + Math.random() * 60;
+            const height = 120 + Math.random() * 180;
+            this.skyline.push({
                 x: x,
-                y: 520 + Math.sin(x * 0.02) * 20
+                width: width,
+                height: height,
+                type: Math.random() > 0.6 ? 'spire' : 'block',
+                damaged: Math.random() > 0.4
             });
+            x += width - 5;
         }
 
-        // Generate grass blades
-        this.grassBlades = [];
-        for (let i = 0; i < 200; i++) {
-            this.grassBlades.push({
-                x: Math.random() * CONFIG.CANVAS_WIDTH,
-                y: 480 + Math.random() * 100,
-                height: 5 + Math.random() * 10,
-                phase: Math.random() * Math.PI * 2
-            });
+        // LAYER 2: Mid-ground ruined buildings with windows
+        this.ruins = [];
+        x = 0;
+        while (x < CONFIG.CANVAS_WIDTH * 1.5) {
+            if (Math.random() > 0.25) {
+                const width = 50 + Math.random() * 80;
+                const height = 60 + Math.random() * 120;
+                this.ruins.push({
+                    x: x,
+                    width: width,
+                    height: height,
+                    windows: this.generateWindows(width, height),
+                    crumbled: Math.random() > 0.6
+                });
+                x += width;
+            } else {
+                x += 30 + Math.random() * 60;
+            }
         }
+
+        // LAYER 3: Foreground rubble and barriers
+        this.debris = [];
+        x = 0;
+        while (x < CONFIG.CANVAS_WIDTH * 2) {
+            if (Math.random() < 0.3) {
+                this.debris.push({
+                    type: 'barrier',
+                    x: x,
+                    width: 20 + Math.random() * 40,
+                    height: 15 + Math.random() * 25
+                });
+            } else if (Math.random() < 0.2) {
+                this.debris.push({
+                    type: 'rubble',
+                    x: x,
+                    width: 30 + Math.random() * 30,
+                    height: 10 + Math.random() * 15
+                });
+            }
+            x += 60 + Math.random() * 40;
+        }
+    },
+
+    createEmber() {
+        return {
+            x: (Math.random() - 0.5) * 60,
+            y: 0,
+            vx: (Math.random() - 0.5) * 20,
+            vy: -30 - Math.random() * 50,
+            life: Math.random(),
+            maxLife: 1.5 + Math.random() * 2,
+            size: 1 + Math.random() * 3
+        };
+    },
+
+    createAshParticle() {
+        return {
+            x: Math.random() * CONFIG.CANVAS_WIDTH,
+            y: -10 - Math.random() * CONFIG.CANVAS_HEIGHT,
+            vx: (Math.random() - 0.5) * 10,
+            vy: 15 + Math.random() * 25,
+            size: 1 + Math.random() * 2,
+            opacity: 0.3 + Math.random() * 0.4,
+            drift: Math.random() * Math.PI * 2
+        };
+    },
+
+    generateWindows(w, h) {
+        const wins = [];
+        const rows = Math.floor(h / 18);
+        const cols = Math.floor(w / 14);
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (Math.random() > 0.5) continue;
+                wins.push({
+                    x: 4 + c * 14,
+                    y: 8 + r * 18,
+                    w: 8,
+                    h: 12,
+                    lit: Math.random() < 0.15,
+                    random: Math.random()  // Store random value for stable rendering
+                });
+            }
+        }
+        return wins;
     },
 
     reset() {
         this.time = 0;
-        this.foreshadowX = 480;
-        this.foreshadowDirection = 1;
-        this.foreshadowY = 0;
+        this.layer1Offset = 0;
+        this.layer2Offset = 0;
+        this.layer3Offset = 0;
         this.init();
     },
 
     update(deltaTime) {
         this.time += deltaTime;
-        this.updateForeshadow(deltaTime);
-    },
+        this.volcanoPulse = Math.sin(this.time * 2) * 0.5 + 0.5;
 
-    updateForeshadow(deltaTime) {
-        // Slow movement behind mountains
-        this.foreshadowX += this.foreshadowDirection * 30 * deltaTime;
+        // Update embers
+        for (let i = 0; i < this.embers.length; i++) {
+            const e = this.embers[i];
+            e.life += deltaTime;
+            e.x += e.vx * deltaTime;
+            e.y += e.vy * deltaTime;
+            e.vy += 5 * deltaTime; // Slight gravity resistance (rising hot air)
 
-        // Bounce at edges (stay in mountain area)
-        if (this.foreshadowX > 700) this.foreshadowDirection = -1;
-        if (this.foreshadowX < 260) this.foreshadowDirection = 1;
+            if (e.life > e.maxLife) {
+                this.embers[i] = this.createEmber();
+            }
+        }
 
-        // Slight vertical bob
-        this.foreshadowY = Math.sin(this.time * 2) * 10;
+        // Update atmospheric ash particles
+        for (let i = 0; i < this.ashParticles.length; i++) {
+            const a = this.ashParticles[i];
+            a.drift += deltaTime;
+            a.x += a.vx * deltaTime + Math.sin(a.drift) * 5 * deltaTime;
+            a.y += a.vy * deltaTime;
+
+            // Reset particles that fall off screen
+            if (a.y > CONFIG.STREET_Y + 50) {
+                this.ashParticles[i] = this.createAshParticle();
+            }
+
+            // Wrap horizontally
+            if (a.x < -10) a.x = CONFIG.CANVAS_WIDTH + 10;
+            if (a.x > CONFIG.CANVAS_WIDTH + 10) a.x = -10;
+        }
+
+        // Slow parallax drift
+        const drift = 3 * deltaTime;
+        this.layer1Offset = (this.layer1Offset + drift * 0.3) % 1200;
+        this.layer2Offset = (this.layer2Offset + drift * 0.6) % 1200;
+        this.layer3Offset = (this.layer3Offset + drift * 1.2) % 1500;
     },
 
     render(ctx) {
-        // Render layers back to front
-        this.renderMountains(ctx);
-        this.renderForeshadow(ctx);  // Boss foreshadow behind forest
-        this.renderForest(ctx);
-        this.renderValley(ctx);
-        this.renderStream(ctx);
-        this.renderGrass(ctx);
+        const playerX = (typeof player !== 'undefined') ? player.x : CONFIG.CANVAS_WIDTH / 2;
+        const offsetX = (playerX - 480);
+
+        // Time of day
+        const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
+        const isDusk = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'dusk';
+
+        // === RENDER CUSTOM CITYSCAPE BACKGROUND ===
+        const cityscapeSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('bg_cityscape') : null;
+
+        if (cityscapeSprite) {
+            const spriteWidth = cityscapeSprite.width;
+            const spriteHeight = cityscapeSprite.height;
+
+            // Scale to eliminate seams (cover screen completely)
+            // Use maximum scale ratio to ensure no black bars
+            const scaleX = CONFIG.CANVAS_WIDTH / spriteWidth;
+            const scaleY = CONFIG.CANVAS_HEIGHT / spriteHeight;
+            const scale = Math.max(scaleX, scaleY);
+
+            const scaledWidth = spriteWidth * scale;
+            const scaledHeight = spriteHeight * scale;
+
+            // Center the image
+            const drawX = (CONFIG.CANVAS_WIDTH - scaledWidth) / 2;
+            const drawY = (CONFIG.CANVAS_HEIGHT - scaledHeight) / 2;
+
+            ctx.save();
+
+            // Apply time-of-day tinting
+            if (isNight) {
+                ctx.globalAlpha = 0.7;
+            } else if (isDusk) {
+                ctx.globalAlpha = 0.9;
+            }
+
+            // Draw single static background image (no tiling/parallax)
+            ctx.drawImage(cityscapeSprite, drawX, drawY, scaledWidth, scaledHeight);
+
+            ctx.restore();
+        } else {
+            // Fallback: Render procedural layers
+            // this.renderVolcano(ctx, offsetX * 0.08);  // DISABLED
+            this.renderSkyline(ctx, offsetX * 0.15);
+            this.renderRuins(ctx, offsetX * 0.3);
+        }
+
+        // Render debris layer on top (optional, can be disabled if cityscape has enough detail)
+        // this.renderDebris(ctx, offsetX * 0.5);
+
+        // Render atmospheric ash particles (on top of everything)
+        this.ashParticles.forEach(a => {
+            ctx.fillStyle = `rgba(200, 180, 160, ${a.opacity})`;
+            ctx.fillRect(a.x, a.y, a.size, a.size);
+
+            // Subtle glow for larger particles
+            if (a.size > 1.5) {
+                ctx.fillStyle = `rgba(220, 200, 180, ${a.opacity * 0.3})`;
+                ctx.fillRect(a.x - 1, a.y - 1, a.size + 2, a.size + 2);
+            }
+        });
     },
 
-    renderForeshadow(ctx) {
-        const upcomingBoss = enemyManager.getUpcomingBoss();
-        if (!upcomingBoss) return;
+    renderVolcano(ctx, offset) {
+        const vx = 520 - offset;
+        const vy = CONFIG.STREET_Y;
+        const volcanoHeight = 450;
 
-        const baseY = 280 + this.foreshadowY;  // Behind mountains
-        const x = this.foreshadowX;
+        // Time of day colors
+        const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
+        const isDusk = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'dusk';
 
-        ctx.save();
-        ctx.globalAlpha = 0.6;  // Semi-transparent/distant
+        // === IMAGE-BASED VOLCANO (with procedural fallback) ===
+        const glow = this.volcanoPulse;
 
-        if (upcomingBoss === 'charger') {
-            // Small red charger with horns
-            ctx.fillStyle = '#dc2626';
+        if (this.volcanoImageLoaded && this.volcanoImage) {
+            // Draw the volcano image - scale to fill more of background
+            const imgWidth = 1100;
+            const imgHeight = 800;
+            const drawX = vx - imgWidth / 2;
+            const drawY = vy - imgHeight + 120;
+
+            ctx.save();
+            ctx.drawImage(this.volcanoImage, drawX, drawY, imgWidth, imgHeight);
+
+            // Apply time-of-day tint overlay
+            if (isNight) {
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.fillStyle = 'rgba(20, 20, 50, 0.4)';
+                ctx.fillRect(drawX, drawY, imgWidth, imgHeight);
+            } else if (isDusk) {
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.fillStyle = 'rgba(50, 25, 15, 0.25)';
+                ctx.fillRect(drawX, drawY, imgWidth, imgHeight);
+            }
+            ctx.restore();
+        } else {
+            // === PROCEDURAL FALLBACK ===
+            const baseColor = isNight ? '#0c0a09' : (isDusk ? '#1c1917' : '#1a1a1a');
+            const faceColor = isNight ? '#1c1917' : (isDusk ? '#292524' : '#2d2d2d');
+            const darkAccent = '#0a0a0a';
+
+            // Draw volcano base
+            ctx.fillStyle = baseColor;
             ctx.beginPath();
-            ctx.ellipse(x, baseY, 15, 10, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Horns
-            ctx.fillStyle = '#991b1b';
-            ctx.beginPath();
-            ctx.moveTo(x - 8, baseY - 6);
-            ctx.lineTo(x - 10, baseY - 16);
-            ctx.lineTo(x - 4, baseY - 8);
-            ctx.closePath();
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(x + 8, baseY - 6);
-            ctx.lineTo(x + 10, baseY - 16);
-            ctx.lineTo(x + 4, baseY - 8);
-            ctx.closePath();
-            ctx.fill();
-
-            // Eyes
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(x - 4, baseY - 2, 3, 0, Math.PI * 2);
-            ctx.arc(x + 4, baseY - 2, 3, 0, Math.PI * 2);
-            ctx.fill();
-
-        } else if (upcomingBoss === 'gunner') {
-            // Small purple gunner
-            ctx.fillStyle = '#7c3aed';
-            ctx.beginPath();
-            ctx.ellipse(x, baseY, 15, 10, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Cannon
-            ctx.fillStyle = '#4c1d95';
-            ctx.fillRect(x - 3, baseY + 6, 6, 8);
-
-            // Eyes (red pupils)
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(x - 4, baseY - 2, 3, 0, Math.PI * 2);
-            ctx.arc(x + 4, baseY - 2, 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#ef4444';
-            ctx.beginPath();
-            ctx.arc(x - 4, baseY - 2, 1.5, 0, Math.PI * 2);
-            ctx.arc(x + 4, baseY - 2, 1.5, 0, Math.PI * 2);
-            ctx.fill();
-
-        } else if (upcomingBoss === 'boss') {
-            // Large silhouette with glowing eyes
-            ctx.fillStyle = '#1a1a2e';
-            ctx.beginPath();
-            ctx.ellipse(x, baseY, 30, 20, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Wings silhouette
-            ctx.beginPath();
-            ctx.moveTo(x - 15, baseY);
-            ctx.quadraticCurveTo(x - 50, baseY - 20, x - 55, baseY + 5);
-            ctx.quadraticCurveTo(x - 40, baseY + 10, x - 20, baseY + 5);
+            ctx.moveTo(vx - 350, vy);
+            ctx.quadraticCurveTo(vx - 100, vy - volcanoHeight * 0.7, vx - 50, vy - volcanoHeight);
+            ctx.lineTo(vx + 50, vy - volcanoHeight);
+            ctx.quadraticCurveTo(vx + 100, vy - volcanoHeight * 0.7, vx + 380, vy);
             ctx.closePath();
             ctx.fill();
 
+            // Draw volcano lighter face
+            ctx.fillStyle = faceColor;
             ctx.beginPath();
-            ctx.moveTo(x + 15, baseY);
-            ctx.quadraticCurveTo(x + 50, baseY - 20, x + 55, baseY + 5);
-            ctx.quadraticCurveTo(x + 40, baseY + 10, x + 20, baseY + 5);
+            ctx.moveTo(vx - 220, vy);
+            ctx.quadraticCurveTo(vx - 60, vy - volcanoHeight * 0.6, vx - 30, vy - volcanoHeight + 30);
+            ctx.lineTo(vx + 30, vy - volcanoHeight + 30);
+            ctx.quadraticCurveTo(vx + 60, vy - volcanoHeight * 0.6, vx + 260, vy);
             ctx.closePath();
             ctx.fill();
 
-            // Glowing red eyes
-            ctx.fillStyle = '#ef4444';
-            ctx.shadowColor = '#ef4444';
-            ctx.shadowBlur = 10;
+            // Dark ridge accents
+            ctx.fillStyle = darkAccent;
             ctx.beginPath();
-            ctx.arc(x - 10, baseY - 5, 4, 0, Math.PI * 2);
-            ctx.arc(x + 10, baseY - 5, 4, 0, Math.PI * 2);
+            ctx.moveTo(vx - 300, vy);
+            ctx.lineTo(vx - 70, vy - volcanoHeight * 0.85);
+            ctx.lineTo(vx - 90, vy - volcanoHeight * 0.85);
+            ctx.lineTo(vx - 320, vy);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(vx + 300, vy);
+            ctx.lineTo(vx + 70, vy - volcanoHeight * 0.85);
+            ctx.lineTo(vx + 90, vy - volcanoHeight * 0.85);
+            ctx.lineTo(vx + 320, vy);
+            ctx.fill();
+        }
+
+        // === LAVA FLOWS (procedural, applied for fallback mode) ===
+        if (!this.volcanoImageLoaded) {
+            const lavaColors = ['#ff4500', '#ff6600', '#ff3300', '#ff5500'];
+
+            this.lavaFlows.forEach((flow, index) => {
+                const flowProgress = (this.time * flow.speed) % 1;
+                const baseAlpha = 0.7 + glow * 0.3;
+
+                // Create gradient for each lava flow
+                const startY = vy - volcanoHeight + 20;
+                const endY = vy - 30;
+                const lavaGrad = ctx.createLinearGradient(0, startY, 0, endY);
+                lavaGrad.addColorStop(0, `rgba(255, 200, 50, ${baseAlpha})`);
+                lavaGrad.addColorStop(0.3, `rgba(255, 100, 0, ${baseAlpha * 0.9})`);
+                lavaGrad.addColorStop(0.7, `rgba(200, 50, 0, ${baseAlpha * 0.7})`);
+                lavaGrad.addColorStop(1, `rgba(100, 20, 0, ${baseAlpha * 0.4})`);
+
+                ctx.strokeStyle = lavaGrad;
+                ctx.lineWidth = flow.width;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+
+                // Wavy lava path
+                const segments = 8;
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    const px = vx + flow.startX + (flow.endX - flow.startX) * t;
+                    const py = startY + (endY - startY) * t;
+                    const wave = Math.sin(t * 4 + this.time * 2 + index) * 3;
+
+                    if (i === 0) {
+                        ctx.moveTo(px + wave, py);
+                    } else {
+                        ctx.lineTo(px + wave, py);
+                    }
+                }
+                ctx.stroke();
+
+                // Glowing edge
+                ctx.strokeStyle = `rgba(255, 255, 100, ${0.3 + glow * 0.2})`;
+                ctx.lineWidth = flow.width * 0.3;
+                ctx.stroke();
+            });
+
+            // === CRATER GLOW ===
+            const glowAlpha = isNight ? 1.0 : 0.85;
+
+            // Large ambient glow
+            const outerGlow = ctx.createRadialGradient(
+                vx, vy - volcanoHeight - 20, 10,
+                vx, vy - volcanoHeight + 60, 150
+            );
+            outerGlow.addColorStop(0, `rgba(255, 150, 50, ${(0.8 + glow * 0.2) * glowAlpha})`);
+            outerGlow.addColorStop(0.3, `rgba(255, 80, 0, ${(0.5 + glow * 0.2) * glowAlpha})`);
+            outerGlow.addColorStop(0.6, `rgba(150, 30, 0, ${0.3 * glowAlpha})`);
+            outerGlow.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = outerGlow;
+            ctx.beginPath();
+            ctx.arc(vx, vy - volcanoHeight + 20, 140, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Inner bright glow
+            const innerGlow = ctx.createRadialGradient(
+                vx, vy - volcanoHeight, 5,
+                vx, vy - volcanoHeight + 20, 50
+            );
+            innerGlow.addColorStop(0, `rgba(255, 255, 200, ${0.9 + glow * 0.1})`);
+            innerGlow.addColorStop(0.5, `rgba(255, 150, 50, ${0.7 + glow * 0.2})`);
+            innerGlow.addColorStop(1, 'rgba(255, 80, 0, 0)');
+            ctx.fillStyle = innerGlow;
+            ctx.beginPath();
+            ctx.arc(vx, vy - volcanoHeight + 10, 45, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Lava pool in crater
+            ctx.fillStyle = '#ffcc00';
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = '#ff6600';
+            ctx.beginPath();
+            ctx.ellipse(vx, vy - volcanoHeight + 12, 35, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#ff4500';
+            ctx.beginPath();
+            ctx.ellipse(vx, vy - volcanoHeight + 14, 28, 9, 0, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0;
-        }
 
-        ctx.restore();
-    },
-
-    renderMountains(ctx) {
-        const baseY = 400;  // Mountain base level
-
-        this.mountains.forEach((m, i) => {
-            // Get colors based on time of day
-            const lightColor = this.getMountainLightColor();
-            const darkColor = this.getMountainDarkColor();
-
-            // Draw mountain shape using quadratic curves
-            ctx.beginPath();
-            ctx.moveTo(m.x - m.width/2, baseY);
-
-            // Left slope
-            ctx.quadraticCurveTo(
-                m.x - m.width/4, baseY - m.height * 0.6,
-                m.x, baseY - m.height
-            );
-
-            // Right slope
-            ctx.quadraticCurveTo(
-                m.x + m.width/4, baseY - m.height * 0.6,
-                m.x + m.width/2, baseY
-            );
-
-            ctx.closePath();
-
-            // Gradient fill
-            const gradient = ctx.createLinearGradient(m.x - m.width/2, baseY - m.height, m.x + m.width/2, baseY);
-            gradient.addColorStop(0, lightColor);
-            gradient.addColorStop(1, darkColor);
-            ctx.fillStyle = gradient;
-            ctx.fill();
-
-            // Snow cap on taller mountains (not volcano)
-            if (m.height > 180 && !m.isVolcano) {
-                ctx.beginPath();
-                ctx.moveTo(m.x - 20, baseY - m.height + 30);
-                ctx.lineTo(m.x, baseY - m.height);
-                ctx.lineTo(m.x + 20, baseY - m.height + 30);
-                ctx.closePath();
-                ctx.fillStyle = '#fff';
-                ctx.fill();
+            // Volcano smoke from VolcanoManager
+            if (typeof VolcanoManager !== 'undefined') {
+                VolcanoManager.volcanoX = vx;
+                VolcanoManager.volcanoY = vy - volcanoHeight + 10;
+                VolcanoManager.renderSmoke(ctx);
             }
 
-            // Volcano crater
-            if (m.isVolcano) {
+            // Render embers on top
+            this.embers.forEach(e => {
+                const alpha = 1 - (e.life / e.maxLife);
+                const flicker = 0.7 + Math.sin(this.time * 10 + e.x) * 0.3;
+
+                ctx.fillStyle = `rgba(255, ${150 + Math.random() * 100}, 50, ${alpha * flicker})`;
                 ctx.beginPath();
-                ctx.ellipse(m.x, baseY - m.height + 10, 25, 8, 0, 0, Math.PI * 2);
-                ctx.fillStyle = '#4a0000';
+                ctx.arc(vx + e.x, vy - volcanoHeight + e.y, e.size * alpha, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Lava glow
+                // Ember glow
+                ctx.fillStyle = `rgba(255, 100, 0, ${alpha * 0.3 * flicker})`;
                 ctx.beginPath();
-                ctx.ellipse(m.x, baseY - m.height + 10, 15, 5, 0, 0, Math.PI * 2);
-                ctx.fillStyle = '#ff4400';
+                ctx.arc(vx + e.x, vy - volcanoHeight + e.y, e.size * alpha * 2, 0, Math.PI * 2);
                 ctx.fill();
+            });
+        }
 
-                // Render volcano smoke (call VolcanoManager)
-                if (typeof VolcanoManager !== 'undefined') {
-                    VolcanoManager.renderSmoke(ctx);
+        // === EMBERS & SMOKE (for both image and procedural modes) ===
+        // Render embers on top
+        this.embers.forEach(e => {
+            const alpha = 1 - (e.life / e.maxLife);
+            const flicker = 0.7 + Math.sin(this.time * 10 + e.x) * 0.3;
+
+            ctx.fillStyle = `rgba(255, ${150 + Math.floor(e.x * 5) % 100}, 50, ${alpha * flicker})`;
+            ctx.beginPath();
+            ctx.arc(vx + e.x + 60, vy - volcanoHeight - 30 + e.y, e.size * alpha, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ember glow
+            ctx.fillStyle = `rgba(255, 100, 0, ${alpha * 0.3 * flicker})`;
+            ctx.beginPath();
+            ctx.arc(vx + e.x + 60, vy - volcanoHeight - 30 + e.y, e.size * alpha * 2, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Volcano smoke (for image mode)
+        if (this.volcanoImageLoaded && typeof VolcanoManager !== 'undefined') {
+            VolcanoManager.volcanoX = vx + 60;
+            VolcanoManager.volcanoY = vy - volcanoHeight - 40;
+            VolcanoManager.renderSmoke(ctx);
+        }
+    },
+
+    renderSkyline(ctx, offset) {
+        // Time of day color
+        const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
+        const isDusk = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'dusk';
+
+        // Try sprite first
+        const skylineSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('bg_skyline') : null;
+
+        if (skylineSprite) {
+            // === SPRITE RENDERING ===
+            // Seamlessly tile the skyline sprite horizontally
+            const spriteWidth = skylineSprite.width;
+            const spriteHeight = skylineSprite.height;
+            const baseY = CONFIG.STREET_Y - spriteHeight;
+
+            // Calculate base offset for parallax tiling
+            const totalOffset = offset + this.layer1Offset;
+            const tileOffset = ((totalOffset % spriteWidth) + spriteWidth) % spriteWidth;
+
+            // Use additive blending for black background transparency
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Apply time-of-day dimming
+            if (isNight) {
+                ctx.globalAlpha = 0.6;
+            } else if (isDusk) {
+                ctx.globalAlpha = 0.8;
+            }
+
+            // Draw enough tiles to cover the screen
+            for (let x = -tileOffset; x < CONFIG.CANVAS_WIDTH + spriteWidth; x += spriteWidth) {
+                ctx.drawImage(skylineSprite, x, baseY);
+            }
+
+            ctx.restore();
+        } else {
+            // === PROCEDURAL FALLBACK ===
+            const silhouetteColor = isNight ? '#0f172a' : (isDusk ? '#431407' : '#374151');
+            ctx.fillStyle = silhouetteColor;
+
+            this.skyline.forEach(b => {
+                let rx = b.x - offset - this.layer1Offset;
+                if (rx < -150) rx += 1440;
+                if (rx > 1100) rx -= 1440;
+
+                const baseY = CONFIG.STREET_Y;
+
+                // Draw building shape
+                if (b.damaged) {
+                    ctx.beginPath();
+                    ctx.moveTo(rx, baseY);
+                    ctx.lineTo(rx, baseY - b.height * 0.7);
+                    ctx.lineTo(rx + b.width * 0.3, baseY - b.height);
+                    ctx.lineTo(rx + b.width * 0.5, baseY - b.height * 0.85);
+                    ctx.lineTo(rx + b.width * 0.7, baseY - b.height * 0.95);
+                    ctx.lineTo(rx + b.width, baseY - b.height * 0.6);
+                    ctx.lineTo(rx + b.width, baseY);
+                    ctx.fill();
+                } else {
+                    ctx.fillRect(rx, baseY - b.height, b.width, b.height);
                 }
+
+                // Antenna on spires
+                if (b.type === 'spire' && !b.damaged) {
+                    ctx.fillRect(rx + b.width / 2 - 1, baseY - b.height - 25, 2, 25);
+                    if ((isNight || isDusk) && Math.floor(this.time * 2) % 2 === 0) {
+                        ctx.fillStyle = '#ef4444';
+                        ctx.beginPath();
+                        ctx.arc(rx + b.width / 2, baseY - b.height - 27, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = silhouetteColor;
+                    }
+                }
+            });
+        }
+    },
+
+    renderRuins(ctx, offset) {
+        const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
+        const isDusk = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'dusk';
+
+        // Try sprite first
+        const ruinsSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('bg_ruins') : null;
+
+        if (ruinsSprite) {
+            // === SPRITE RENDERING ===
+            const spriteWidth = ruinsSprite.width;
+            const spriteHeight = ruinsSprite.height;
+            const baseY = CONFIG.STREET_Y - spriteHeight;
+
+            // Calculate base offset for parallax tiling
+            const totalOffset = offset + this.layer2Offset;
+            const tileOffset = ((totalOffset % spriteWidth) + spriteWidth) % spriteWidth;
+
+            // Use additive blending for black background transparency
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Apply time-of-day dimming
+            if (isNight) {
+                ctx.globalAlpha = 0.5;
+            } else if (isDusk) {
+                ctx.globalAlpha = 0.7;
+            }
+
+            // Draw enough tiles to cover the screen
+            for (let x = -tileOffset; x < CONFIG.CANVAS_WIDTH + spriteWidth; x += spriteWidth) {
+                ctx.drawImage(ruinsSprite, x, baseY);
+            }
+
+            ctx.restore();
+        } else {
+            // === PROCEDURAL FALLBACK ===
+            const ruinColor = isNight ? '#1e293b' : (isDusk ? '#78350f' : '#4b5563');
+            const windowDark = isNight ? '#0f172a' : '#1f2937';
+            const windowLit = '#fbbf24';
+
+            this.ruins.forEach(r => {
+                let rx = r.x - offset - this.layer2Offset;
+                if (rx < -120) rx += 1440;
+                if (rx > 1080) rx -= 1440;
+
+                const baseY = CONFIG.STREET_Y;
+                ctx.fillStyle = ruinColor;
+
+                if (r.crumbled) {
+                    ctx.beginPath();
+                    ctx.moveTo(rx, baseY);
+                    ctx.lineTo(rx, baseY - r.height * 0.5);
+                    ctx.lineTo(rx + r.width * 0.2, baseY - r.height * 0.8);
+                    ctx.lineTo(rx + r.width * 0.4, baseY - r.height * 0.6);
+                    ctx.lineTo(rx + r.width * 0.6, baseY - r.height);
+                    ctx.lineTo(rx + r.width * 0.8, baseY - r.height * 0.7);
+                    ctx.lineTo(rx + r.width, baseY - r.height * 0.4);
+                    ctx.lineTo(rx + r.width, baseY);
+                    ctx.fill();
+                } else {
+                    ctx.fillRect(rx, baseY - r.height, r.width, r.height);
+                }
+
+                // Windows
+                r.windows.forEach(w => {
+                    if (r.crumbled && w.random > 0.5) return;
+                    const showLit = w.lit && (isNight || isDusk);
+                    ctx.fillStyle = showLit ? windowLit : windowDark;
+                    ctx.fillRect(rx + w.x, baseY - r.height + w.y, w.w, w.h);
+                });
+            });
+        }
+    },
+
+    renderDebris(ctx, offset) {
+        const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
+        const debrisColor = isNight ? '#374151' : '#6b7280';
+        ctx.fillStyle = debrisColor;
+
+        this.debris.forEach(d => {
+            let dx = d.x - offset - this.layer3Offset;
+            if (dx < -80) dx += 1920;
+            if (dx > 1040) dx -= 1920;
+
+            const baseY = CONFIG.STREET_Y;
+
+            if (d.type === 'rubble') {
+                // Rubble pile
+                ctx.beginPath();
+                ctx.moveTo(dx, baseY);
+                ctx.lineTo(dx + d.width * 0.3, baseY - d.height);
+                ctx.lineTo(dx + d.width * 0.6, baseY - d.height * 0.7);
+                ctx.lineTo(dx + d.width, baseY);
+                ctx.fill();
             }
         });
-    },
-
-    renderForest(ctx) {
-        const treeColor = this.getForestColor();
-        const darkTreeColor = this.getForestDarkColor();
-
-        this.trees.forEach(tree => {
-            // Simple triangle tree
-            ctx.beginPath();
-            ctx.moveTo(tree.x, tree.y - tree.height);
-            ctx.lineTo(tree.x - tree.width/2, tree.y);
-            ctx.lineTo(tree.x + tree.width/2, tree.y);
-            ctx.closePath();
-
-            // Depth-based coloring (further = lighter)
-            const depth = (tree.y - 380) / 80;
-            ctx.fillStyle = depth < 0.5 ? treeColor : darkTreeColor;
-            ctx.fill();
-        });
-    },
-
-    renderValley(ctx) {
-        // Valley floor (behind stream)
-        const valleyColor = this.getValleyColor();
-
-        ctx.fillStyle = valleyColor;
-        ctx.beginPath();
-        ctx.moveTo(0, 480);
-        ctx.quadraticCurveTo(CONFIG.CANVAS_WIDTH/2, 500, CONFIG.CANVAS_WIDTH, 480);
-        ctx.lineTo(CONFIG.CANVAS_WIDTH, CONFIG.STREET_Y);
-        ctx.lineTo(0, CONFIG.STREET_Y);
-        ctx.closePath();
-        ctx.fill();
-    },
-
-    renderStream(ctx) {
-        const streamColor = this.getStreamColor();
-        const highlightColor = this.getStreamHighlightColor();
-
-        // Animated offset for flowing effect
-        const flowOffset = this.time * 30;
-
-        ctx.beginPath();
-        ctx.moveTo(this.streamPoints[0].x, this.streamPoints[0].y);
-
-        for (let i = 1; i < this.streamPoints.length; i++) {
-            const p = this.streamPoints[i];
-            // Add wave animation
-            const waveY = p.y + Math.sin((p.x + flowOffset) * 0.05) * 3;
-            ctx.lineTo(p.x, waveY);
-        }
-
-        // Complete the stream shape
-        ctx.lineTo(CONFIG.CANVAS_WIDTH, 540);
-        ctx.lineTo(0, 540);
-        ctx.closePath();
-
-        ctx.fillStyle = streamColor;
-        ctx.fill();
-
-        // Highlight ripples
-        ctx.strokeStyle = highlightColor;
-        ctx.lineWidth = 1;
-        for (let x = 0; x < CONFIG.CANVAS_WIDTH; x += 60) {
-            const waveX = x + Math.sin(this.time * 2 + x * 0.1) * 5;
-            ctx.beginPath();
-            ctx.moveTo(waveX, 525);
-            ctx.lineTo(waveX + 20, 525);
-            ctx.stroke();
-        }
-    },
-
-    renderGrass(ctx) {
-        const grassColor = this.getGrassColor();
-
-        ctx.strokeStyle = grassColor;
-        ctx.lineWidth = 2;
-
-        this.grassBlades.forEach(blade => {
-            // Sway animation
-            const sway = Math.sin(this.time * 2 + blade.phase) * 3;
-
-            ctx.beginPath();
-            ctx.moveTo(blade.x, blade.y);
-            ctx.lineTo(blade.x + sway, blade.y - blade.height);
-            ctx.stroke();
-        });
-    },
-
-    // Color getters based on time of day
-    getMountainLightColor() {
-        switch (DayCycle.currentTime) {
-            case TimeOfDay.NIGHT: return '#2a2a4a';
-            case TimeOfDay.DUSK: return '#8b4513';
-            case TimeOfDay.DAWN: return '#9370db';
-            default: return '#6b8e6b';
-        }
-    },
-
-    getMountainDarkColor() {
-        switch (DayCycle.currentTime) {
-            case TimeOfDay.NIGHT: return '#1a1a2a';
-            case TimeOfDay.DUSK: return '#5c3317';
-            case TimeOfDay.DAWN: return '#6a4a8a';
-            default: return '#4a6b4a';
-        }
-    },
-
-    getForestColor() {
-        switch (DayCycle.currentTime) {
-            case TimeOfDay.NIGHT: return '#1a3a1a';
-            case TimeOfDay.DUSK: return '#4a3520';
-            case TimeOfDay.DAWN: return '#5a4a6a';
-            default: return '#228b22';
-        }
-    },
-
-    getForestDarkColor() {
-        switch (DayCycle.currentTime) {
-            case TimeOfDay.NIGHT: return '#0a2a0a';
-            case TimeOfDay.DUSK: return '#3a2510';
-            case TimeOfDay.DAWN: return '#4a3a5a';
-            default: return '#006400';
-        }
-    },
-
-    getValleyColor() {
-        switch (DayCycle.currentTime) {
-            case TimeOfDay.NIGHT: return '#1a2a1a';
-            case TimeOfDay.DUSK: return '#6b5a3a';
-            case TimeOfDay.DAWN: return '#8a7a9a';
-            default: return '#7cba3d';
-        }
-    },
-
-    getStreamColor() {
-        switch (DayCycle.currentTime) {
-            case TimeOfDay.NIGHT: return '#1a3a5a';
-            case TimeOfDay.DUSK: return '#8b6914';
-            case TimeOfDay.DAWN: return '#9090b0';
-            default: return '#4a90d9';
-        }
-    },
-
-    getStreamHighlightColor() {
-        switch (DayCycle.currentTime) {
-            case TimeOfDay.NIGHT: return '#4a6a8a44';
-            case TimeOfDay.DUSK: return '#ffd70044';
-            case TimeOfDay.DAWN: return '#dda0dd44';
-            default: return '#ffffff44';
-        }
-    },
-
-    getGrassColor() {
-        switch (DayCycle.currentTime) {
-            case TimeOfDay.NIGHT: return '#1a4a1a';
-            case TimeOfDay.DUSK: return '#8b7500';
-            case TimeOfDay.DAWN: return '#9a7aaa';
-            default: return '#32cd32';
-        }
     }
 };

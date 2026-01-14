@@ -1,13 +1,12 @@
 // Building definitions: [x position, width in blocks, height in blocks]
-// Greater spacing and height variance for larger screen (960x720)
-// Heights adjusted to leave more sky area (max ~60% of play area)
+// Taller buildings for dramatic cityscape
 const BUILDING_DEFS = [
-    { x: 100, width: 5, height: 12 },   // Short
-    { x: 240, width: 6, height: 28 },   // Tall
-    { x: 400, width: 5, height: 16 },   // Medium-short
-    { x: 540, width: 7, height: 32 },   // Tallest (Empire State style)
-    { x: 700, width: 5, height: 20 },   // Medium
-    { x: 780, width: 5, height: 14 }    // Short (moved left to clear right spawn pad)
+    { x: 100, width: 5, height: 14 },   // Medium
+    { x: 240, width: 6, height: 22 },   // Tall
+    { x: 400, width: 5, height: 16 },   // Medium
+    { x: 540, width: 7, height: 25 },   // Tallest
+    { x: 700, width: 5, height: 18 },   // Medium-tall
+    { x: 820, width: 5, height: 10 }    // Short (near right spawn)
 ];
 
 // Debris particle for collapse animation
@@ -280,26 +279,202 @@ class Building {
     }
 
     render(ctx) {
+        const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
+        const isDusk = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'dusk';
+
+        // Try to get building tileset
+        const tileset = typeof AssetManager !== 'undefined' ? AssetManager.getImage('building_tileset') : null;
+
+        // Dynamically calculate tile size from actual image dimensions (4x4 grid)
+        const tilesPerRow = 4;
+        const tileSize = tileset ? Math.floor(tileset.width / tilesPerRow) : 16;
+
         // Render blocks
         for (let row = 0; row < this.heightBlocks; row++) {
             for (let col = 0; col < this.widthBlocks; col++) {
                 if (this.blocks[row][col]) {
                     const pos = this.getBlockWorldPosition(row, col);
+                    const isTopRow = row === 0;
 
-                    // Alternate colors for visual interest (using DayCycle colors)
-                    const isLight = (row + col) % 2 === 0;
-                    ctx.fillStyle = isLight ? DayCycle.getBuildingLightColor() : DayCycle.getBuildingDarkColor();
+                    // Determine block characteristics for tile selection
+                    const hasWindow = (row > 0) && (row % 2 === 1) && (col % 2 === 0);
+                    const windowLit = hasWindow && (isNight || isDusk) && ((row * 7 + col * 13) % 10 < 6);
+                    const isLeftEdge = col === 0 || !this.blocks[row][col - 1];
+                    const isRightEdge = col === this.widthBlocks - 1 || !this.blocks[row][col + 1];
+
+                    // === POLISHED PROCEDURAL RENDERING ===
+                    // Modern industrial building style with gradients and details
+
+                    const isBottomRow = row === this.heightBlocks - 1;
+                    const blockSeed = (this.x * 17 + row * 7 + col * 13) % 100;
+                    const isWindowLit = (isNight || isDusk) && blockSeed < 45;
+
+                    // Base building colors - Lighter steel/concrete palette for contrast
+                    const baseHue = (this.x * 7) % 20 + 210; // Cool steel blue range (210-230)
+                    const baseSat = 10 + (this.x % 15);      // Low saturation concrete
+                    // Increased brightness to stand out against dark background
+                    const baseLit = isNight ? 35 : (isDusk ? 45 : 55);
+
+                    // Create gradient for depth
+                    const gradient = ctx.createLinearGradient(pos.x, pos.y, pos.x + pos.width, pos.y);
+                    gradient.addColorStop(0, `hsl(${baseHue}, ${baseSat}%, ${baseLit + 10}%)`);
+                    gradient.addColorStop(0.5, `hsl(${baseHue}, ${baseSat}%, ${baseLit}%)`);
+                    gradient.addColorStop(1, `hsl(${baseHue}, ${baseSat}%, ${baseLit - 10}%)`);
+
+                    ctx.fillStyle = gradient;
                     ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
 
-                    // Draw window on some blocks (using DayCycle window color)
-                    if ((row + col) % 3 === 0) {
-                        ctx.fillStyle = DayCycle.getWindowColor();
-                        ctx.fillRect(pos.x + 2, pos.y + 2, pos.width - 4, pos.height - 4);
+                    // Left edge highlight
+                    if (isLeftEdge) {
+                        ctx.fillStyle = `hsla(${baseHue}, ${baseSat}%, ${baseLit + 20}%, 0.4)`;
+                        ctx.fillRect(pos.x, pos.y, 2, pos.height);
                     }
 
-                    // Draw block outline
-                    ctx.strokeStyle = '#00000033';
-                    ctx.lineWidth = 1;
+                    // Right edge shadow
+                    if (isRightEdge) {
+                        ctx.fillStyle = `hsla(${baseHue}, ${baseSat}%, ${baseLit - 15}%, 0.6)`;
+                        ctx.fillRect(pos.x + pos.width - 2, pos.y, 2, pos.height);
+                    }
+
+                    // Horizontal floor line (architectural detail)
+                    ctx.fillStyle = `hsla(0, 0%, 0%, 0.3)`;
+                    ctx.fillRect(pos.x, pos.y + pos.height - 1, pos.width, 1);
+
+                    // === ROOFTOP RENDERING ===
+                    if (isTopRow) {
+                        // Rooftop ledge
+                        ctx.fillStyle = `hsl(${baseHue}, ${baseSat - 5}%, ${baseLit - 8}%)`;
+                        ctx.fillRect(pos.x - 1, pos.y, pos.width + 2, 4);
+
+                        // Rooftop highlight
+                        ctx.fillStyle = `hsla(${baseHue}, ${baseSat}%, ${baseLit + 15}%, 0.5)`;
+                        ctx.fillRect(pos.x, pos.y, pos.width, 1);
+
+                        // Occasional rooftop structures
+                        const roofStyle = (this.x + col) % 5;
+                        if (roofStyle === 0 && col % 2 === 0) {
+                            // Antenna
+                            ctx.fillStyle = '#444';
+                            ctx.fillRect(pos.x + pos.width / 2 - 1, pos.y - 10, 2, 10);
+                            if (isNight || isDusk) {
+                                ctx.fillStyle = '#ff3333';
+                                ctx.beginPath();
+                                ctx.arc(pos.x + pos.width / 2, pos.y - 11, 2, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
+                        } else if (roofStyle === 2 && col === 0) {
+                            // AC unit
+                            ctx.fillStyle = '#555';
+                            ctx.fillRect(pos.x + 2, pos.y - 6, 8, 6);
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(pos.x + 3, pos.y - 5, 6, 4);
+                        }
+                    }
+
+                    // === GROUND FLOOR RENDERING ===
+                    if (isBottomRow) {
+                        // Darker base for ground level
+                        ctx.fillStyle = `hsl(${baseHue}, ${baseSat}%, ${baseLit - 8}%)`;
+                        ctx.fillRect(pos.x, pos.y, pos.width, pos.height);
+
+                        // Door or large window
+                        const isCenterish = Math.abs(col - this.widthBlocks / 2) < 1;
+                        if (isCenterish && this.widthBlocks > 2) {
+                            // Door
+                            const doorW = Math.min(12, pos.width - 4);
+                            const doorH = pos.height - 4;
+                            const doorX = pos.x + (pos.width - doorW) / 2;
+                            const doorY = pos.y + 2;
+
+                            ctx.fillStyle = '#2a1810';
+                            ctx.fillRect(doorX, doorY, doorW, doorH);
+                            ctx.strokeStyle = '#1a0a05';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(doorX, doorY, doorW, doorH);
+
+                            // Door frame
+                            ctx.fillStyle = '#444';
+                            ctx.fillRect(doorX - 1, doorY, 1, doorH);
+                            ctx.fillRect(doorX + doorW, doorY, 1, doorH);
+                            ctx.fillRect(doorX - 1, doorY - 1, doorW + 2, 2);
+                        } else {
+                            // Large storefront window
+                            const winW = pos.width - 6;
+                            const winH = pos.height - 6;
+                            const winX = pos.x + 3;
+                            const winY = pos.y + 3;
+
+                            if (isWindowLit) {
+                                ctx.fillStyle = '#FFDD44';
+                                ctx.fillRect(winX, winY, winW, winH);
+                                ctx.fillStyle = '#FFEE88';
+                                ctx.fillRect(winX + 1, winY + 1, winW - 2, winH - 2);
+                            } else {
+                                ctx.fillStyle = '#0a0a15';
+                                ctx.fillRect(winX, winY, winW, winH);
+                            }
+                            ctx.strokeStyle = '#222';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(winX, winY, winW, winH);
+                        }
+                    }
+
+                    // === WINDOW RENDERING (middle floors) ===
+                    if (!isTopRow && !isBottomRow) {
+                        // Calculate window grid (2 windows per block for wider buildings)
+                        const winsPerBlock = pos.width > 20 ? 2 : 1;
+                        const winWidth = 6;
+                        const winHeight = 10;
+                        const spacing = pos.width / (winsPerBlock + 1);
+
+                        for (let w = 0; w < winsPerBlock; w++) {
+                            const winX = pos.x + spacing * (w + 1) - winWidth / 2;
+                            const winY = pos.y + (pos.height - winHeight) / 2;
+
+                            // Different lit status for each window
+                            const thisWinLit = (isNight || isDusk) && ((blockSeed + w * 37) % 100) < 50;
+
+                            if (thisWinLit) {
+                                // Lit window with warm glow
+                                ctx.fillStyle = '#FFDD33';
+                                ctx.fillRect(winX, winY, winWidth, winHeight);
+
+                                // Inner brighter area
+                                ctx.fillStyle = '#FFEE88';
+                                ctx.fillRect(winX + 1, winY + 1, winWidth - 2, winHeight - 2);
+
+                                // Glow effect
+                                ctx.save();
+                                ctx.globalCompositeOperation = 'lighter';
+                                ctx.globalAlpha = isNight ? 0.25 : 0.1;
+                                ctx.fillStyle = '#FFCC44';
+                                ctx.fillRect(winX - 2, winY - 2, winWidth + 4, winHeight + 4);
+                                ctx.restore();
+                            } else {
+                                // Dark window with reflection
+                                ctx.fillStyle = '#0a0a18';
+                                ctx.fillRect(winX, winY, winWidth, winHeight);
+
+                                // Glass reflection highlight
+                                ctx.fillStyle = 'rgba(100, 120, 150, 0.2)';
+                                ctx.fillRect(winX, winY, 2, winHeight / 2);
+                            }
+
+                            // Window frame
+                            ctx.strokeStyle = '#222';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(winX, winY, winWidth, winHeight);
+
+                            // Window divider (cross)
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(winX + winWidth / 2 - 0.5, winY, 1, winHeight);
+                            ctx.fillRect(winX, winY + winHeight / 2 - 0.5, winWidth, 1);
+                        }
+                    }
+
+                    // Block outline for structure
+                    ctx.strokeStyle = `hsla(0, 0%, 0%, ${isNight ? 0.4 : 0.2})`;
+                    ctx.lineWidth = 0.5;
                     ctx.strokeRect(pos.x, pos.y, pos.width, pos.height);
                 }
             }
