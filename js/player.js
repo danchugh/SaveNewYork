@@ -394,8 +394,13 @@ class Player {
         if (sprite) {
             const spriteWidth = 45;
             const spriteHeight = 45;
-            // Draw normally (solid) - removed additive blending
+            // Sprite orientation fix: rotate to match expected angle
+            // P1 sprite has nose pointing left (needs +180°)
+            // P2 sprite has nose pointing up (needs +90°)
+            const spriteRotation = this.id === 1 ? Math.PI : Math.PI / 2;
+            ctx.rotate(spriteRotation);
             ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight / 2, spriteWidth, spriteHeight);
+            ctx.rotate(-spriteRotation); // Restore for any subsequent drawing
         } else {
             // Fallback: draw simple placeholder
             ctx.fillStyle = c.body;
