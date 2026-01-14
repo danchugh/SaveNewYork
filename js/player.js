@@ -68,8 +68,8 @@ class Player {
         this.fireRate = 0.15;
         this.launchGraceTimer = 0;
 
-        this.width = 30;
-        this.height = 20;
+        this.width = 35;  // Wider hitbox to match 45x45 sprite
+        this.height = 35; // Taller hitbox to match 45x45 sprite
 
         this.shield = false;
         this.invulnerable = false;
@@ -361,6 +361,12 @@ class Player {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle * Math.PI / 180);
 
+        // Apply sprite-specific rotation offset FIRST (before engine effects)
+        // P1 sprite has nose pointing left (needs +180°)
+        // P2 sprite has nose pointing up (needs +90°)
+        const spriteRotation = this.id === 1 ? Math.PI : Math.PI / 2;
+        ctx.rotate(spriteRotation);
+
         // Engine glow (behind sprite)
         if (this.state === PlayerState.FLYING) {
             const glowSize = 30 + Math.random() * 12;
@@ -394,13 +400,7 @@ class Player {
         if (sprite) {
             const spriteWidth = 45;
             const spriteHeight = 45;
-            // Sprite orientation fix: rotate to match expected angle
-            // P1 sprite has nose pointing left (needs +180°)
-            // P2 sprite has nose pointing up (needs +90°)
-            const spriteRotation = this.id === 1 ? Math.PI : Math.PI / 2;
-            ctx.rotate(spriteRotation);
             ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight / 2, spriteWidth, spriteHeight);
-            ctx.rotate(-spriteRotation); // Restore for any subsequent drawing
         } else {
             // Fallback: draw simple placeholder
             ctx.fillStyle = c.body;

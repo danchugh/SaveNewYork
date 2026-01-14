@@ -66,33 +66,33 @@ class Enemy {
         switch (type) {
             case EnemyType.STANDARD: // Scout Drone
                 this.speed = 60;
-                this.width = 24; this.height = 16;
+                this.width = 30; this.height = 20; // +25% from 24x16
                 this.attackTimeMin = 1.0; this.attackTimeMax = 3.0;
                 break;
 
             case EnemyType.AGGRESSIVE: // Hunter Chopper (Red)
                 this.speed = 100;
-                this.width = 28; this.height = 20;
+                this.width = 35; this.height = 25; // +25% from 28x20
                 this.attackTimeMin = 0.5; this.attackTimeMax = 1.5;
                 break;
 
             case EnemyType.TANK: // Heavy Gunship (Green)
                 this.speed = 35;
                 this.health = 4;
-                this.width = 40; this.height = 30;
+                this.width = 50; this.height = 38; // +25% from 40x30
                 this.blocksToDestroy = 3; // Huge damage
                 this.attackTimeMin = 0.5; this.attackTimeMax = 1.0;
                 break;
 
             case EnemyType.SPLITTER: // Carrier (Cyan)
                 this.speed = 50;
-                this.width = 32; this.height = 24;
+                this.width = 40; this.height = 30; // +25% from 32x24
                 this.attackTimeMin = 2.0; this.attackTimeMax = 4.0;
                 break;
 
             case EnemyType.BOMBER: // Missile (Orange)
                 this.speed = 120;
-                this.width = 20; this.height = 10;
+                this.width = 25; this.height = 13; // +25% from 20x10
                 this.attackTimeMin = 999; this.attackTimeMax = 999;
                 this.diveTimer = 2 + Math.random() * 4;
                 break;
@@ -489,9 +489,8 @@ class Enemy {
         // Try sprite first
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_drone') : null;
         if (sprite) {
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.drawImage(sprite, -16, -16, 32, 32);
-            ctx.globalCompositeOperation = 'source-over';
+            // Draw solid (no additive blending) at +25% size: 40x40 from 32x32
+            ctx.drawImage(sprite, -20, -20, 40, 40);
             return;
         }
 
@@ -535,9 +534,8 @@ class Enemy {
         // Try sprite first
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_interceptor') : null;
         if (sprite) {
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.drawImage(sprite, -20, -16, 40, 32);
-            ctx.globalCompositeOperation = 'source-over';
+            // Draw solid at +25% size: 50x40 from 40x32
+            ctx.drawImage(sprite, -25, -20, 50, 40);
             return;
         }
 
@@ -564,14 +562,13 @@ class Enemy {
         // Try sprite first
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_gunship') : null;
         if (sprite) {
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.drawImage(sprite, -28, -24, 56, 48);
-            ctx.globalCompositeOperation = 'source-over';
+            // Draw solid at +25% size: 70x60 from 56x48
+            ctx.drawImage(sprite, -35, -30, 70, 60);
             // Still draw health bar on top
             if (this.health > 0) {
                 for (let i = 0; i < this.health; i++) {
                     ctx.fillStyle = '#4ade80';
-                    ctx.fillRect(-15 + i * 8, -30, 6, 4);
+                    ctx.fillRect(-15 + i * 8, -38, 6, 4);
                 }
             }
             return;
@@ -602,9 +599,8 @@ class Enemy {
         // Try sprite first
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_carrier') : null;
         if (sprite) {
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.drawImage(sprite, -32, -20, 64, 40);
-            ctx.globalCompositeOperation = 'source-over';
+            // Draw solid at +25% size: 80x50 from 64x40
+            ctx.drawImage(sprite, -40, -25, 80, 50);
             return;
         }
 
@@ -630,9 +626,8 @@ class Enemy {
         // Try sprite first
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_missile') : null;
         if (sprite) {
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.drawImage(sprite, -16, -16, 32, 32);
-            ctx.globalCompositeOperation = 'source-over';
+            // Draw solid at +25% size: 40x40 from 32x32
+            ctx.drawImage(sprite, -20, -20, 40, 40);
             return;
         }
 
