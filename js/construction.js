@@ -327,15 +327,16 @@ const ConstructionManager = {
             const vehicleSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('construction_vehicle') : null;
             if (vehicleSprite) {
                 // Draw vehicle sprite (scaled to ~80x50)
+                // Sprite faces left by default, so flip when driving right (+1)
                 const vw = 80, vh = 50;
-                ctx.save(); // Save for potential scale
-                if (this.vehicleDirection === -1) {
-                    ctx.scale(-1, 1); // Flip horizontally
-                    ctx.drawImage(vehicleSprite, -vw, 0, vw, vh); // Draw flipped
+                ctx.save();
+                if (this.vehicleDirection === 1) {
+                    ctx.scale(-1, 1); // Flip horizontally when driving right
+                    ctx.drawImage(vehicleSprite, -vw, 0, vw, vh);
                 } else {
                     ctx.drawImage(vehicleSprite, 0, 0, vw, vh);
                 }
-                ctx.restore(); // Restore scale
+                ctx.restore();
             } else {
                 // Fallback: Procedural truck
                 // Truck body (yellow/orange)

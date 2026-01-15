@@ -329,6 +329,10 @@ class Player {
             this.fuel = CONFIG.FUEL_MAX;
             this.state = PlayerState.DOCKED;
             this.explosionTimer = 0;
+            // Play takeoff sound on respawn
+            if (typeof SoundManager !== 'undefined') {
+                setTimeout(() => SoundManager.takeoff(), 300);
+            }
         } else {
             this.state = PlayerState.DEAD;
             console.log(`Player ${this.id} is out of lives!`);

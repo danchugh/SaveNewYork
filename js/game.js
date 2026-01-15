@@ -501,6 +501,7 @@ function update(deltaTime) {
             if (input.isKeyJustPressed(Keys.ENTER)) {
                 SoundManager.init(); // Ensure audio context is ready
                 SoundManager.gameStart();
+                setTimeout(() => SoundManager.takeoff(), 300); // Takeoff sound after start
                 initGame();
                 console.log('Game started!');
             }
