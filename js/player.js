@@ -278,13 +278,30 @@ class Player {
         SoundManager.playerDeath();
 
         if (typeof EffectsManager !== 'undefined') {
-            // Animated explosion with player-style debris (sparks/fire)
-            EffectsManager.addAnimatedExplosion(this.x, this.y, 'player', 50);
-            // Secondary delayed explosions
-            setTimeout(() => EffectsManager.addAnimatedExplosion(this.x + 10, this.y - 10, 'player', 30), 100);
-            setTimeout(() => EffectsManager.addAnimatedExplosion(this.x - 10, this.y + 10, 'player', 30), 200);
-            EffectsManager.shake(15);
-            EffectsManager.hitStop(0.2);
+            // DRAMATIC PLAYER DEATH - combine procedural + animated for maximum impact
+
+            // Main procedural explosions (visible fireball)
+            EffectsManager.addExplosion(this.x, this.y, 50, '#ffffff');
+            EffectsManager.addExplosion(this.x, this.y, 70, '#ffaa00');
+
+            // Animated debris particles on top
+            EffectsManager.addAnimatedExplosion(this.x, this.y, 'player', 60);
+
+            // Cascading secondary explosions for dramatic effect
+            setTimeout(() => {
+                EffectsManager.addExplosion(this.x + 15, this.y - 10, 40, '#ff4400');
+                EffectsManager.addAnimatedExplosion(this.x + 15, this.y - 10, 'player', 35);
+            }, 80);
+            setTimeout(() => {
+                EffectsManager.addExplosion(this.x - 15, this.y + 10, 40, '#ff0000');
+                EffectsManager.addAnimatedExplosion(this.x - 15, this.y + 10, 'player', 35);
+            }, 160);
+            setTimeout(() => {
+                EffectsManager.addExplosion(this.x, this.y - 15, 30, '#ffcc00');
+            }, 240);
+
+            EffectsManager.shake(20);
+            EffectsManager.hitStop(0.25);
         }
 
         console.log(`Player ${this.id} died! Lives: ${this.lives}`);

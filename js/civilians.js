@@ -56,47 +56,44 @@ class Civilian {
         if (this.animations) return; // Already initialized
         if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
 
-        const waitingSheet = AssetManager.getImage('civilian_waiting');
-        const fallingSheet = AssetManager.getImage('civilian_falling');
-        const rescuedSheet = AssetManager.getImage('civilian_rescued');
+        // Use test sprite sheet for debugging (EvilCleric)
+        // Sheet is ~320x200, 8 columns x 4 rows, so each frame is ~40x50
+        const testSheet = AssetManager.getImage('test_civilian');
 
-        // All sheets are 512x512 with 4 frames horizontally = 128x128 per frame
-        // (except rescued which is 3 frames = ~170x170)
         this.animations = {};
 
-        if (waitingSheet) {
+        if (testSheet) {
+            // Use first row for waiting (idle animation)
             this.animations.waiting = new AnimatedSprite({
-                sheet: waitingSheet,
-                frameWidth: 128,
-                frameHeight: 128,
-                frameCount: 4,
-                fps: 6,
+                sheet: testSheet,
+                frameWidth: 40,
+                frameHeight: 50,
+                frameCount: 8,
+                fps: 8,
                 mode: 'loop',
-                scale: 0.35 // Scale to ~45px for visibility
+                scale: 0.8
             });
-        }
 
-        if (fallingSheet) {
+            // Use same sheet for falling (just reuse idle for now)
             this.animations.falling = new AnimatedSprite({
-                sheet: fallingSheet,
-                frameWidth: 128,
-                frameHeight: 128,
-                frameCount: 4,
-                fps: 12, // Faster for tumbling
+                sheet: testSheet,
+                frameWidth: 40,
+                frameHeight: 50,
+                frameCount: 8,
+                fps: 12,
                 mode: 'loop',
-                scale: 0.35
+                scale: 0.8
             });
-        }
 
-        if (rescuedSheet) {
+            // Use same sheet for rescued
             this.animations.rescued = new AnimatedSprite({
-                sheet: rescuedSheet,
-                frameWidth: 170,
-                frameHeight: 170,
-                frameCount: 3,
+                sheet: testSheet,
+                frameWidth: 40,
+                frameHeight: 50,
+                frameCount: 8,
                 fps: 8,
                 mode: 'once',
-                scale: 0.3
+                scale: 0.8
             });
         }
     }
