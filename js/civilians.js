@@ -193,29 +193,32 @@ class Civilian {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // Try animated sprite based on state
-        if (this.animations && Object.keys(this.animations).length > 0) {
-            let anim = null;
+        // DIRECT SPRITE SHEET TEST - bypassing AnimatedSprite class
+        const testSheet = typeof AssetManager !== 'undefined' ? AssetManager.getImage('test_civilian') : null;
 
-            switch (this.state) {
-                case CivilianState.WAITING:
-                    anim = this.animations.waiting;
-                    break;
-                case CivilianState.FALLING:
-                    anim = this.animations.falling;
-                    break;
-                case CivilianState.RESCUED:
-                    anim = this.animations.rescued;
-                    break;
-            }
+        if (testSheet) {
+            // Frame parameters
+            const frameWidth = 40;
+            const frameHeight = 45;
+            const totalFrames = 8;
+            const fps = 8;
 
-            if (anim && anim.sheet) {
-                // Update animation (time-based)
-                anim.update(1 / 60); // Approximate delta
-                anim.render(ctx, 0, 0);
-                ctx.restore();
-                return;
-            }
+            // Calculate current frame based on time
+            const frameIndex = Math.floor((Date.now() / 1000 * fps) % totalFrames);
+
+            // Source rectangle (where to cut from sprite sheet)
+            const srcX = frameIndex * frameWidth;
+            const srcY = 0;  // First row
+
+            // Draw the sprite frame directly
+            ctx.drawImage(
+                testSheet,
+                srcX, srcY, frameWidth, frameHeight,  // source x, y, width, height
+                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight  // dest x, y, width, height (centered)
+            );
+
+            ctx.restore();
+            return;
         }
 
         // Fallback: Try static sprite
