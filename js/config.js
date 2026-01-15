@@ -2,6 +2,8 @@
 // GAME CONFIGURATION
 // ============================================
 const CONFIG = {
+    // Version for debugging (increment with each change)
+    VERSION: 'v1.0.1',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,

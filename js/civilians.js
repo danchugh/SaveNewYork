@@ -66,21 +66,22 @@ class Civilian {
 
         if (testSheet) {
             // Use just 1 frame for testing (static - no animation)
+            // Frame size: 40x45 (reduced height to avoid catching next row)
             this.animations.waiting = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
-                frameHeight: 50,
-                frameCount: 1,  // Single frame - static for testing
+                frameHeight: 45,  // Reduced from 50
+                frameCount: 1,
                 fps: 1,
                 mode: 'loop',
-                scale: 1.0  // Full size for visibility
+                scale: 1.0
             });
 
             // Same for falling
             this.animations.falling = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
-                frameHeight: 50,
+                frameHeight: 45,
                 frameCount: 1,
                 fps: 1,
                 mode: 'loop',
@@ -91,7 +92,7 @@ class Civilian {
             this.animations.rescued = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
-                frameHeight: 50,
+                frameHeight: 45,
                 frameCount: 1,
                 fps: 1,
                 mode: 'once',

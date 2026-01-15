@@ -7,6 +7,14 @@ function renderHUD(ctx, buildingManager, enemyManager, totalScore) {
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'left';
 
+    // VERSION DISPLAY (top-right corner for debugging)
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#666666';
+    ctx.font = '10px monospace';
+    ctx.fillText(CONFIG.VERSION || 'v?', CONFIG.CANVAS_WIDTH - 5, 12);
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left';
+
     // === TOP HUD - PLAYER 1 (Left Side) ===
     const p1 = players[0];
     if (p1) {
