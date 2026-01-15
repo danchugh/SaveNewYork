@@ -132,6 +132,22 @@ class Civilian {
         ctx.save();
         ctx.translate(this.x, this.y);
 
+        // Try sprite first
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('civilian') : null;
+        if (sprite) {
+            // Draw sprite (scaled down to ~20x20 to match original size)
+            const size = 20;
+            if (this.state === CivilianState.FALLING) {
+                // Add rotation for falling animation
+                const tumble = (Date.now() / 100) % (Math.PI * 2);
+                ctx.rotate(tumble);
+            }
+            ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
+            ctx.restore();
+            return;
+        }
+
+        // Fallback to procedural drawing
         if (this.state === CivilianState.FALLING) {
             // Falling animation - arms flailing wildly
             const flail = Math.sin(Date.now() / 50) * 1.5;

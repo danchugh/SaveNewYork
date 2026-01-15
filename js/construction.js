@@ -323,36 +323,51 @@ const ConstructionManager = {
             ctx.save();
             ctx.translate(this.vehicleX, this.vehicleY);
 
-            // Truck body (yellow/orange)
-            ctx.fillStyle = '#f59e0b';
-            ctx.fillRect(0, 10, this.vehicleWidth, this.vehicleHeight - 10);
+            // Try sprite first
+            const vehicleSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('construction_vehicle') : null;
+            if (vehicleSprite) {
+                // Draw vehicle sprite (scaled to ~80x50)
+                const vw = 80, vh = 50;
+                ctx.save(); // Save for potential scale
+                if (this.vehicleDirection === -1) {
+                    ctx.scale(-1, 1); // Flip horizontally
+                    ctx.drawImage(vehicleSprite, -vw, 0, vw, vh); // Draw flipped
+                } else {
+                    ctx.drawImage(vehicleSprite, 0, 0, vw, vh);
+                }
+                ctx.restore(); // Restore scale
+            } else {
+                // Fallback: Procedural truck
+                // Truck body (yellow/orange)
+                ctx.fillStyle = '#f59e0b';
+                ctx.fillRect(0, 10, this.vehicleWidth, this.vehicleHeight - 10);
 
-            // Cab
-            ctx.fillStyle = '#ea580c';
-            const cabX = this.vehicleDirection === 1 ? this.vehicleWidth - 25 : 0;
-            ctx.fillRect(cabX, 0, 25, this.vehicleHeight);
+                // Cab
+                ctx.fillStyle = '#ea580c';
+                const cabX = this.vehicleDirection === 1 ? this.vehicleWidth - 25 : 0;
+                ctx.fillRect(cabX, 0, 25, this.vehicleHeight);
 
-            // Windows
-            ctx.fillStyle = '#7dd3fc';
-            ctx.fillRect(cabX + 3, 5, 19, 12);
+                // Windows
+                ctx.fillStyle = '#7dd3fc';
+                ctx.fillRect(cabX + 3, 5, 19, 12);
 
-            // Wheels
-            ctx.fillStyle = '#1f2937';
-            ctx.beginPath();
-            ctx.arc(15, this.vehicleHeight, 8, 0, Math.PI * 2);
-            ctx.arc(this.vehicleWidth - 15, this.vehicleHeight, 8, 0, Math.PI * 2);
-            ctx.fill();
+                // Wheels
+                ctx.fillStyle = '#1f2937';
+                ctx.beginPath();
+                ctx.arc(15, this.vehicleHeight, 8, 0, Math.PI * 2);
+                ctx.arc(this.vehicleWidth - 15, this.vehicleHeight, 8, 0, Math.PI * 2);
+                ctx.fill();
 
-            // Yellow stripe
-            ctx.fillStyle = '#fbbf24';
-            ctx.fillRect(5, 20, this.vehicleWidth - 35, 5);
+                // Yellow stripe
+                ctx.fillStyle = '#fbbf24';
+                ctx.fillRect(5, 20, this.vehicleWidth - 35, 5);
 
-            // "REPAIR" text
-            ctx.fillStyle = '#000';
-            ctx.font = 'bold 8px monospace';
-            ctx.fillText('REPAIR', 15, 35);
-
-            ctx.restore();
+                // "REPAIR" text
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 8px monospace';
+                ctx.fillText('REPAIR', 15, 35);
+            }
+            ctx.restore(); // Restore for translate
         }
 
         // Draw workers
@@ -362,28 +377,37 @@ const ConstructionManager = {
             ctx.save();
             ctx.translate(w.x, w.y);
 
-            // Hard hat (yellow)
-            ctx.fillStyle = '#fbbf24';
-            ctx.beginPath();
-            ctx.ellipse(0, -8, 6, 3, 0, 0, Math.PI * 2);
-            ctx.fill();
+            // Try sprite first
+            const workerSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('construction_worker') : null;
+            if (workerSprite) {
+                // Draw worker sprite (scaled to ~20x25)
+                const ww = 20, wh = 25;
+                ctx.drawImage(workerSprite, -ww / 2, -wh / 2, ww, wh);
+            } else {
+                // Fallback: Procedural worker
+                // Hard hat (yellow)
+                ctx.fillStyle = '#fbbf24';
+                ctx.beginPath();
+                ctx.ellipse(0, -8, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
 
-            // Head
-            ctx.fillStyle = '#fcd34d';
-            ctx.beginPath();
-            ctx.arc(0, -4, 4, 0, Math.PI * 2);
-            ctx.fill();
+                // Head
+                ctx.fillStyle = '#fcd34d';
+                ctx.beginPath();
+                ctx.arc(0, -4, 4, 0, Math.PI * 2);
+                ctx.fill();
 
-            // Body (orange vest)
-            ctx.fillStyle = '#ea580c';
-            ctx.fillRect(-4, 0, 8, 10);
+                // Body (orange vest)
+                ctx.fillStyle = '#ea580c';
+                ctx.fillRect(-4, 0, 8, 10);
 
-            // Legs
-            ctx.fillStyle = '#1e40af';
-            ctx.fillRect(-4, 10, 3, 6);
-            ctx.fillRect(1, 10, 3, 6);
+                // Legs
+                ctx.fillStyle = '#1e40af';
+                ctx.fillRect(-4, 10, 3, 6);
+                ctx.fillRect(1, 10, 3, 6);
+            }
 
-            // Hammering arm animation (during repair)
+            // Hammering arm animation (during repair) - always drawn procedurally
             if (this.state === ConstructionState.REPAIRING) {
                 const hammerAngle = Math.sin(w.hammerPhase) * 0.8;
                 ctx.save();

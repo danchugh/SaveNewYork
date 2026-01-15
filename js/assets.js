@@ -13,7 +13,8 @@ const AssetManager = {
         'player_p1', 'player_p2',
         'projectile_player', 'projectile_enemy',
         'enemy_drone', 'enemy_interceptor', 'enemy_gunship', 'enemy_carrier', 'enemy_missile',
-        'boss_main', 'miniboss_charger', 'miniboss_gunner'
+        'boss_main', 'miniboss_charger', 'miniboss_gunner',
+        'civilian', 'construction_vehicle', 'construction_worker'
     ],
 
     // Asset manifest - add entries here as sprites are created
@@ -37,6 +38,11 @@ const AssetManager = {
             'boss_main': 'assets/boss_main.png',
             'miniboss_charger': 'assets/miniboss_charger.png',
             'miniboss_gunner': 'assets/miniboss_gunner.png',
+
+            // Phase 2b - Civilians & Construction
+            'civilian': 'assets/civilian.png',
+            'construction_vehicle': 'assets/construction_vehicle.png',
+            'construction_worker': 'assets/construction_worker.png',
 
             // Phase 5 - Environment
             // Building tileset (4x4 grid, dynamically scaled from actual image dimensions)
