@@ -358,27 +358,61 @@ const SoundManager = {
     },
 
     takeoff() {
-        // Engine spool-up with ascending frequency sweep
+        // Spaceship launch sound - building thrust and whoosh
         if (!this.enabled || !this.ctx) return;
         this.resume();
 
         const now = this.ctx.currentTime;
 
-        // Engine rumble
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(60, now);
-        osc.frequency.exponentialRampToValueAtTime(200, now + 0.5);
-        gain.gain.setValueAtTime(0.4 * this.masterVolume, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-        osc.start(now);
-        osc.stop(now + 0.6);
+        // Layer 1: Low frequency thrust rumble (building up)
+        const rumble = this.ctx.createOscillator();
+        const rumbleGain = this.ctx.createGain();
+        rumble.connect(rumbleGain);
+        rumbleGain.connect(this.ctx.destination);
+        rumble.type = 'sawtooth';
+        rumble.frequency.setValueAtTime(40, now);
+        rumble.frequency.exponentialRampToValueAtTime(80, now + 0.3);
+        rumble.frequency.exponentialRampToValueAtTime(150, now + 0.8);
+        rumbleGain.gain.setValueAtTime(0.3 * this.masterVolume, now);
+        rumbleGain.gain.linearRampToValueAtTime(0.6 * this.masterVolume, now + 0.4);
+        rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+        rumble.start(now);
+        rumble.stop(now + 1.0);
 
-        // Whoosh overlay
-        setTimeout(() => this.playNoise(0.2, 0.3), 300);
+        // Layer 2: Jet afterburner whoosh (ascending)
+        const jet = this.ctx.createOscillator();
+        const jetGain = this.ctx.createGain();
+        jet.connect(jetGain);
+        jetGain.connect(this.ctx.destination);
+        jet.type = 'square';
+        jet.frequency.setValueAtTime(100, now + 0.2);
+        jet.frequency.exponentialRampToValueAtTime(400, now + 0.7);
+        jet.frequency.exponentialRampToValueAtTime(800, now + 1.0);
+        jetGain.gain.setValueAtTime(0, now);
+        jetGain.gain.linearRampToValueAtTime(0.25 * this.masterVolume, now + 0.3);
+        jetGain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+        jet.start(now + 0.2);
+        jet.stop(now + 1.0);
+
+        // Layer 3: Noise burst for rocket exhaust
+        const bufferSize = Math.floor(this.ctx.sampleRate * 0.8);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        }
+        const noise = this.ctx.createBufferSource();
+        const noiseGain = this.ctx.createGain();
+        const lowpass = this.ctx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 600;
+        noise.buffer = buffer;
+        noise.connect(lowpass);
+        lowpass.connect(noiseGain);
+        noiseGain.connect(this.ctx.destination);
+        noiseGain.gain.setValueAtTime(0.4 * this.masterVolume, now + 0.1);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+        noise.start(now + 0.1);
     },
 
     enemyFalling() {
