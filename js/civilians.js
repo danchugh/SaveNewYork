@@ -47,6 +47,9 @@ class Civilian {
         // Initialize animated sprites (lazy - created when first rendered)
         this.animations = null;
         this.currentAnimation = null;
+
+        // Random animation offset so civilians don't all sync
+        this.animOffset = Math.random() * 1000;
     }
 
     /**
@@ -214,7 +217,8 @@ class Civilian {
             }
 
             const fps = 8;
-            const frameIndex = Math.floor((Date.now() / 1000 * fps) % framesPerRow);
+            // Use animOffset for independent animation per civilian
+            const frameIndex = Math.floor(((Date.now() + this.animOffset) / 1000 * fps) % framesPerRow);
 
             const srcX = frameIndex * frameWidth;
             const srcY = 0;
