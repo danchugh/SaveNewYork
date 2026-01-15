@@ -200,19 +200,14 @@ class Civilian {
         const testSheet = typeof AssetManager !== 'undefined' ? AssetManager.getImage('test_civilian') : null;
 
         if (testSheet) {
-            // Get actual image dimensions
-            const imgWidth = testSheet.width;
-            const imgHeight = testSheet.height;
+            // Fixed frame size: 32x32
+            const frameWidth = 32;
+            const frameHeight = 32;
             const framesPerRow = 8;
-            const rows = 4;
-
-            // Calculate frame size from actual image
-            const frameWidth = Math.floor(imgWidth / framesPerRow);
-            const frameHeight = Math.floor(imgHeight / rows);
 
             // Log once for debugging
             if (!this._loggedDimensions) {
-                console.log(`Sprite sheet: ${imgWidth}x${imgHeight}, Frame: ${frameWidth}x${frameHeight}`);
+                console.log(`Frame size: ${frameWidth}x${frameHeight}`);
                 this._loggedDimensions = true;
             }
 
@@ -223,7 +218,7 @@ class Civilian {
             const srcX = frameIndex * frameWidth;
             const srcY = 0;
 
-            // Scale to ~40px for display
+            // Display at 40px
             const scale = 40 / frameWidth;
             const destW = frameWidth * scale;
             const destH = frameHeight * scale;
