@@ -370,8 +370,9 @@ class Player {
         // Engine glow (behind sprite) - position adjusted for sprite rotation
         if (this.state === PlayerState.FLYING) {
             // P1 is rotated 180° so "behind" is at +X, P2 is rotated 90° so "behind" is at +Y
-            const thrustOffsetX = this.id === 1 ? 25 : 0;
-            const thrustOffsetY = this.id === 1 ? 0 : 25;
+            // Position at edge of sprite (sprite is 45x45, half = 22)
+            const thrustOffsetX = this.id === 1 ? 20 : 0;
+            const thrustOffsetY = this.id === 1 ? 0 : 20;
 
             const glowSize = 30 + Math.random() * 12;
             const gradient = ctx.createRadialGradient(thrustOffsetX, thrustOffsetY, 2, thrustOffsetX, thrustOffsetY, glowSize);
@@ -388,28 +389,28 @@ class Player {
             ctx.fillStyle = this.id === 1 ? '#60a5fa' : '#f472b6';
             ctx.beginPath();
             if (this.id === 1) {
-                // P1: flames extend to the right (+X)
-                ctx.moveTo(30, -6);
-                ctx.lineTo(30 + thrust, 0);
-                ctx.lineTo(30, 6);
+                // P1: flames extend to the right (+X) from sprite edge
+                ctx.moveTo(20, -6);
+                ctx.lineTo(20 + thrust, 0);
+                ctx.lineTo(20, 6);
             } else {
-                // P2: flames extend downward (+Y)
-                ctx.moveTo(-6, 30);
-                ctx.lineTo(0, 30 + thrust);
-                ctx.lineTo(6, 30);
+                // P2: flames extend downward (+Y) from sprite edge
+                ctx.moveTo(-6, 20);
+                ctx.lineTo(0, 20 + thrust);
+                ctx.lineTo(6, 20);
             }
             ctx.fill();
 
             ctx.fillStyle = this.id === 1 ? '#bfdbfe' : '#fbcfe8';
             ctx.beginPath();
             if (this.id === 1) {
-                ctx.moveTo(30, -3);
-                ctx.lineTo(30 + thrust * 0.6, 0);
-                ctx.lineTo(30, 3);
+                ctx.moveTo(20, -3);
+                ctx.lineTo(20 + thrust * 0.6, 0);
+                ctx.lineTo(20, 3);
             } else {
-                ctx.moveTo(-3, 30);
-                ctx.lineTo(0, 30 + thrust * 0.6);
-                ctx.lineTo(3, 30);
+                ctx.moveTo(-3, 20);
+                ctx.lineTo(0, 20 + thrust * 0.6);
+                ctx.lineTo(3, 20);
             }
             ctx.fill();
         }
