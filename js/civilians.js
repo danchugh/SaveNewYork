@@ -65,37 +65,37 @@ class Civilian {
         this.animations = {};
 
         if (testSheet) {
-            // Use first row for waiting (idle animation)
+            // Use just 1 frame for testing (static - no animation)
             this.animations.waiting = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
                 frameHeight: 50,
-                frameCount: 8,
-                fps: 8,
+                frameCount: 1,  // Single frame - static for testing
+                fps: 1,
                 mode: 'loop',
-                scale: 0.8
+                scale: 1.0  // Full size for visibility
             });
 
-            // Use same sheet for falling (just reuse idle for now)
+            // Same for falling
             this.animations.falling = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
                 frameHeight: 50,
-                frameCount: 8,
-                fps: 12,
+                frameCount: 1,
+                fps: 1,
                 mode: 'loop',
-                scale: 0.8
+                scale: 1.0
             });
 
-            // Use same sheet for rescued
+            // Same for rescued
             this.animations.rescued = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
                 frameHeight: 50,
-                frameCount: 8,
-                fps: 8,
+                frameCount: 1,
+                fps: 1,
                 mode: 'once',
-                scale: 0.8
+                scale: 1.0
             });
         }
     }
