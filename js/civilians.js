@@ -196,10 +196,10 @@ class Civilian {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // DIRECT SPRITE SHEET TEST - calculate frame size from actual image
-        const testSheet = typeof AssetManager !== 'undefined' ? AssetManager.getImage('test_civilian') : null;
+        // Use generated civilian waving sprite sheet
+        const civSheet = typeof AssetManager !== 'undefined' ? AssetManager.getImage('civilian_waving') : null;
 
-        if (testSheet) {
+        if (civSheet) {
             // Fixed frame size: 32x32
             const frameWidth = 32;
             const frameHeight = 32;
@@ -224,7 +224,7 @@ class Civilian {
             const destH = frameHeight * scale;
 
             ctx.drawImage(
-                testSheet,
+                civSheet,
                 srcX, srcY, frameWidth, frameHeight,
                 -destW / 2, -destH / 2, destW, destH
             );

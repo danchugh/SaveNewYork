@@ -69,6 +69,7 @@ const AssetManager = {
             'civilian_waiting': 'assets/civilian_waiting.png',
             'civilian_falling': 'assets/civilian_falling.png',
             'civilian_rescued': 'assets/civilian_rescued.png',
+            'civilian_waving': 'assets/civilian_waving.png',
 
             // Test sprite for animation debugging
             'test_civilian': 'assets/test_civilian.png'
