@@ -278,7 +278,7 @@ class Player {
         SoundManager.playerDeath();
 
         if (typeof EffectsManager !== 'undefined') {
-            // Main explosion with player-style debris (sparks/fire)
+            // Animated explosion with player-style debris (sparks/fire)
             EffectsManager.addAnimatedExplosion(this.x, this.y, 'player', 50);
             // Secondary delayed explosions
             setTimeout(() => EffectsManager.addAnimatedExplosion(this.x + 10, this.y - 10, 'player', 30), 100);
