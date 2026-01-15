@@ -55,7 +55,13 @@ const AssetManager = {
 
             // Splash screen assets (already exist)
             'splash_bg': 'assets/splash_bg.png',
-            'splash_logo': 'assets/splash_logo.png'
+            'splash_logo': 'assets/splash_logo.png',
+
+            // Debris sprite sheets (for animated particles)
+            'debris_concrete': 'assets/debris_concrete.png',
+            'debris_metal': 'assets/debris_metal.png',
+            'debris_spark': 'assets/debris_spark.png',
+            'debris_smoke': 'assets/debris_smoke.png'
         },
         sounds: {
             // Phase 3 - Audio Overhaul (royalty-free samples)

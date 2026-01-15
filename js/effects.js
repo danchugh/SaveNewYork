@@ -19,6 +19,11 @@ const EffectsManager = {
         this.shakeX = 0;
         this.shakeY = 0;
         this.hitStopTimer = 0;
+
+        // Clear animated particles
+        if (typeof particleEmitter !== 'undefined') {
+            particleEmitter.clear();
+        }
     },
 
     // ============================================
@@ -92,6 +97,134 @@ const EffectsManager = {
         });
 
         // Trigger shake based on size
+        this.shake(size * 0.5);
+    },
+
+    /**
+     * Add animated sprite-based explosion
+     * @param {number} x - Center X
+     * @param {number} y - Center Y
+     * @param {string} source - 'building', 'enemy', 'player', 'boss'
+     * @param {number} [size=20] - Explosion size (affects particle count)
+     */
+    addAnimatedExplosion(x, y, source = 'enemy', size = 20) {
+        // Check if animated particles are available
+        if (typeof particleEmitter === 'undefined' || typeof AssetManager === 'undefined') {
+            // Fallback to procedural
+            this.addExplosion(x, y, size, '#f97316');
+            return;
+        }
+
+        // Determine debris type and sprite based on source
+        let debrisKey, sparkKey, smokeKey;
+
+        switch (source) {
+            case 'building':
+                debrisKey = 'debris_concrete';
+                sparkKey = 'debris_spark';
+                smokeKey = 'debris_smoke';
+                break;
+            case 'player':
+                debrisKey = 'debris_spark';
+                sparkKey = 'debris_spark';
+                smokeKey = 'debris_smoke';
+                break;
+            case 'boss':
+                debrisKey = 'debris_metal';
+                sparkKey = 'debris_spark';
+                smokeKey = 'debris_smoke';
+                break;
+            case 'enemy':
+            default:
+                debrisKey = 'debris_metal';
+                sparkKey = 'debris_spark';
+                smokeKey = 'debris_smoke';
+                break;
+        }
+
+        const debrisSheet = AssetManager.getImage(debrisKey);
+        const sparkSheet = AssetManager.getImage(sparkKey);
+        const smokeSheet = AssetManager.getImage(smokeKey);
+
+        // If sprites not loaded, fall back to procedural
+        if (!debrisSheet && !sparkSheet) {
+            this.addExplosion(x, y, size, '#f97316');
+            return;
+        }
+
+        // Calculate particle count based on size and config
+        const sizeMultiplier = Math.max(0.5, size / 20);
+        const baseCount = CONFIG.PARTICLE_COUNT_MIN + Math.floor(
+            (CONFIG.PARTICLE_COUNT_MAX - CONFIG.PARTICLE_COUNT_MIN) * Math.min(1, sizeMultiplier)
+        );
+
+        // Emit main debris (60% of particles)
+        if (debrisSheet) {
+            // Note: concrete is 2x2 grid (256x256, so 128x128 per frame)
+            // metal/spark/smoke are horizontal strips
+            const isGrid = debrisKey === 'debris_concrete';
+            const frameSize = isGrid ? 128 : 128; // Approximate
+
+            particleEmitter.emit({
+                x: x,
+                y: y,
+                sheet: debrisSheet,
+                frameWidth: frameSize,
+                frameHeight: frameSize,
+                frameCount: 4,
+                count: Math.floor(baseCount * 0.6),
+                speed: 100 + size * 3,
+                gravity: 300,
+                lifetime: 0.8 + Math.random() * 0.4,
+                scale: 0.15 + (size / 100) * 0.1
+            });
+        }
+
+        // Emit sparks (30% of particles)
+        if (sparkSheet) {
+            particleEmitter.emit({
+                x: x,
+                y: y,
+                sheet: sparkSheet,
+                frameWidth: 128,
+                frameHeight: 128,
+                frameCount: 4,
+                count: Math.floor(baseCount * 0.3),
+                speed: 150 + size * 2,
+                gravity: 100,
+                lifetime: 0.5 + Math.random() * 0.3,
+                scale: 0.2 + (size / 100) * 0.15
+            });
+        }
+
+        // Emit smoke (10% of particles)
+        if (smokeSheet) {
+            particleEmitter.emit({
+                x: x,
+                y: y,
+                sheet: smokeSheet,
+                frameWidth: 128,
+                frameHeight: 128,
+                frameCount: 4,
+                count: Math.floor(baseCount * 0.1),
+                speed: 30,
+                gravity: -50, // Float up
+                lifetime: 1.0 + Math.random() * 0.5,
+                scale: 0.3 + (size / 100) * 0.2
+            });
+        }
+
+        // Add white flash effect using procedural system
+        this.effects.push({
+            type: 'explosion_flash',
+            x: x,
+            y: y,
+            size: size,
+            life: 0.15,
+            maxLife: 0.15
+        });
+
+        // Trigger shake
         this.shake(size * 0.5);
     },
 
@@ -238,11 +371,29 @@ const EffectsManager = {
 
         // Remove dead effects
         this.effects = this.effects.filter(e => e.life > 0);
+
+        // Update animated particles
+        if (typeof particleEmitter !== 'undefined') {
+            particleEmitter.update(deltaTime);
+        }
     },
 
     render(ctx) {
+        // Render animated particles first (behind procedural effects)
+        if (typeof particleEmitter !== 'undefined') {
+            particleEmitter.render(ctx);
+        }
+
         this.effects.forEach(effect => {
             const alpha = Math.max(0, effect.life / effect.maxLife);
+
+            // Animated explosion flash
+            if (effect.type === 'explosion_flash') {
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(effect.x, effect.y, effect.size * 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
 
             if (effect.type === 'muzzle_flash') {
                 ctx.save();

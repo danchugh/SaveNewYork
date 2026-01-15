@@ -56,6 +56,11 @@ const CONFIG = {
     HIT_STOP_DURATION: 0.1,
     HIT_STOP_BOSS: 0.5,
 
+    // Particle Settings
+    PARTICLE_COUNT_MIN: 15,
+    PARTICLE_COUNT_MAX: 30,
+    PARTICLE_FPS: 10,
+
     // Buildings - Height cap for more sky space
     BUILDING_COUNT: 6,
     BLOCK_SIZE: 14,

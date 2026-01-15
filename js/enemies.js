@@ -438,8 +438,8 @@ class Enemy {
             if (this.type === EnemyType.TANK) size = 50;
             else if (this.type === EnemyType.BOMBER) size = 35;
 
-            const color = (this.type === EnemyType.AGGRESSIVE || this.type === EnemyType.BOMBER) ? '#ff4400' : '#aa00ff';
-            EffectsManager.addExplosion(this.x, this.y, size, color);
+            // Use animated explosion with metal debris
+            EffectsManager.addAnimatedExplosion(this.x, this.y, 'enemy', size);
 
             // Screen Shake for big ones only
             if (this.type === EnemyType.TANK || this.type === EnemyType.BOMBER) {

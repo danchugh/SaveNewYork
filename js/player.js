@@ -278,10 +278,11 @@ class Player {
         SoundManager.playerDeath();
 
         if (typeof EffectsManager !== 'undefined') {
-            EffectsManager.addExplosion(this.x, this.y, 40, '#ffffff');
-            EffectsManager.addExplosion(this.x, this.y, 60, this.colors.cockpit);
-            setTimeout(() => EffectsManager.addExplosion(this.x + 10, this.y - 10, 30, '#ffaa00'), 100);
-            setTimeout(() => EffectsManager.addExplosion(this.x - 10, this.y + 10, 30, '#ff0000'), 200);
+            // Main explosion with player-style debris (sparks/fire)
+            EffectsManager.addAnimatedExplosion(this.x, this.y, 'player', 50);
+            // Secondary delayed explosions
+            setTimeout(() => EffectsManager.addAnimatedExplosion(this.x + 10, this.y - 10, 'player', 30), 100);
+            setTimeout(() => EffectsManager.addAnimatedExplosion(this.x - 10, this.y + 10, 'player', 30), 200);
             EffectsManager.shake(15);
             EffectsManager.hitStop(0.2);
         }
