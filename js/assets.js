@@ -15,7 +15,8 @@ const AssetManager = {
         'enemy_drone', 'enemy_interceptor', 'enemy_gunship', 'enemy_carrier', 'enemy_missile',
         'boss_main', 'miniboss_charger', 'miniboss_gunner',
         'civilian', 'construction_vehicle', 'construction_worker',
-        'debris_concrete', 'debris_metal', 'debris_spark', 'debris_smoke'
+        'debris_concrete', 'debris_metal', 'debris_spark', 'debris_smoke',
+        'civilian_waiting', 'civilian_falling', 'civilian_rescued'
     ],
 
     // Asset manifest - add entries here as sprites are created

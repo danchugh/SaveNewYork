@@ -60,22 +60,19 @@ class Civilian {
         const fallingSheet = AssetManager.getImage('civilian_falling');
         const rescuedSheet = AssetManager.getImage('civilian_rescued');
 
-        // Frame dimensions (approximate based on generated sheets)
-        // Waiting: 4 frames, each ~128px wide in 512px image
-        // Falling: 4 frames with white backgrounds (will need transparency)
-        // Rescued: 3 frames
-
+        // All sheets are 512x512 with 4 frames horizontally = 128x128 per frame
+        // (except rescued which is 3 frames = ~170x170)
         this.animations = {};
 
         if (waitingSheet) {
             this.animations.waiting = new AnimatedSprite({
                 sheet: waitingSheet,
                 frameWidth: 128,
-                frameHeight: 170,
+                frameHeight: 128,
                 frameCount: 4,
                 fps: 6,
                 mode: 'loop',
-                scale: 0.25 // Scale down to ~32px
+                scale: 0.35 // Scale to ~45px for visibility
             });
         }
 
@@ -83,11 +80,11 @@ class Civilian {
             this.animations.falling = new AnimatedSprite({
                 sheet: fallingSheet,
                 frameWidth: 128,
-                frameHeight: 170,
+                frameHeight: 128,
                 frameCount: 4,
                 fps: 12, // Faster for tumbling
                 mode: 'loop',
-                scale: 0.25
+                scale: 0.35
             });
         }
 
@@ -99,7 +96,7 @@ class Civilian {
                 frameCount: 3,
                 fps: 8,
                 mode: 'once',
-                scale: 0.25
+                scale: 0.3
             });
         }
     }
