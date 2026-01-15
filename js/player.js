@@ -217,6 +217,8 @@ class Player {
             this.state = PlayerState.DOCKED;
             this.refuelTimer = 0;
             SoundManager.refuelComplete();
+            // Play takeoff sound after brief delay
+            setTimeout(() => SoundManager.takeoff(), 200);
         }
     }
 

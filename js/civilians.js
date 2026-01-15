@@ -135,12 +135,16 @@ class Civilian {
         // Try sprite first
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('civilian') : null;
         if (sprite) {
-            // Draw sprite (scaled down to ~20x20 to match original size)
-            const size = 20;
+            // Draw sprite (scaled to ~32x32 for better visibility)
+            const size = 32;
             if (this.state === CivilianState.FALLING) {
                 // Add rotation for falling animation
                 const tumble = (Date.now() / 100) % (Math.PI * 2);
                 ctx.rotate(tumble);
+            } else {
+                // Bobbing animation when waiting
+                const bob = Math.sin(Date.now() / 300) * 2;
+                ctx.translate(0, bob);
             }
             ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
             ctx.restore();

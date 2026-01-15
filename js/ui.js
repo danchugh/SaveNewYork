@@ -29,11 +29,12 @@ function renderHUD(ctx, buildingManager, enemyManager, totalScore) {
 
     if (numPlayers === 1) {
         ctx.fillText('SCORE', CONFIG.CANVAS_WIDTH / 2 - 40, hudY + 16);
-        const scoreStr = String(totalScore || 0).padStart(6, '0');
+        // Use game.score directly since addScore() updates game.score
+        const scoreStr = String(typeof game !== 'undefined' ? game.score : 0).padStart(6, '0');
         ctx.fillText(scoreStr, CONFIG.CANVAS_WIDTH / 2 + 30, hudY + 16);
     } else {
         // 2P mode - show combined score in center
-        const combinedScore = playerManager.getTotalScore();
+        const combinedScore = typeof game !== 'undefined' ? game.score : 0;
         ctx.fillText('TOTAL', CONFIG.CANVAS_WIDTH / 2, hudY + 10);
         const scoreStr = String(combinedScore || 0).padStart(6, '0');
         ctx.fillText(scoreStr, CONFIG.CANVAS_WIDTH / 2, hudY + 24);

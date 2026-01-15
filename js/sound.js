@@ -236,11 +236,18 @@ const SoundManager = {
         osc.stop(this.ctx.currentTime + duration);
     },
 
-    // ========== CONTRA-STYLE GAME SOUNDS ==========
+    // Rate limiting for rapid-fire sounds
+    lastShootTime: 0,
+    shootCooldown: 50, // milliseconds between shots
 
     shoot() {
+        // Rate limit to prevent echo from overlapping samples
+        const now = Date.now();
+        if (now - this.lastShootTime < this.shootCooldown) return;
+        this.lastShootTime = now;
+
         // Try loaded sample first, fallback to oscillator
-        if (this.playBuffer('shoot', 0.6)) return;
+        if (this.playBuffer('shoot', 0.5)) return;
         // Punchy rapid-fire like Contra machine gun
         this.playLaser(1200, 400, 0.06, 0.6);
         this.playPunchyTone(200, 0.03, 'square', 0.3, true);
@@ -276,12 +283,12 @@ const SoundManager = {
     },
 
     playerDeath() {
-        // Try loaded sample first
-        if (this.playBuffer('player_death', 1.0)) return;
-        // Fallback: Massive cinematic explosion
-        this.playLayeredExplosion(0.6, 1.0, 50);
-        setTimeout(() => this.playLayeredExplosion(0.4, 0.7, 35), 100);
-        setTimeout(() => this.playPunchyTone(80, 0.3, 'sawtooth', 0.8), 50);
+        // Use explosion sample for deeper impact, or try player_death
+        if (this.playBuffer('explosion', 1.0)) return;
+        // Fallback: Deep cinematic explosion
+        this.playLayeredExplosion(0.8, 1.2, 30); // Lower freq for deeper rumble
+        setTimeout(() => this.playLayeredExplosion(0.5, 0.8, 25), 100);
+        setTimeout(() => this.playPunchyTone(50, 0.4, 'sawtooth', 0.9), 50);
     },
 
     blockDestroyed() {
@@ -348,6 +355,30 @@ const SoundManager = {
         // Energetic start sound
         this.playLaser(300, 800, 0.15, 0.5);
         setTimeout(() => this.playPunchyTone(660, 0.2, 'square', 0.6), 150);
+    },
+
+    takeoff() {
+        // Engine spool-up with ascending frequency sweep
+        if (!this.enabled || !this.ctx) return;
+        this.resume();
+
+        const now = this.ctx.currentTime;
+
+        // Engine rumble
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(60, now);
+        osc.frequency.exponentialRampToValueAtTime(200, now + 0.5);
+        gain.gain.setValueAtTime(0.4 * this.masterVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.start(now);
+        osc.stop(now + 0.6);
+
+        // Whoosh overlay
+        setTimeout(() => this.playNoise(0.2, 0.3), 300);
     },
 
     enemyFalling() {
@@ -629,14 +660,8 @@ const SoundManager = {
     },
 
     updateAmbientForTime(timeOfDay) {
-        if (timeOfDay === 'night' || timeOfDay === 'dusk') {
-            if (this.currentAmbient !== 'crickets') {
-                this.startCrickets();
-            }
-        } else if (timeOfDay === 'day' || timeOfDay === 'dawn') {
-            if (this.currentAmbient !== 'birds') {
-                this.startBirds();
-            }
-        }
+        // Disabled ambient sounds - they interfere with gameplay audio
+        // and the bird chirps sound like enemy effects
+        this.stopAmbient();
     }
 };

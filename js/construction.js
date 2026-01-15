@@ -380,8 +380,8 @@ const ConstructionManager = {
             // Try sprite first
             const workerSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('construction_worker') : null;
             if (workerSprite) {
-                // Draw worker sprite (scaled to ~20x25)
-                const ww = 20, wh = 25;
+                // Draw worker sprite (scaled to ~35x40 for better visibility)
+                const ww = 35, wh = 40;
                 ctx.drawImage(workerSprite, -ww / 2, -wh / 2, ww, wh);
             } else {
                 // Fallback: Procedural worker
