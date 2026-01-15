@@ -39,12 +39,12 @@ function renderHUD(ctx, buildingManager, enemyManager, totalScore) {
         ctx.fillText(scoreStr, CONFIG.CANVAS_WIDTH / 2, hudY + 24);
     }
 
-    // WAVE (below score in 2P, or to the side in 1P)
+    // WAVE (moved right to avoid overlap with 8 lives)
     if (numPlayers === 1) {
         ctx.textAlign = 'left';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText('WAVE', 200, hudY + 16);
-        ctx.fillText(`${enemyManager.waveNumber}-1`, 258, hudY + 16);
+        ctx.fillText('WAVE', 280, hudY + 16);
+        ctx.fillText(`${enemyManager.waveNumber}-1`, 338, hudY + 16);
 
         // DMG (for 1P mode, on right)
         const destruction = Math.floor(buildingManager.getDestructionPercentage() * 100);

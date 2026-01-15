@@ -92,7 +92,7 @@ class Enemy {
 
             case EnemyType.BOMBER: // Missile (Orange)
                 this.speed = 120;
-                this.width = 25; this.height = 13; // +25% from 20x10
+                this.width = 31; this.height = 16; // +56% total from original 20x10
                 this.attackTimeMin = 999; this.attackTimeMax = 999;
                 this.diveTimer = 2 + Math.random() * 4;
                 break;
@@ -626,8 +626,8 @@ class Enemy {
         // Try sprite first
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_missile') : null;
         if (sprite) {
-            // Draw solid at +25% size: 40x40 from 32x32
-            ctx.drawImage(sprite, -20, -20, 40, 40);
+            // Draw solid at +56% size: 50x50 from original 32x32
+            ctx.drawImage(sprite, -25, -25, 50, 50);
             return;
         }
 

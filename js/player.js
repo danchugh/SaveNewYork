@@ -367,32 +367,50 @@ class Player {
         const spriteRotation = this.id === 1 ? Math.PI : Math.PI / 2;
         ctx.rotate(spriteRotation);
 
-        // Engine glow (behind sprite)
+        // Engine glow (behind sprite) - position adjusted for sprite rotation
         if (this.state === PlayerState.FLYING) {
+            // P1 is rotated 180° so "behind" is at +X, P2 is rotated 90° so "behind" is at +Y
+            const thrustOffsetX = this.id === 1 ? 25 : 0;
+            const thrustOffsetY = this.id === 1 ? 0 : 25;
+
             const glowSize = 30 + Math.random() * 12;
-            const gradient = ctx.createRadialGradient(-25, 0, 2, -25, 0, glowSize);
+            const gradient = ctx.createRadialGradient(thrustOffsetX, thrustOffsetY, 2, thrustOffsetX, thrustOffsetY, glowSize);
             gradient.addColorStop(0, this.id === 1 ? 'rgba(59, 130, 246, 0.8)' : 'rgba(236, 72, 153, 0.8)');
             gradient.addColorStop(0.5, this.id === 1 ? 'rgba(59, 130, 246, 0.3)' : 'rgba(236, 72, 153, 0.3)');
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             ctx.fillStyle = gradient;
             ctx.beginPath();
-            ctx.arc(-25, 0, glowSize, 0, Math.PI * 2);
+            ctx.arc(thrustOffsetX, thrustOffsetY, glowSize, 0, Math.PI * 2);
             ctx.fill();
 
             // Animated thrust flames
             const thrust = 15 + Math.random() * 10;
             ctx.fillStyle = this.id === 1 ? '#60a5fa' : '#f472b6';
             ctx.beginPath();
-            ctx.moveTo(-30, -6);
-            ctx.lineTo(-30 - thrust, 0);
-            ctx.lineTo(-30, 6);
+            if (this.id === 1) {
+                // P1: flames extend to the right (+X)
+                ctx.moveTo(30, -6);
+                ctx.lineTo(30 + thrust, 0);
+                ctx.lineTo(30, 6);
+            } else {
+                // P2: flames extend downward (+Y)
+                ctx.moveTo(-6, 30);
+                ctx.lineTo(0, 30 + thrust);
+                ctx.lineTo(6, 30);
+            }
             ctx.fill();
 
             ctx.fillStyle = this.id === 1 ? '#bfdbfe' : '#fbcfe8';
             ctx.beginPath();
-            ctx.moveTo(-30, -3);
-            ctx.lineTo(-30 - thrust * 0.6, 0);
-            ctx.lineTo(-30, 3);
+            if (this.id === 1) {
+                ctx.moveTo(30, -3);
+                ctx.lineTo(30 + thrust * 0.6, 0);
+                ctx.lineTo(30, 3);
+            } else {
+                ctx.moveTo(-3, 30);
+                ctx.lineTo(0, 30 + thrust * 0.6);
+                ctx.lineTo(3, 30);
+            }
             ctx.fill();
         }
 
