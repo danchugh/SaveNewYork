@@ -25,6 +25,32 @@ const SoundManager = {
         }
     },
 
+    /**
+     * Play a loaded AudioBuffer from AssetManager
+     * @param {string} key - The sound key in AssetManager.sounds
+     * @param {number} volume - Volume multiplier (0-1)
+     * @returns {boolean} True if sample was played, false if not available
+     */
+    playBuffer(key, volume = 1.0) {
+        if (!this.enabled || !this.ctx) return false;
+
+        // Check if we have a loaded sample
+        const buffer = typeof AssetManager !== 'undefined' ? AssetManager.sounds[key] : null;
+        if (!buffer) return false;
+
+        this.resume();
+
+        const source = this.ctx.createBufferSource();
+        const gain = this.ctx.createGain();
+        source.buffer = buffer;
+        source.connect(gain);
+        gain.connect(this.ctx.destination);
+        gain.gain.setValueAtTime(volume * this.masterVolume, this.ctx.currentTime);
+        source.start(this.ctx.currentTime);
+
+        return true;
+    },
+
     // ========== ENHANCED AUDIO HELPERS ==========
 
     // Create distortion curve for gritty sound
@@ -213,13 +239,17 @@ const SoundManager = {
     // ========== CONTRA-STYLE GAME SOUNDS ==========
 
     shoot() {
+        // Try loaded sample first, fallback to oscillator
+        if (this.playBuffer('shoot', 0.6)) return;
         // Punchy rapid-fire like Contra machine gun
         this.playLaser(1200, 400, 0.06, 0.6);
         this.playPunchyTone(200, 0.03, 'square', 0.3, true);
     },
 
     enemyDeath() {
-        // Sharp explosion with satisfying crunch
+        // Try loaded sample first
+        if (this.playBuffer('enemy_death', 0.7)) return;
+        // Fallback: Sharp explosion with satisfying crunch
         if (!this.enabled || !this.ctx) return;
         this.resume();
 
@@ -246,14 +276,18 @@ const SoundManager = {
     },
 
     playerDeath() {
-        // Massive cinematic explosion
+        // Try loaded sample first
+        if (this.playBuffer('player_death', 1.0)) return;
+        // Fallback: Massive cinematic explosion
         this.playLayeredExplosion(0.6, 1.0, 50);
         setTimeout(() => this.playLayeredExplosion(0.4, 0.7, 35), 100);
         setTimeout(() => this.playPunchyTone(80, 0.3, 'sawtooth', 0.8), 50);
     },
 
     blockDestroyed() {
-        // Quick debris crunch
+        // Try loaded sample first
+        if (this.playBuffer('block_destroy', 0.6)) return;
+        // Fallback: Quick debris crunch
         this.playPunchyTone(300, 0.04, 'square', 0.4, true);
         this.playNoise(0.06, 0.5);
     },
@@ -272,21 +306,27 @@ const SoundManager = {
     },
 
     refuelComplete() {
-        // Satisfying power-up jingle
+        // Try loaded sample first
+        if (this.playBuffer('refuel_complete', 0.7)) return;
+        // Fallback: Satisfying power-up jingle
         this.playPunchyTone(523, 0.1, 'square', 0.5);
         setTimeout(() => this.playPunchyTone(659, 0.1, 'square', 0.5), 100);
         setTimeout(() => this.playPunchyTone(784, 0.15, 'square', 0.6), 200);
     },
 
     bossHit() {
-        // Heavy metallic impact
+        // Try loaded sample first
+        if (this.playBuffer('boss_hit', 0.8)) return;
+        // Fallback: Heavy metallic impact
         this.playPunchyTone(150, 0.12, 'sawtooth', 0.7, true);
         this.playNoise(0.08, 0.6);
         this.playPunchyTone(80, 0.1, 'square', 0.5);
     },
 
     victory() {
-        // Epic victory fanfare
+        // Try loaded sample first
+        if (this.playBuffer('victory', 0.8)) return;
+        // Fallback: Epic victory fanfare
         const notes = [523, 659, 784, 1047];
         notes.forEach((freq, i) => {
             setTimeout(() => this.playPunchyTone(freq, 0.25, 'square', 0.6), i * 150);
@@ -295,7 +335,9 @@ const SoundManager = {
     },
 
     gameOver() {
-        // Dramatic descending doom
+        // Try loaded sample first
+        if (this.playBuffer('game_over', 0.8)) return;
+        // Fallback: Dramatic descending doom
         const notes = [400, 300, 200, 100];
         notes.forEach((freq, i) => {
             setTimeout(() => this.playPunchyTone(freq, 0.3, 'sawtooth', 0.5), i * 250);
@@ -410,7 +452,9 @@ const SoundManager = {
     },
 
     miniBossAppear() {
-        // Dramatic warning klaxon
+        // Try loaded sample first
+        if (this.playBuffer('boss_warning', 0.8)) return;
+        // Fallback: Dramatic warning klaxon
         this.playPunchyTone(150, 0.4, 'sawtooth', 0.6);
         setTimeout(() => this.playPunchyTone(200, 0.4, 'sawtooth', 0.6), 250);
         setTimeout(() => this.playPunchyTone(300, 0.5, 'square', 0.7), 500);
@@ -440,7 +484,9 @@ const SoundManager = {
     },
 
     miniBossRam() {
-        // Devastating charge impact
+        // Try loaded sample first
+        if (this.playBuffer('miniboss_ram', 0.9)) return;
+        // Fallback: Devastating charge impact
         this.playLayeredExplosion(0.45, 0.9, 40);
         this.playPunchyTone(40, 0.35, 'sawtooth', 0.8);
     },
@@ -509,7 +555,9 @@ const SoundManager = {
     // ========== BONUS LIFE SOUND ==========
 
     oneUp() {
-        // Classic 1UP sound - triumphant ascending cascade
+        // Try loaded sample first
+        if (this.playBuffer('one_up', 0.8)) return;
+        // Fallback: Classic 1UP sound - triumphant ascending cascade
         this.playPunchyTone(523, 0.12, 'square', 0.5);  // C5
         setTimeout(() => this.playPunchyTone(659, 0.12, 'square', 0.5), 80);  // E5
         setTimeout(() => this.playPunchyTone(784, 0.12, 'square', 0.5), 160); // G5

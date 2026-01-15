@@ -58,8 +58,19 @@ const AssetManager = {
             'splash_logo': 'assets/splash_logo.png'
         },
         sounds: {
-            // Future: Add sound file paths here
-            // 'shoot': 'assets/sounds/shoot.wav'
+            // Phase 3 - Audio Overhaul (royalty-free samples)
+            'shoot': 'assets/sounds/shoot.wav',
+            'enemy_death': 'assets/sounds/enemy_death.wav',
+            'player_death': 'assets/sounds/player_death.wav',
+            'block_destroy': 'assets/sounds/block_destroy.wav',
+            'explosion': 'assets/sounds/explosion.wav',
+            'victory': 'assets/sounds/victory.wav',
+            'game_over': 'assets/sounds/game_over.wav',
+            'one_up': 'assets/sounds/one_up.wav',
+            'refuel_complete': 'assets/sounds/refuel_complete.wav',
+            'boss_warning': 'assets/sounds/boss_warning.wav',
+            'boss_hit': 'assets/sounds/boss_hit.wav',
+            'miniboss_ram': 'assets/sounds/miniboss_ram.wav'
         }
     },
 
