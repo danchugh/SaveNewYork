@@ -43,6 +43,65 @@ class Civilian {
         // Falling physics
         this.fallSpeed = 0;
         this.fallGravity = 400;
+
+        // Initialize animated sprites (lazy - created when first rendered)
+        this.animations = null;
+        this.currentAnimation = null;
+    }
+
+    /**
+     * Initialize animated sprites for civilian states
+     */
+    initAnimations() {
+        if (this.animations) return; // Already initialized
+        if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
+
+        const waitingSheet = AssetManager.getImage('civilian_waiting');
+        const fallingSheet = AssetManager.getImage('civilian_falling');
+        const rescuedSheet = AssetManager.getImage('civilian_rescued');
+
+        // Frame dimensions (approximate based on generated sheets)
+        // Waiting: 4 frames, each ~128px wide in 512px image
+        // Falling: 4 frames with white backgrounds (will need transparency)
+        // Rescued: 3 frames
+
+        this.animations = {};
+
+        if (waitingSheet) {
+            this.animations.waiting = new AnimatedSprite({
+                sheet: waitingSheet,
+                frameWidth: 128,
+                frameHeight: 170,
+                frameCount: 4,
+                fps: 6,
+                mode: 'loop',
+                scale: 0.25 // Scale down to ~32px
+            });
+        }
+
+        if (fallingSheet) {
+            this.animations.falling = new AnimatedSprite({
+                sheet: fallingSheet,
+                frameWidth: 128,
+                frameHeight: 170,
+                frameCount: 4,
+                fps: 12, // Faster for tumbling
+                mode: 'loop',
+                scale: 0.25
+            });
+        }
+
+        if (rescuedSheet) {
+            this.animations.rescued = new AnimatedSprite({
+                sheet: rescuedSheet,
+                frameWidth: 170,
+                frameHeight: 170,
+                frameCount: 3,
+                fps: 8,
+                mode: 'once',
+                scale: 0.25
+            });
+        }
     }
 
     updatePosition() {
@@ -129,20 +188,47 @@ class Civilian {
     render(ctx) {
         if (!this.active) return;
 
+        // Lazy initialize animations
+        if (!this.animations) {
+            this.initAnimations();
+        }
+
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // Try sprite first
+        // Try animated sprite based on state
+        if (this.animations) {
+            let anim = null;
+
+            switch (this.state) {
+                case CivilianState.WAITING:
+                    anim = this.animations.waiting;
+                    break;
+                case CivilianState.FALLING:
+                    anim = this.animations.falling;
+                    break;
+                case CivilianState.RESCUED:
+                    anim = this.animations.rescued;
+                    break;
+            }
+
+            if (anim) {
+                // Update animation (time-based)
+                anim.update(1 / 60); // Approximate delta
+                anim.render(ctx, 0, 0);
+                ctx.restore();
+                return;
+            }
+        }
+
+        // Fallback: Try static sprite
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('civilian') : null;
         if (sprite) {
-            // Draw sprite (scaled to ~32x32 for better visibility)
             const size = 32;
             if (this.state === CivilianState.FALLING) {
-                // Add rotation for falling animation
                 const tumble = (Date.now() / 100) % (Math.PI * 2);
                 ctx.rotate(tumble);
             } else {
-                // Bobbing animation when waiting
                 const bob = Math.sin(Date.now() / 300) * 2;
                 ctx.translate(0, bob);
             }

@@ -61,7 +61,12 @@ const AssetManager = {
             'debris_concrete': 'assets/debris_concrete.png',
             'debris_metal': 'assets/debris_metal.png',
             'debris_spark': 'assets/debris_spark.png',
-            'debris_smoke': 'assets/debris_smoke.png'
+            'debris_smoke': 'assets/debris_smoke.png',
+
+            // Civilian animation sprite sheets
+            'civilian_waiting': 'assets/civilian_waiting.png',
+            'civilian_falling': 'assets/civilian_falling.png',
+            'civilian_rescued': 'assets/civilian_rescued.png'
         },
         sounds: {
             // Phase 3 - Audio Overhaul (royalty-free samples)
