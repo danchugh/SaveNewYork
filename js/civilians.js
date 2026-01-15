@@ -193,28 +193,41 @@ class Civilian {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // DIRECT SPRITE SHEET TEST - bypassing AnimatedSprite class
+        // DIRECT SPRITE SHEET TEST - calculate frame size from actual image
         const testSheet = typeof AssetManager !== 'undefined' ? AssetManager.getImage('test_civilian') : null;
 
         if (testSheet) {
-            // Frame parameters
-            const frameWidth = 40;
-            const frameHeight = 45;
-            const totalFrames = 8;
+            // Get actual image dimensions
+            const imgWidth = testSheet.width;
+            const imgHeight = testSheet.height;
+            const framesPerRow = 8;
+            const rows = 4;
+
+            // Calculate frame size from actual image
+            const frameWidth = Math.floor(imgWidth / framesPerRow);
+            const frameHeight = Math.floor(imgHeight / rows);
+
+            // Log once for debugging
+            if (!this._loggedDimensions) {
+                console.log(`Sprite sheet: ${imgWidth}x${imgHeight}, Frame: ${frameWidth}x${frameHeight}`);
+                this._loggedDimensions = true;
+            }
+
             const fps = 8;
+            const frameIndex = Math.floor((Date.now() / 1000 * fps) % framesPerRow);
 
-            // Calculate current frame based on time
-            const frameIndex = Math.floor((Date.now() / 1000 * fps) % totalFrames);
-
-            // Source rectangle (where to cut from sprite sheet)
             const srcX = frameIndex * frameWidth;
-            const srcY = 0;  // First row
+            const srcY = 0;
 
-            // Draw the sprite frame directly
+            // Scale to ~40px for display
+            const scale = 40 / frameWidth;
+            const destW = frameWidth * scale;
+            const destH = frameHeight * scale;
+
             ctx.drawImage(
                 testSheet,
-                srcX, srcY, frameWidth, frameHeight,  // source x, y, width, height
-                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight  // dest x, y, width, height (centered)
+                srcX, srcY, frameWidth, frameHeight,
+                -destW / 2, -destH / 2, destW, destH
             );
 
             ctx.restore();
