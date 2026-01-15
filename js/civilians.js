@@ -60,6 +60,8 @@ class Civilian {
         // Sheet is ~320x200, 8 columns x 4 rows, so each frame is ~40x50
         const testSheet = AssetManager.getImage('test_civilian');
 
+        console.log('Civilian initAnimations - testSheet:', testSheet ? 'LOADED' : 'NULL');
+
         this.animations = {};
 
         if (testSheet) {
@@ -191,7 +193,7 @@ class Civilian {
         ctx.translate(this.x, this.y);
 
         // Try animated sprite based on state
-        if (this.animations) {
+        if (this.animations && Object.keys(this.animations).length > 0) {
             let anim = null;
 
             switch (this.state) {
@@ -206,7 +208,7 @@ class Civilian {
                     break;
             }
 
-            if (anim) {
+            if (anim && anim.sheet) {
                 // Update animation (time-based)
                 anim.update(1 / 60); // Approximate delta
                 anim.render(ctx, 0, 0);
