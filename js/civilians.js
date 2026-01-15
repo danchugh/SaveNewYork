@@ -65,38 +65,38 @@ class Civilian {
         this.animations = {};
 
         if (testSheet) {
-            // Use just 1 frame for testing (static - no animation)
-            // Frame size: 40x45 (reduced height to avoid catching next row)
+            // ANIMATION ENABLED - 8 frames at 8 fps
+            // Frame size: 40x45
             this.animations.waiting = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
-                frameHeight: 45,  // Reduced from 50
-                frameCount: 1,
-                fps: 1,
+                frameHeight: 45,
+                frameCount: 8,  // Full 8-frame animation
+                fps: 8,         // 8 frames per second
                 mode: 'loop',
-                scale: 1.0
+                scale: 0.8
             });
 
-            // Same for falling
+            // Faster animation for falling
             this.animations.falling = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
                 frameHeight: 45,
-                frameCount: 1,
-                fps: 1,
+                frameCount: 8,
+                fps: 12,  // Faster when falling
                 mode: 'loop',
-                scale: 1.0
+                scale: 0.8
             });
 
-            // Same for rescued
+            // Celebration animation
             this.animations.rescued = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
                 frameHeight: 45,
-                frameCount: 1,
-                fps: 1,
-                mode: 'once',
-                scale: 1.0
+                frameCount: 8,
+                fps: 10,
+                mode: 'loop',  // Loop celebration
+                scale: 0.8
             });
         }
     }
