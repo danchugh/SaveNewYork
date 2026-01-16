@@ -46,10 +46,61 @@ class Civilian {
 
         // Initialize animated sprites (lazy - created when first rendered)
         this.animations = null;
-        this.currentAnimation = null;
+
+        // Animation state tracking
+        this.currentAnimName = 'idle';  // 'idle', 'help', or 'fall'
+        this.playerInRange = false;
+        this.pendingIdleSwitch = false;  // Wait for help animation to finish before switching to idle
+        this.lastFrame = 0;  // Track frame to detect animation cycle completion
 
         // Random animation offset so civilians don't all sync
         this.animOffset = Math.random() * 1000;
+    }
+
+    /**
+     * Helper to create AnimatedSprite from a sprite sheet
+     * @param {string} assetKey - Key for AssetManager
+     * @param {number} fps - Frames per second
+     * @param {number} scale - Render scale
+     * @returns {AnimatedSprite|null}
+     */
+    createAnimationFromSheet(assetKey, fps = 8, scale = 1.25) {
+        const sheet = AssetManager.getImage(assetKey);
+        if (!sheet || sheet.width <= 0 || sheet.height <= 0) {
+            console.warn(`Civilian: ${assetKey} sprite not loaded or invalid`);
+            return null;
+        }
+
+        // Frame dimensions from naming convention: 32x32_Name.png
+        const frameWidth = 32;
+        const frameHeight = 32;
+
+        // Calculate frame layout from sheet dimensions
+        const framesPerRow = Math.floor(sheet.width / frameWidth);
+        const rowCount = Math.floor(sheet.height / frameHeight);
+        const frameCount = framesPerRow * rowCount;
+
+        if (frameCount <= 0) {
+            console.warn(`Civilian: ${assetKey} has no valid frames`);
+            return null;
+        }
+
+        console.log(`Civilian ${assetKey} loaded:`, {
+            sheetSize: `${sheet.width}x${sheet.height}`,
+            frames: frameCount,
+            framesPerRow: framesPerRow
+        });
+
+        return new AnimatedSprite({
+            sheet: sheet,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight,
+            frameCount: frameCount,
+            framesPerRow: framesPerRow,
+            fps: fps,
+            mode: 'loop',
+            scale: scale
+        });
     }
 
     /**
@@ -61,72 +112,13 @@ class Civilian {
 
         this.animations = {};
 
-        // Load civilian_help sprite for WAITING state
-        const helpSheet = AssetManager.getImage('civilian_help');
+        // Load all civilian sprite sheets (32x32 frames)
+        this.animations.idle = this.createAnimationFromSheet('civilian_idle', 8, 1.25);
+        this.animations.help = this.createAnimationFromSheet('civilian_help', 8, 1.25);
+        this.animations.fall = this.createAnimationFromSheet('civilian_fall', 12, 1.25);
 
-        if (helpSheet && helpSheet.width > 0 && helpSheet.height > 0) {
-            // Auto-detect frame info from sprite sheet
-            // Frame dimensions come from filename: 32x32_Civilian_Help.png
-            const frameWidth = 32;
-            const frameHeight = 32;
-
-            // Calculate frame layout from sheet dimensions
-            const framesPerRow = Math.floor(helpSheet.width / frameWidth);
-            const rowCount = Math.floor(helpSheet.height / frameHeight);
-            const frameCount = framesPerRow * rowCount;
-
-            console.log('Civilian_Help sprite loaded:', {
-                sheetSize: `${helpSheet.width}x${helpSheet.height}`,
-                frameSize: `${frameWidth}x${frameHeight}`,
-                framesPerRow: framesPerRow,
-                rowCount: rowCount,
-                totalFrames: frameCount
-            });
-
-            // Only create animation if we have valid frames
-            if (frameCount > 0) {
-                this.animations.waiting = new AnimatedSprite({
-                    sheet: helpSheet,
-                    frameWidth: frameWidth,
-                    frameHeight: frameHeight,
-                    frameCount: frameCount,
-                    framesPerRow: framesPerRow,
-                    fps: 8,
-                    mode: 'loop',
-                    scale: 1.25  // Scale up 32px frames to ~40px display size
-                });
-            } else {
-                console.warn('Civilian_Help: No valid frames, falling back to procedural');
-            }
-        } else {
-            console.warn('Civilian_Help sprite not loaded or invalid');
-        }
-
-        // Fallback to test_civilian for other states if available
-        const testSheet = AssetManager.getImage('test_civilian');
-        if (testSheet) {
-            // Faster animation for falling
-            this.animations.falling = new AnimatedSprite({
-                sheet: testSheet,
-                frameWidth: 40,
-                frameHeight: 45,
-                frameCount: 8,
-                fps: 12,
-                mode: 'loop',
-                scale: 0.8
-            });
-
-            // Celebration animation
-            this.animations.rescued = new AnimatedSprite({
-                sheet: testSheet,
-                frameWidth: 40,
-                frameHeight: 45,
-                frameCount: 8,
-                fps: 10,
-                mode: 'loop',
-                scale: 0.8
-            });
-        }
+        // Set initial animation
+        this.currentAnimName = 'idle';
     }
 
     updatePosition() {
@@ -150,17 +142,37 @@ class Civilian {
         this.y = this.building.y + topRow * CONFIG.BLOCK_SIZE - 8;
     }
 
-    update(deltaTime) {
+    update(deltaTime, playerX, playerY) {
         // Update current animation
         if (this.animations) {
-            const currentAnim = this.animations[this.state];
+            const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
+                // Track frame before update to detect cycle completion
+                const prevFrame = currentAnim.currentFrame;
                 currentAnim.update(deltaTime);
+
+                // Check if animation cycled back to start (for pending idle switch)
+                if (this.pendingIdleSwitch && currentAnim.currentFrame < prevFrame) {
+                    // Animation completed a cycle, switch back to idle
+                    this.currentAnimName = 'idle';
+                    this.pendingIdleSwitch = false;
+                    if (this.animations.idle) {
+                        this.animations.idle.reset();
+                    }
+                }
             }
         }
 
         if (this.state === CivilianState.FALLING) {
-            // Falling animation
+            // Switch to fall animation
+            if (this.currentAnimName !== 'fall') {
+                this.currentAnimName = 'fall';
+                if (this.animations && this.animations.fall) {
+                    this.animations.fall.reset();
+                }
+            }
+
+            // Falling physics
             this.fallSpeed += this.fallGravity * deltaTime;
             this.y += this.fallSpeed * deltaTime;
 
@@ -176,6 +188,30 @@ class Civilian {
         }
 
         if (this.state === CivilianState.WAITING) {
+            // Check player proximity for animation switching
+            if (playerX !== undefined && playerY !== undefined) {
+                const dist = Math.sqrt(
+                    Math.pow(playerX - this.x, 2) +
+                    Math.pow(playerY - this.y, 2)
+                );
+
+                const wasInRange = this.playerInRange;
+                this.playerInRange = dist < 96;
+
+                // Player just entered range - switch to help animation
+                if (this.playerInRange && !wasInRange) {
+                    this.currentAnimName = 'help';
+                    this.pendingIdleSwitch = false;
+                    if (this.animations && this.animations.help) {
+                        this.animations.help.reset();
+                    }
+                }
+                // Player just left range - mark to switch back after animation completes
+                else if (!this.playerInRange && wasInRange && this.currentAnimName === 'help') {
+                    this.pendingIdleSwitch = true;
+                }
+            }
+
             // Find which column and row we're on
             const col = Math.floor(this.localX / CONFIG.BLOCK_SIZE);
 
@@ -229,9 +265,9 @@ class Civilian {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // Try to use AnimatedSprite for current state
+        // Try to use AnimatedSprite for current animation
         if (this.animations) {
-            const currentAnim = this.animations[this.state];
+            const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
                 // AnimatedSprite.render expects center position, we're already translated
                 currentAnim.render(ctx, 0, 0);
@@ -335,7 +371,7 @@ class CivilianManager {
         this.spawnTimer = 0;
     }
 
-    update(deltaTime) {
+    update(deltaTime, playerX, playerY) {
         // Spawn civilians periodically
         this.spawnTimer += deltaTime;
         if (this.spawnTimer >= this.spawnInterval &&
@@ -344,8 +380,8 @@ class CivilianManager {
             this.spawnTimer = 0;
         }
 
-        // Update civilians
-        this.civilians.forEach(c => c.update(deltaTime));
+        // Update civilians with player position for proximity detection
+        this.civilians.forEach(c => c.update(deltaTime, playerX, playerY));
 
         // Remove inactive civilians
         this.civilians = this.civilians.filter(c => c.active);

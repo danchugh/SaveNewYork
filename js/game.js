@@ -515,7 +515,7 @@ function update(deltaTime) {
             const p1 = playerManager.getPlayer(1);
             enemyManager.update(game.deltaTime, p1 ? p1.x : 0, p1 ? p1.y : 0, projectileManager);
             buildingManager.update(game.deltaTime);
-            civilianManager.update(game.deltaTime);
+            civilianManager.update(game.deltaTime, p1 ? p1.x : 0, p1 ? p1.y : 0);
             ConstructionManager.update(game.deltaTime);
             BackgroundManager.update(game.deltaTime);
             DayCycle.update(game.deltaTime);

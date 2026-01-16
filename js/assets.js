@@ -66,12 +66,10 @@ const AssetManager = {
             'debris_spark': 'assets/debris_spark.png',
             'debris_smoke': 'assets/debris_smoke.png',
 
-            // Civilian animation sprite sheets
-            'civilian_waiting': 'assets/civilian_waiting.png',
-            'civilian_falling': 'assets/civilian_falling.png',
-            'civilian_rescued': 'assets/civilian_rescued.png',
-            'civilian_waving': 'assets/civilian_waving.png',
+            // Civilian animation sprite sheets (32x32 frames)
+            'civilian_idle': 'assets/32x32_Civilian_Idle.png',
             'civilian_help': 'assets/32x32_Civilian_Help.png',
+            'civilian_fall': 'assets/32x32_Civilian_Fall.png',
 
             // Test sprite for animation debugging
             'test_civilian': 'assets/test_civilian.png'
