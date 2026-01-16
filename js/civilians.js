@@ -58,35 +58,52 @@ class Civilian {
     initAnimations() {
         if (this.animations) return; // Already initialized
         if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
-
-        // Use test sprite sheet for debugging (EvilCleric)
-        // Sheet is ~320x200, 8 columns x 4 rows, so each frame is ~40x50
-        const testSheet = AssetManager.getImage('test_civilian');
-
-        console.log('Civilian initAnimations - testSheet:', testSheet ? 'LOADED' : 'NULL');
+        if (typeof countValidFrames === 'undefined') return;
 
         this.animations = {};
 
-        if (testSheet) {
-            // ANIMATION ENABLED - 8 frames at 8 fps
-            // Frame size: 40x45
-            this.animations.waiting = new AnimatedSprite({
-                sheet: testSheet,
-                frameWidth: 40,
-                frameHeight: 45,
-                frameCount: 8,  // Full 8-frame animation
-                fps: 8,         // 8 frames per second
-                mode: 'loop',
-                scale: 0.8
+        // Load civilian_help sprite for WAITING state
+        const helpSheet = AssetManager.getImage('civilian_help');
+
+        if (helpSheet) {
+            // Auto-detect frame info from sprite sheet
+            // Frame dimensions come from filename: 32x32_Civilian_Help.png
+            const frameWidth = 32;
+            const frameHeight = 32;
+
+            // Count valid frames (excludes transparent frames)
+            const frameInfo = countValidFrames(helpSheet, frameWidth, frameHeight);
+
+            console.log('Civilian_Help sprite loaded:', {
+                sheetSize: `${helpSheet.width}x${helpSheet.height}`,
+                frameSize: `${frameWidth}x${frameHeight}`,
+                framesPerRow: frameInfo.framesPerRow,
+                validFrames: frameInfo.frameCount
             });
 
+            this.animations.waiting = new AnimatedSprite({
+                sheet: helpSheet,
+                frameWidth: frameWidth,
+                frameHeight: frameHeight,
+                frameCount: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow,
+                validFrameIndices: frameInfo.validFrameIndices,
+                fps: 8,
+                mode: 'loop',
+                scale: 1.25  // Scale up 32px frames to ~40px display size
+            });
+        }
+
+        // Fallback to test_civilian for other states if available
+        const testSheet = AssetManager.getImage('test_civilian');
+        if (testSheet) {
             // Faster animation for falling
             this.animations.falling = new AnimatedSprite({
                 sheet: testSheet,
                 frameWidth: 40,
                 frameHeight: 45,
                 frameCount: 8,
-                fps: 12,  // Faster when falling
+                fps: 12,
                 mode: 'loop',
                 scale: 0.8
             });
@@ -98,7 +115,7 @@ class Civilian {
                 frameHeight: 45,
                 frameCount: 8,
                 fps: 10,
-                mode: 'loop',  // Loop celebration
+                mode: 'loop',
                 scale: 0.8
             });
         }
@@ -126,6 +143,14 @@ class Civilian {
     }
 
     update(deltaTime) {
+        // Update current animation
+        if (this.animations) {
+            const currentAnim = this.animations[this.state];
+            if (currentAnim) {
+                currentAnim.update(deltaTime);
+            }
+        }
+
         if (this.state === CivilianState.FALLING) {
             // Falling animation
             this.fallSpeed += this.fallGravity * deltaTime;
@@ -196,41 +221,15 @@ class Civilian {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // Use generated civilian waving sprite sheet
-        const civSheet = typeof AssetManager !== 'undefined' ? AssetManager.getImage('civilian_waving') : null;
-
-        if (civSheet) {
-            // Fixed frame size: 32x32
-            const frameWidth = 32;
-            const frameHeight = 32;
-            const framesPerRow = 8;
-
-            // Log once for debugging
-            if (!this._loggedDimensions) {
-                console.log(`Frame size: ${frameWidth}x${frameHeight}`);
-                this._loggedDimensions = true;
+        // Try to use AnimatedSprite for current state
+        if (this.animations) {
+            const currentAnim = this.animations[this.state];
+            if (currentAnim) {
+                // AnimatedSprite.render expects center position, we're already translated
+                currentAnim.render(ctx, 0, 0);
+                ctx.restore();
+                return;
             }
-
-            const fps = 8;
-            // Use animOffset for independent animation per civilian
-            const frameIndex = Math.floor(((Date.now() + this.animOffset) / 1000 * fps) % framesPerRow);
-
-            const srcX = frameIndex * frameWidth;
-            const srcY = 0;
-
-            // Display at 40px
-            const scale = 40 / frameWidth;
-            const destW = frameWidth * scale;
-            const destH = frameHeight * scale;
-
-            ctx.drawImage(
-                civSheet,
-                srcX, srcY, frameWidth, frameHeight,
-                -destW / 2, -destH / 2, destW, destH
-            );
-
-            ctx.restore();
-            return;
         }
 
         // Fallback: Try static sprite

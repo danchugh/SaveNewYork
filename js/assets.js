@@ -16,7 +16,7 @@ const AssetManager = {
         'boss_main', 'miniboss_charger', 'miniboss_gunner',
         'civilian', 'construction_vehicle', 'construction_worker',
         'debris_concrete', 'debris_metal', 'debris_spark', 'debris_smoke',
-        'civilian_waiting', 'civilian_falling', 'civilian_rescued'
+        'civilian_waiting', 'civilian_falling', 'civilian_rescued', 'civilian_help'
     ],
 
     // Asset manifest - add entries here as sprites are created
@@ -70,6 +70,7 @@ const AssetManager = {
             'civilian_falling': 'assets/civilian_falling.png',
             'civilian_rescued': 'assets/civilian_rescued.png',
             'civilian_waving': 'assets/civilian_waving.png',
+            'civilian_help': 'assets/32x32_Civilian_Help.png',
 
             // Test sprite for animation debugging
             'test_civilian': 'assets/test_civilian.png'

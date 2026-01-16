@@ -5,12 +5,93 @@
 // ============================================
 
 /**
+ * Parse sprite sheet filename to extract frame dimensions
+ * Format: [frameWidth]x[frameHeight]_[name].png
+ * Example: "32x32_Civilian_Help.png" -> { frameWidth: 32, frameHeight: 32, name: "Civilian_Help" }
+ * @param {string} filename - The sprite sheet filename
+ * @returns {Object|null} Parsed dimensions and name, or null if invalid format
+ */
+function parseSheetFilename(filename) {
+    // Extract just the filename if a path is provided
+    const basename = filename.split('/').pop().split('\\').pop();
+
+    // Match pattern: [width]x[height]_[name].png
+    const match = basename.match(/^(\d+)x(\d+)_(.+)\.(png|jpg|gif)$/i);
+
+    if (!match) {
+        return null;
+    }
+
+    return {
+        frameWidth: parseInt(match[1], 10),
+        frameHeight: parseInt(match[2], 10),
+        name: match[3]
+    };
+}
+
+/**
+ * Count valid (non-transparent) frames in a sprite sheet
+ * @param {HTMLImageElement|HTMLCanvasElement} sheet - The sprite sheet image
+ * @param {number} frameWidth - Width of each frame
+ * @param {number} frameHeight - Height of each frame
+ * @returns {Object} { frameCount, framesPerRow, validFrameIndices }
+ */
+function countValidFrames(sheet, frameWidth, frameHeight) {
+    const framesPerRow = Math.floor(sheet.width / frameWidth);
+    const rowCount = Math.floor(sheet.height / frameHeight);
+    const totalPossibleFrames = framesPerRow * rowCount;
+
+    // Create a temporary canvas to read pixel data
+    const canvas = document.createElement('canvas');
+    canvas.width = sheet.width;
+    canvas.height = sheet.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(sheet, 0, 0);
+
+    const validFrameIndices = [];
+
+    for (let i = 0; i < totalPossibleFrames; i++) {
+        const col = i % framesPerRow;
+        const row = Math.floor(i / framesPerRow);
+        const srcX = col * frameWidth;
+        const srcY = row * frameHeight;
+
+        // Get pixel data for this frame
+        const imageData = ctx.getImageData(srcX, srcY, frameWidth, frameHeight);
+        const data = imageData.data;
+
+        // Check if frame has any non-transparent pixels
+        let hasContent = false;
+        for (let j = 3; j < data.length; j += 4) { // Check alpha channel
+            if (data[j] > 0) {
+                hasContent = true;
+                break;
+            }
+        }
+
+        if (hasContent) {
+            validFrameIndices.push(i);
+        }
+    }
+
+    return {
+        frameCount: validFrameIndices.length,
+        framesPerRow: framesPerRow,
+        rowCount: rowCount,
+        validFrameIndices: validFrameIndices
+    };
+}
+
+/**
  * AnimatedSprite - Renders animated sprites from sprite sheets
- * 
- * Sprite sheet format: Horizontal strip of equal-sized frames
- * +---+---+---+---+
- * | 0 | 1 | 2 | 3 |  ← Frame indices left to right
- * +---+---+---+---+
+ *
+ * Supports both single-row and multi-row sprite sheets:
+ * Single row:          Multi-row (grid):
+ * +---+---+---+---+    +---+---+---+
+ * | 0 | 1 | 2 | 3 |    | 0 | 1 | 2 |
+ * +---+---+---+---+    +---+---+---+
+ *                      | 3 | 4 | 5 |
+ *                      +---+---+---+
  */
 class AnimatedSprite {
     /**
@@ -18,7 +99,9 @@ class AnimatedSprite {
      * @param {HTMLImageElement} config.sheet - The sprite sheet image
      * @param {number} config.frameWidth - Width of each frame in pixels
      * @param {number} config.frameHeight - Height of each frame in pixels
-     * @param {number} config.frameCount - Total number of frames
+     * @param {number} config.frameCount - Total number of valid frames
+     * @param {number} [config.framesPerRow] - Frames per row (defaults to frameCount for single-row)
+     * @param {number[]} [config.validFrameIndices] - Array of valid frame indices (for sparse sheets)
      * @param {number} [config.fps=10] - Frames per second (8-12 recommended)
      * @param {string} [config.mode='loop'] - 'loop', 'once', 'pingpong'
      * @param {number} [config.scale=1] - Render scale multiplier
@@ -29,6 +112,8 @@ class AnimatedSprite {
         this.frameWidth = config.frameWidth;
         this.frameHeight = config.frameHeight;
         this.frameCount = config.frameCount;
+        this.framesPerRow = config.framesPerRow || config.frameCount; // Default: single row
+        this.validFrameIndices = config.validFrameIndices || null; // Optional sparse frame support
         this.fps = config.fps || 10;
         this.mode = config.mode || 'loop';
         this.scale = config.scale || 1;
@@ -101,8 +186,19 @@ class AnimatedSprite {
     render(ctx, x, y) {
         if (!this.sheet || this.isComplete) return;
 
-        const srcX = this.currentFrame * this.frameWidth;
-        const srcY = 0;
+        // Get the actual frame index in the sprite sheet
+        let sheetFrameIndex = this.currentFrame;
+        if (this.validFrameIndices && this.validFrameIndices.length > 0) {
+            // Use sparse frame mapping
+            sheetFrameIndex = this.validFrameIndices[this.currentFrame] || 0;
+        }
+
+        // Calculate source position based on row/column
+        const col = sheetFrameIndex % this.framesPerRow;
+        const row = Math.floor(sheetFrameIndex / this.framesPerRow);
+        const srcX = col * this.frameWidth;
+        const srcY = row * this.frameHeight;
+
         const destWidth = this.frameWidth * this.scale;
         const destHeight = this.frameHeight * this.scale;
 
