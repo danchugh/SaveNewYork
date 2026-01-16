@@ -9,6 +9,7 @@ const AssetManager = {
     loadedAssets: 0,
 
     // Keys that require transparency processing (removal of black background)
+    // NOTE: civilian_help excluded - sprite already has transparency or needs different handling
     transparencyKeys: [
         'player_p1', 'player_p2',
         'projectile_player', 'projectile_enemy',
@@ -16,7 +17,7 @@ const AssetManager = {
         'boss_main', 'miniboss_charger', 'miniboss_gunner',
         'civilian', 'construction_vehicle', 'construction_worker',
         'debris_concrete', 'debris_metal', 'debris_spark', 'debris_smoke',
-        'civilian_waiting', 'civilian_falling', 'civilian_rescued', 'civilian_help'
+        'civilian_waiting', 'civilian_falling', 'civilian_rescued'
     ],
 
     // Asset manifest - add entries here as sprites are created

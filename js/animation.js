@@ -41,35 +41,52 @@ function countValidFrames(sheet, frameWidth, frameHeight) {
     const rowCount = Math.floor(sheet.height / frameHeight);
     const totalPossibleFrames = framesPerRow * rowCount;
 
-    // Create a temporary canvas to read pixel data
-    const canvas = document.createElement('canvas');
-    canvas.width = sheet.width;
-    canvas.height = sheet.height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(sheet, 0, 0);
+    // If we can't read pixel data (CORS), assume all frames are valid
+    let validFrameIndices = [];
 
-    const validFrameIndices = [];
+    try {
+        // Create a temporary canvas to read pixel data
+        const canvas = document.createElement('canvas');
+        canvas.width = sheet.width;
+        canvas.height = sheet.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(sheet, 0, 0);
 
-    for (let i = 0; i < totalPossibleFrames; i++) {
-        const col = i % framesPerRow;
-        const row = Math.floor(i / framesPerRow);
-        const srcX = col * frameWidth;
-        const srcY = row * frameHeight;
+        for (let i = 0; i < totalPossibleFrames; i++) {
+            const col = i % framesPerRow;
+            const row = Math.floor(i / framesPerRow);
+            const srcX = col * frameWidth;
+            const srcY = row * frameHeight;
 
-        // Get pixel data for this frame
-        const imageData = ctx.getImageData(srcX, srcY, frameWidth, frameHeight);
-        const data = imageData.data;
+            // Get pixel data for this frame
+            const imageData = ctx.getImageData(srcX, srcY, frameWidth, frameHeight);
+            const data = imageData.data;
 
-        // Check if frame has any non-transparent pixels
-        let hasContent = false;
-        for (let j = 3; j < data.length; j += 4) { // Check alpha channel
-            if (data[j] > 0) {
-                hasContent = true;
-                break;
+            // Check if frame has any non-transparent pixels
+            let hasContent = false;
+            for (let j = 3; j < data.length; j += 4) { // Check alpha channel
+                if (data[j] > 0) {
+                    hasContent = true;
+                    break;
+                }
+            }
+
+            if (hasContent) {
+                validFrameIndices.push(i);
             }
         }
+    } catch (e) {
+        console.warn('countValidFrames: Could not read pixel data (CORS?), assuming all frames valid:', e);
+        // Fall back to assuming all frames are valid
+        for (let i = 0; i < totalPossibleFrames; i++) {
+            validFrameIndices.push(i);
+        }
+    }
 
-        if (hasContent) {
+    // If no valid frames found, assume all frames are valid (sprite may not have transparency)
+    if (validFrameIndices.length === 0) {
+        console.warn('countValidFrames: No valid frames detected, assuming all frames valid');
+        for (let i = 0; i < totalPossibleFrames; i++) {
             validFrameIndices.push(i);
         }
     }

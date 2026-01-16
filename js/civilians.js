@@ -58,40 +58,48 @@ class Civilian {
     initAnimations() {
         if (this.animations) return; // Already initialized
         if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
-        if (typeof countValidFrames === 'undefined') return;
 
         this.animations = {};
 
         // Load civilian_help sprite for WAITING state
         const helpSheet = AssetManager.getImage('civilian_help');
 
-        if (helpSheet) {
+        if (helpSheet && helpSheet.width > 0 && helpSheet.height > 0) {
             // Auto-detect frame info from sprite sheet
             // Frame dimensions come from filename: 32x32_Civilian_Help.png
             const frameWidth = 32;
             const frameHeight = 32;
 
-            // Count valid frames (excludes transparent frames)
-            const frameInfo = countValidFrames(helpSheet, frameWidth, frameHeight);
+            // Calculate frame layout from sheet dimensions
+            const framesPerRow = Math.floor(helpSheet.width / frameWidth);
+            const rowCount = Math.floor(helpSheet.height / frameHeight);
+            const frameCount = framesPerRow * rowCount;
 
             console.log('Civilian_Help sprite loaded:', {
                 sheetSize: `${helpSheet.width}x${helpSheet.height}`,
                 frameSize: `${frameWidth}x${frameHeight}`,
-                framesPerRow: frameInfo.framesPerRow,
-                validFrames: frameInfo.frameCount
+                framesPerRow: framesPerRow,
+                rowCount: rowCount,
+                totalFrames: frameCount
             });
 
-            this.animations.waiting = new AnimatedSprite({
-                sheet: helpSheet,
-                frameWidth: frameWidth,
-                frameHeight: frameHeight,
-                frameCount: frameInfo.frameCount,
-                framesPerRow: frameInfo.framesPerRow,
-                validFrameIndices: frameInfo.validFrameIndices,
-                fps: 8,
-                mode: 'loop',
-                scale: 1.25  // Scale up 32px frames to ~40px display size
-            });
+            // Only create animation if we have valid frames
+            if (frameCount > 0) {
+                this.animations.waiting = new AnimatedSprite({
+                    sheet: helpSheet,
+                    frameWidth: frameWidth,
+                    frameHeight: frameHeight,
+                    frameCount: frameCount,
+                    framesPerRow: framesPerRow,
+                    fps: 8,
+                    mode: 'loop',
+                    scale: 1.25  // Scale up 32px frames to ~40px display size
+                });
+            } else {
+                console.warn('Civilian_Help: No valid frames, falling back to procedural');
+            }
+        } else {
+            console.warn('Civilian_Help sprite not loaded or invalid');
         }
 
         // Fallback to test_civilian for other states if available
