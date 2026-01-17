@@ -44,9 +44,9 @@ const AssetManager = {
             'drone_death': 'assets/64x64_Drone_Death.png',
 
             // Aggressive drone animation sprite sheets (64x64 frames)
-            'drone_aggressive_fly': 'assets/64x64_Drone_Aggressive_Fly.png',
-            'drone_aggressive_attack': 'assets/64x64_Drone_Aggressive_Attack.png',
-            'drone_aggressive_death': 'assets/64x64_Drone_Aggressive_Death.png',
+            'drone_aggressive_fly': 'assets/64x64_Drone_Aggresive_Fly.png',
+            'drone_aggressive_attack': 'assets/64x64_Drone_Aggresive_Attack.png',
+            'drone_aggressive_death': 'assets/64x64_Drone_Aggresive_Death.png',
 
             // Phase 4 - Bosses & Mini-Bosses
             'boss_main': 'assets/boss_main.png',
