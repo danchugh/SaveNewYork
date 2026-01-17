@@ -17,7 +17,8 @@ const AssetManager = {
         'civilian', 'construction_vehicle', 'construction_worker',
         'debris_concrete', 'debris_metal', 'debris_spark', 'debris_smoke',
         'civilian_idle', 'civilian_help', 'civilian_fall',
-        'drone_fly', 'drone_attack', 'drone_death'
+        'drone_fly', 'drone_attack', 'drone_death',
+        'drone_aggressive_fly', 'drone_aggressive_attack', 'drone_aggressive_death'
     ],
 
     // Asset manifest - add entries here as sprites are created
@@ -41,6 +42,11 @@ const AssetManager = {
             'drone_fly': 'assets/64x64_Drone_Fly.png',
             'drone_attack': 'assets/64x64_Drone_Attack.png',
             'drone_death': 'assets/64x64_Drone_Death.png',
+
+            // Aggressive drone animation sprite sheets (64x64 frames)
+            'drone_aggressive_fly': 'assets/64x64_Drone_Aggressive_Fly.png',
+            'drone_aggressive_attack': 'assets/64x64_Drone_Aggressive_Attack.png',
+            'drone_aggressive_death': 'assets/64x64_Drone_Aggressive_Death.png',
 
             // Phase 4 - Bosses & Mini-Bosses
             'boss_main': 'assets/boss_main.png',

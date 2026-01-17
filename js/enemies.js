@@ -60,13 +60,20 @@ class Enemy {
         this.fallGravity = 500;
         this.fallRotationSpeed = (Math.random() - 0.5) * 10;
 
-        // Animation system (for standard drones with sprite sheets)
+        // Animation system (for drones with sprite sheets)
         this.animations = null;
         this.currentAnimName = 'fly';
         this.facingRight = true;  // For horizontal flip based on movement
 
         // Attack collision data (for AOE damage at end of attack animation)
         this.attackCollision = null;  // { building, row, col }
+
+        // Aggressive drone ranged attack system
+        this.rangedAttackCooldown = 5 + Math.random() * 5; // Start with 5-10 second delay
+        this.projectilesToFire = 0;      // Counter for sequential projectiles
+        this.projectileFireTimer = 0;    // Timer between sequential fires
+        this.attackVelX = 0;             // Stored velocity direction for projectiles
+        this.attackVelY = 0;
 
         this.active = true;
     }
@@ -181,11 +188,75 @@ class Enemy {
         });
     }
 
+    /**
+     * Initialize animated sprites for AGGRESSIVE drones
+     */
+    initAggressiveAnimations() {
+        if (this.animations) return; // Already initialized
+        if (this.type !== EnemyType.AGGRESSIVE) return; // Only for aggressive drones
+        if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
+
+        this.animations = {};
+        const frameSize = 64;
+        const scale = 1.0;
+
+        // Helper to create animation from sheet with valid frame detection
+        const createAnim = (assetKey, fps, mode) => {
+            const sheet = AssetManager.getImage(assetKey);
+            if (!sheet || sheet.width <= 0 || sheet.height <= 0) return null;
+
+            // Use countValidFrames to detect empty frames in the sprite sheet
+            let frameInfo;
+            if (typeof countValidFrames === 'function') {
+                frameInfo = countValidFrames(sheet, frameSize, frameSize);
+            } else {
+                const framesPerRow = Math.floor(sheet.width / frameSize);
+                const rowCount = Math.floor(sheet.height / frameSize);
+                frameInfo = {
+                    frameCount: framesPerRow * rowCount,
+                    framesPerRow: framesPerRow,
+                    validFrameIndices: null
+                };
+            }
+
+            if (frameInfo.frameCount <= 0) return null;
+
+            console.log(`Aggressive drone ${assetKey}:`, {
+                sheetSize: `${sheet.width}x${sheet.height}`,
+                validFrames: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow
+            });
+
+            return new AnimatedSprite({
+                sheet: sheet,
+                frameWidth: frameSize,
+                frameHeight: frameSize,
+                frameCount: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow,
+                validFrameIndices: frameInfo.validFrameIndices,
+                fps: fps,
+                mode: mode,
+                scale: scale
+            });
+        };
+
+        // Create animations
+        this.animations.fly = createAnim('drone_aggressive_fly', 8, 'loop');
+        this.animations.attack = createAnim('drone_aggressive_attack', 10, 'once');
+        this.animations.death = createAnim('drone_aggressive_death', 10, 'once');
+
+        console.log('Aggressive drone animations initialized:', {
+            fly: this.animations.fly ? 'loaded' : 'failed',
+            attack: this.animations.attack ? 'loaded' : 'failed',
+            death: this.animations.death ? 'loaded' : 'failed'
+        });
+    }
+
     update(deltaTime) {
         if (this.state === EnemyState.DEAD) return;
 
-        // Update animations for STANDARD drones
-        if (this.type === EnemyType.STANDARD && this.animations) {
+        // Update animations for STANDARD and AGGRESSIVE drones
+        if ((this.type === EnemyType.STANDARD || this.type === EnemyType.AGGRESSIVE) && this.animations) {
             const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
                 currentAnim.update(deltaTime);
@@ -258,9 +329,32 @@ class Enemy {
             this.collisionDamageCooldown -= deltaTime;
         }
 
-        // Track facing direction for STANDARD drones
-        if (this.type === EnemyType.STANDARD) {
+        // Track facing direction for STANDARD and AGGRESSIVE drones
+        if (this.type === EnemyType.STANDARD || this.type === EnemyType.AGGRESSIVE) {
             this.facingRight = this.velX >= 0;
+        }
+
+        // AGGRESSIVE drone ranged attack cooldown
+        if (this.type === EnemyType.AGGRESSIVE) {
+            this.rangedAttackCooldown -= deltaTime;
+
+            // Random chance to attack (% per second), min 5s, max 20s between attacks
+            if (this.rangedAttackCooldown <= 0 && Math.random() < 0.1 * deltaTime) {
+                // Trigger ranged attack - switch to ATTACKING state
+                this.state = EnemyState.ATTACKING;
+                this.currentAnimName = 'attack';
+                if (this.animations && this.animations.attack) {
+                    this.animations.attack.reset();
+                }
+                // Store current velocity direction for projectiles
+                this.attackVelX = this.velX;
+                this.attackVelY = this.velY;
+                this.projectilesToFire = 3;
+                this.projectileFireTimer = 0;
+                // Reset cooldown (5-20 seconds)
+                this.rangedAttackCooldown = 5 + Math.random() * 15;
+                return; // Stop moving for attack animation
+            }
         }
 
         // Change direction - roaming behavior
@@ -287,6 +381,27 @@ class Enemy {
 
                 // Altitude preference: 70% chance to prefer lower altitude
                 if (Math.random() < 0.7 && this.y < 300) {
+                    this.velY = Math.abs(this.velY) * 0.5 + 0.3; // Bias downward
+                    this.normalizeVelocity();
+                }
+            } else if (this.type === EnemyType.AGGRESSIVE) {
+                // AGGRESSIVE drones: similar roaming to STANDARD
+                const rand = Math.random();
+                if (rand < 0.1) {
+                    // 10% chance to reverse direction
+                    this.velX = -this.velX;
+                } else if (rand < 0.4) {
+                    // 30% chance to seek building target
+                    this.seekGenericTarget();
+                } else {
+                    // 60% chance to wander freely
+                    this.velX += (Math.random() - 0.5) * 2;
+                    this.velY += (Math.random() - 0.5) * 1;
+                    this.normalizeVelocity();
+                }
+
+                // Altitude preference: 40% chance to prefer lower altitude (less than standard)
+                if (Math.random() < 0.4 && this.y < 300) {
                     this.velY = Math.abs(this.velY) * 0.5 + 0.3; // Bias downward
                     this.normalizeVelocity();
                 }
@@ -428,6 +543,51 @@ class Enemy {
             return;
         }
 
+        // AGGRESSIVE drones: animation-based ranged attack
+        if (this.type === EnemyType.AGGRESSIVE) {
+            // Stay frozen in place (no movement)
+            if (this.animations && this.animations.attack) {
+                const anim = this.animations.attack;
+
+                // Check if attack animation completed
+                if (anim.isComplete || anim.currentFrame === anim.frameCount - 1) {
+                    // Animation complete - fire 3 sequential projectiles
+                    this.projectileFireTimer += deltaTime;
+
+                    // Fire a projectile every 0.15 seconds
+                    if (this.projectilesToFire > 0 && this.projectileFireTimer >= 0.15) {
+                        this.projectileFireTimer = 0;
+                        this.projectilesToFire--;
+
+                        // Fire projectile in stored velocity direction
+                        if (typeof projectileManager !== 'undefined') {
+                            const angle = Math.atan2(this.attackVelY, this.attackVelX) * 180 / Math.PI;
+                            projectileManager.add(this.x, this.y, angle, 200, false); // Enemy projectile
+                        }
+
+                        // Sound effect
+                        if (typeof SoundManager !== 'undefined') {
+                            SoundManager.shoot();
+                        }
+                    }
+
+                    // All projectiles fired - return to flying
+                    if (this.projectilesToFire <= 0) {
+                        this.state = EnemyState.FLYING;
+                        this.currentAnimName = 'fly';
+                        if (this.animations.fly) {
+                            this.animations.fly.reset();
+                        }
+                    }
+                }
+            } else {
+                // No animation, just return to flying
+                this.state = EnemyState.FLYING;
+                this.currentAnimName = 'fly';
+            }
+            return;
+        }
+
         // Other enemy types: timer-based attack
         this.attackTimer += deltaTime;
 
@@ -466,6 +626,18 @@ class Enemy {
     }
 
     updateFalling(deltaTime) {
+        // Update death animation for AGGRESSIVE drones while falling
+        if (this.type === EnemyType.AGGRESSIVE && this.animations && this.animations.death) {
+            if (this.currentAnimName !== 'death') {
+                this.currentAnimName = 'death';
+                this.animations.death.reset();
+            }
+            // Animation plays once (don't loop)
+            if (!this.animations.death.isComplete) {
+                this.animations.death.update(deltaTime);
+            }
+        }
+
         this.fallSpeed += this.fallGravity * deltaTime;
         this.y += this.fallSpeed * deltaTime;
         this.x += this.velX * 30 * deltaTime; // Drifting
@@ -794,7 +966,37 @@ class Enemy {
     }
 
     renderInterceptor(ctx) { // Aggressive
-        // Try sprite first
+        // Lazy initialize animations if needed
+        if (!this.animations) {
+            this.initAggressiveAnimations();
+        }
+
+        // Try animated sprite first
+        if (this.animations) {
+            const currentAnim = this.animations[this.currentAnimName];
+            if (currentAnim) {
+                ctx.save();
+
+                // Apply horizontal flip if facing left (skip during falling - use rotation instead)
+                if (this.state !== EnemyState.FALLING && !this.facingRight) {
+                    ctx.scale(-1, 1);
+                }
+
+                // Apply tilt based on vertical velocity (skip during falling)
+                if (this.state !== EnemyState.FALLING) {
+                    const tilt = Math.max(-0.35, Math.min(0.35, this.velY * 0.015));
+                    ctx.rotate(tilt);
+                }
+
+                // Render the animation at center
+                currentAnim.render(ctx, 0, 0);
+
+                ctx.restore();
+                return;
+            }
+        }
+
+        // Fallback: Try static sprite
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_interceptor') : null;
         if (sprite) {
             // Draw solid at +25% size: 50x40 from 40x32
