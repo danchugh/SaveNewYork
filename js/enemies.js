@@ -128,23 +128,41 @@ class Enemy {
         const frameSize = 64;
         const scale = 1.0;  // 64px frames displayed at native size
 
-        // Helper to create animation from sheet
+        // Helper to create animation from sheet with valid frame detection
         const createAnim = (assetKey, fps, mode) => {
             const sheet = AssetManager.getImage(assetKey);
             if (!sheet || sheet.width <= 0 || sheet.height <= 0) return null;
 
-            const framesPerRow = Math.floor(sheet.width / frameSize);
-            const rowCount = Math.floor(sheet.height / frameSize);
-            const frameCount = framesPerRow * rowCount;
+            // Use countValidFrames to detect empty frames in the sprite sheet
+            let frameInfo;
+            if (typeof countValidFrames === 'function') {
+                frameInfo = countValidFrames(sheet, frameSize, frameSize);
+            } else {
+                // Fallback if function not available
+                const framesPerRow = Math.floor(sheet.width / frameSize);
+                const rowCount = Math.floor(sheet.height / frameSize);
+                frameInfo = {
+                    frameCount: framesPerRow * rowCount,
+                    framesPerRow: framesPerRow,
+                    validFrameIndices: null
+                };
+            }
 
-            if (frameCount <= 0) return null;
+            if (frameInfo.frameCount <= 0) return null;
+
+            console.log(`Drone ${assetKey}:`, {
+                sheetSize: `${sheet.width}x${sheet.height}`,
+                validFrames: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow
+            });
 
             return new AnimatedSprite({
                 sheet: sheet,
                 frameWidth: frameSize,
                 frameHeight: frameSize,
-                frameCount: frameCount,
-                framesPerRow: framesPerRow,
+                frameCount: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow,
+                validFrameIndices: frameInfo.validFrameIndices,
                 fps: fps,
                 mode: mode,
                 scale: scale

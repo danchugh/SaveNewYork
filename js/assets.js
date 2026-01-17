@@ -16,7 +16,8 @@ const AssetManager = {
         'boss_main', 'miniboss_charger', 'miniboss_gunner',
         'civilian', 'construction_vehicle', 'construction_worker',
         'debris_concrete', 'debris_metal', 'debris_spark', 'debris_smoke',
-        'civilian_idle', 'civilian_help', 'civilian_fall'
+        'civilian_idle', 'civilian_help', 'civilian_fall',
+        'drone_fly', 'drone_attack', 'drone_death'
     ],
 
     // Asset manifest - add entries here as sprites are created
