@@ -139,7 +139,7 @@ class Civilian {
         }
 
         this.x = this.building.x + this.localX;
-        this.y = this.building.y + topRow * CONFIG.BLOCK_SIZE - 8;
+        this.y = this.building.y + topRow * CONFIG.BLOCK_SIZE - 15;
     }
 
     update(deltaTime, playerX, playerY) {
@@ -236,7 +236,7 @@ class Civilian {
 
             // Check if the block we were standing on is still there
             // Compare expected Y position with current
-            const expectedY = this.building.y + currentTopRow * CONFIG.BLOCK_SIZE - 8;
+            const expectedY = this.building.y + currentTopRow * CONFIG.BLOCK_SIZE - 15;
 
             // If we're higher than expected (our block got destroyed), fall!
             if (this.y < expectedY - 5) {
@@ -388,8 +388,15 @@ class CivilianManager {
     }
 
     spawnCivilian() {
-        // Pick a random building that has blocks
-        const validBuildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+        // Get buildings that already have a civilian
+        const occupiedBuildings = new Set(
+            this.civilians.filter(c => c.active).map(c => c.building)
+        );
+
+        // Pick a random building that has blocks AND doesn't already have a civilian
+        const validBuildings = buildingManager.buildings.filter(
+            b => b.getBlockCount() > 0 && !occupiedBuildings.has(b)
+        );
         if (validBuildings.length === 0) return;
 
         const building = validBuildings[Math.floor(Math.random() * validBuildings.length)];
