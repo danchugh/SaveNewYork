@@ -154,10 +154,12 @@ class Civilian {
                 // Check if animation cycled back to start (for pending idle switch)
                 if (this.pendingIdleSwitch && currentAnim.currentFrame < prevFrame) {
                     // Animation completed a cycle, switch back to idle
-                    this.currentAnimName = 'idle';
                     this.pendingIdleSwitch = false;
                     if (this.animations.idle) {
+                        this.currentAnimName = 'idle';
                         this.animations.idle.reset();
+                        // Update idle animation immediately so it's ready for render
+                        this.animations.idle.update(0);
                     }
                 }
             }

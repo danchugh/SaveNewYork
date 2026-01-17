@@ -10,6 +10,7 @@ const EnemyState = {
     FLYING: 'flying',
     ATTACKING: 'attacking',
     FALLING: 'falling',
+    DYING: 'dying',      // Death animation playing (frozen, no collision)
     DEAD: 'dead'
 };
 
@@ -59,6 +60,14 @@ class Enemy {
         this.fallGravity = 500;
         this.fallRotationSpeed = (Math.random() - 0.5) * 10;
 
+        // Animation system (for standard drones with sprite sheets)
+        this.animations = null;
+        this.currentAnimName = 'fly';
+        this.facingRight = true;  // For horizontal flip based on movement
+
+        // Attack collision data (for AOE damage at end of attack animation)
+        this.attackCollision = null;  // { building, row, col }
+
         this.active = true;
     }
 
@@ -107,8 +116,63 @@ class Enemy {
         }
     }
 
+    /**
+     * Initialize animated sprites for STANDARD drones
+     */
+    initDroneAnimations() {
+        if (this.animations) return; // Already initialized
+        if (this.type !== EnemyType.STANDARD) return; // Only for standard drones
+        if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
+
+        this.animations = {};
+        const frameSize = 64;
+        const scale = 1.0;  // 64px frames displayed at native size
+
+        // Helper to create animation from sheet
+        const createAnim = (assetKey, fps, mode) => {
+            const sheet = AssetManager.getImage(assetKey);
+            if (!sheet || sheet.width <= 0 || sheet.height <= 0) return null;
+
+            const framesPerRow = Math.floor(sheet.width / frameSize);
+            const rowCount = Math.floor(sheet.height / frameSize);
+            const frameCount = framesPerRow * rowCount;
+
+            if (frameCount <= 0) return null;
+
+            return new AnimatedSprite({
+                sheet: sheet,
+                frameWidth: frameSize,
+                frameHeight: frameSize,
+                frameCount: frameCount,
+                framesPerRow: framesPerRow,
+                fps: fps,
+                mode: mode,
+                scale: scale
+            });
+        };
+
+        // Create animations
+        this.animations.fly = createAnim('drone_fly', 8, 'loop');
+        this.animations.attack = createAnim('drone_attack', 10, 'once');
+        this.animations.death = createAnim('drone_death', 10, 'once');
+
+        console.log('Drone animations initialized:', {
+            fly: this.animations.fly ? 'loaded' : 'failed',
+            attack: this.animations.attack ? 'loaded' : 'failed',
+            death: this.animations.death ? 'loaded' : 'failed'
+        });
+    }
+
     update(deltaTime) {
         if (this.state === EnemyState.DEAD) return;
+
+        // Update animations for STANDARD drones
+        if (this.type === EnemyType.STANDARD && this.animations) {
+            const currentAnim = this.animations[this.currentAnimName];
+            if (currentAnim) {
+                currentAnim.update(deltaTime);
+            }
+        }
 
         if (this.state === EnemyState.FLYING) {
             this.updateFlying(deltaTime);
@@ -116,11 +180,15 @@ class Enemy {
             this.updateAttacking(deltaTime);
         } else if (this.state === EnemyState.FALLING) {
             this.updateFalling(deltaTime);
+        } else if (this.state === EnemyState.DYING) {
+            this.updateDying(deltaTime);
         }
 
-        // Banking visual based on X velocity
-        const targetRot = this.velX * 0.5;
-        this.rotation += (targetRot - this.rotation) * deltaTime * 5;
+        // Banking visual based on X velocity (skip for dying drones)
+        if (this.state !== EnemyState.DYING) {
+            const targetRot = this.velX * 0.5;
+            this.rotation += (targetRot - this.rotation) * deltaTime * 5;
+        }
     }
 
     updateFlying(deltaTime) {
@@ -172,20 +240,47 @@ class Enemy {
             this.collisionDamageCooldown -= deltaTime;
         }
 
-        // Change direction - more aggressive building seeking
+        // Track facing direction for STANDARD drones
+        if (this.type === EnemyType.STANDARD) {
+            this.facingRight = this.velX >= 0;
+        }
+
+        // Change direction - roaming behavior
         this.directionChangeTimer += deltaTime;
         if (this.directionChangeTimer >= this.directionChangeInterval) {
             this.directionChangeTimer = 0;
-            this.directionChangeInterval = 0.3 + Math.random() * 0.5; // Faster decisions
+            this.directionChangeInterval = 0.3 + Math.random() * 0.5;
 
-            // 80% chance to seek building, 20% random wander
-            if (this.type !== EnemyType.BOMBER && Math.random() < 0.8) {
-                this.seekGenericTarget();
-            } else {
-                // Random wander
-                this.velX += (Math.random() - 0.5) * 2;
-                this.velY += (Math.random() - 0.5) * 1;
-                this.normalizeVelocity();
+            if (this.type === EnemyType.STANDARD) {
+                // STANDARD drones: roaming behavior
+                const rand = Math.random();
+                if (rand < 0.1) {
+                    // 10% chance to reverse direction
+                    this.velX = -this.velX;
+                } else if (rand < 0.4) {
+                    // 30% chance to seek building target
+                    this.seekGenericTarget();
+                } else {
+                    // 60% chance to wander freely
+                    this.velX += (Math.random() - 0.5) * 2;
+                    this.velY += (Math.random() - 0.5) * 1;
+                    this.normalizeVelocity();
+                }
+
+                // Altitude preference: 70% chance to prefer lower altitude
+                if (Math.random() < 0.7 && this.y < 300) {
+                    this.velY = Math.abs(this.velY) * 0.5 + 0.3; // Bias downward
+                    this.normalizeVelocity();
+                }
+            } else if (this.type !== EnemyType.BOMBER) {
+                // Other types: 80% seek building, 20% wander
+                if (Math.random() < 0.8) {
+                    this.seekGenericTarget();
+                } else {
+                    this.velX += (Math.random() - 0.5) * 2;
+                    this.velY += (Math.random() - 0.5) * 1;
+                    this.normalizeVelocity();
+                }
             }
         }
 
@@ -197,10 +292,26 @@ class Enemy {
         // Check building collision BEFORE moving
         const collisionResult = this.checkBuildingCollisionDamage(newX, newY);
         if (collisionResult.hit) {
-            // Bounce off building
-            this.velX = -this.velX + (Math.random() - 0.5) * 0.5;
-            this.velY = -this.velY + (Math.random() - 0.5) * 0.5;
-            this.normalizeVelocity();
+            if (this.type === EnemyType.STANDARD && collisionResult.didDamage) {
+                // STANDARD drone: switch to ATTACKING state for attack animation
+                this.state = EnemyState.ATTACKING;
+                this.currentAnimName = 'attack';
+                if (this.animations && this.animations.attack) {
+                    this.animations.attack.reset();
+                }
+                // Store collision data for AOE damage at end of animation
+                this.attackCollision = {
+                    building: collisionResult.building,
+                    row: collisionResult.row,
+                    col: collisionResult.col
+                };
+                return; // Don't move, stay in place for attack animation
+            } else {
+                // Other types or cooldown active: bounce off building
+                this.velX = -this.velX + (Math.random() - 0.5) * 0.5;
+                this.velY = -this.velY + (Math.random() - 0.5) * 0.5;
+                this.normalizeVelocity();
+            }
         } else {
             this.x = newX;
             this.y = newY;
@@ -246,6 +357,60 @@ class Enemy {
     }
 
     updateAttacking(deltaTime) {
+        // STANDARD drones: animation-based attack
+        if (this.type === EnemyType.STANDARD) {
+            // Stay frozen in place (no movement)
+            // Check if attack animation completed by detecting frame reset
+            if (this.animations && this.animations.attack) {
+                const anim = this.animations.attack;
+                const prevFrame = anim.currentFrame;
+                anim.update(deltaTime);
+
+                // Animation completed when it resets to frame 0 (once mode stops at last frame)
+                // For 'once' mode, check if we're at the last frame
+                if (anim.currentFrame === anim.frameCount - 1 ||
+                    (prevFrame > 0 && anim.currentFrame === 0)) {
+                    // Attack animation complete - deal 3x3 AOE damage
+                    if (this.attackCollision) {
+                        const { building, row, col } = this.attackCollision;
+
+                        // 3x3 AOE damage centered on collision point
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                const nr = row + dr;
+                                const nc = col + dc;
+                                if (nr >= 0 && nr < building.heightBlocks &&
+                                    nc >= 0 && nc < building.widthBlocks &&
+                                    building.blocks[nr]?.[nc]) {
+                                    building.destroyBlock(nr, nc);
+                                }
+                            }
+                        }
+
+                        // Visual feedback
+                        if (typeof EffectsManager !== 'undefined') {
+                            const pos = building.getBlockWorldPosition(row, col);
+                            EffectsManager.addExplosion(pos.x + CONFIG.BLOCK_SIZE / 2, pos.y + CONFIG.BLOCK_SIZE / 2, 25, '#ff8800');
+                        }
+
+                        this.attackCollision = null;
+                    }
+
+                    // Return to flying state
+                    this.state = EnemyState.FLYING;
+                    this.currentAnimName = 'fly';
+                    if (this.animations.fly) {
+                        this.animations.fly.reset();
+                    }
+                    this.velY = -0.8; // Fly up
+                    this.velX = (Math.random() - 0.5) * 0.5;
+                    this.normalizeVelocity();
+                }
+            }
+            return;
+        }
+
+        // Other enemy types: timer-based attack
         this.attackTimer += deltaTime;
 
         // Slight hover shake
@@ -338,6 +503,38 @@ class Enemy {
         }
     }
 
+    updateDying(deltaTime) {
+        // STANDARD drones: play death animation then explode
+        // Position is frozen (no movement)
+        // No collision detection (can't be hit again)
+
+        if (this.animations && this.animations.death) {
+            const anim = this.animations.death;
+            const prevFrame = anim.currentFrame;
+            anim.update(deltaTime);
+
+            // Animation completed when we reach the last frame (once mode)
+            if (anim.currentFrame === anim.frameCount - 1 ||
+                (prevFrame > 0 && anim.currentFrame === 0)) {
+                // Death animation complete - explode and remove
+                this.state = EnemyState.DEAD;
+                this.active = false;
+
+                // Explosion effect
+                if (typeof EffectsManager !== 'undefined') {
+                    EffectsManager.addAnimatedExplosion(this.x, this.y, 'enemy', 15);
+                }
+                if (typeof SoundManager !== 'undefined') {
+                    SoundManager.enemyDeath();
+                }
+            }
+        } else {
+            // Fallback: no animation, just die immediately
+            this.state = EnemyState.DEAD;
+            this.active = false;
+        }
+    }
+
     checkBuildingCollision(x, y) {
         if (!buildingManager) return false;
         // Check if position collides with any building block
@@ -362,8 +559,9 @@ class Enemy {
     }
 
     // Check collision AND damage buildings (with cooldown)
+    // For STANDARD drones, damage is deferred to attack animation completion
     checkBuildingCollisionDamage(x, y) {
-        if (!buildingManager) return { hit: false };
+        if (!buildingManager) return { hit: false, didDamage: false };
 
         const halfW = this.width / 2;
         const halfH = this.height / 2;
@@ -388,6 +586,13 @@ class Enemy {
 
                         // Collision detected! Can we do damage?
                         if (this.collisionDamageCooldown <= 0) {
+                            // STANDARD drones: defer damage to attack animation completion
+                            if (this.type === EnemyType.STANDARD) {
+                                this.collisionDamageCooldown = 3.0; // 3 second cooldown
+                                return { hit: true, didDamage: true, building, row, col };
+                            }
+
+                            // Other types: immediate damage
                             building.destroyBlock(row, col);
                             this.collisionDamageCooldown = 3.0; // 3 second cooldown
 
@@ -395,14 +600,16 @@ class Enemy {
                             if (typeof EffectsManager !== 'undefined') {
                                 EffectsManager.addExplosion(pos.x + pos.width / 2, pos.y + pos.height / 2, 12, '#ff8800');
                             }
+                            return { hit: true, didDamage: true, building, row, col };
                         }
 
-                        return { hit: true, building, row, col };
+                        // Cooldown active, no damage
+                        return { hit: true, didDamage: false, building, row, col };
                     }
                 }
             }
         }
-        return { hit: false };
+        return { hit: false, didDamage: false };
     }
 
     die(forceImmediate = false) {
@@ -412,6 +619,16 @@ class Enemy {
             this.state = EnemyState.FALLING;
             this.fallSpeed = -100; // Hop up first
             if (typeof SoundManager !== 'undefined') SoundManager.enemyFalling();
+            return;
+        }
+
+        // STANDARD drones: play death animation before dying
+        if (!forceImmediate && this.type === EnemyType.STANDARD && this.state !== EnemyState.DYING && this.animations) {
+            this.state = EnemyState.DYING;
+            this.currentAnimName = 'death';
+            if (this.animations.death) {
+                this.animations.death.reset();
+            }
             return;
         }
 
@@ -486,7 +703,35 @@ class Enemy {
     // --- RENDER HELPERS ---
 
     renderDrone(ctx) { // Standard
-        // Try sprite first
+        // Lazy initialize animations if needed
+        if (!this.animations) {
+            this.initDroneAnimations();
+        }
+
+        // Try animated sprite first
+        if (this.animations) {
+            const currentAnim = this.animations[this.currentAnimName];
+            if (currentAnim) {
+                ctx.save();
+
+                // Apply horizontal flip if facing left
+                if (!this.facingRight) {
+                    ctx.scale(-1, 1);
+                }
+
+                // Apply tilt based on vertical velocity (±20° max)
+                const tilt = Math.max(-0.35, Math.min(0.35, this.velY * 0.015));
+                ctx.rotate(tilt);
+
+                // Render the animation at center
+                currentAnim.render(ctx, 0, 0);
+
+                ctx.restore();
+                return;
+            }
+        }
+
+        // Fallback: Try static sprite
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_drone') : null;
         if (sprite) {
             // Draw solid (no additive blending) at +25% size: 40x40 from 32x32

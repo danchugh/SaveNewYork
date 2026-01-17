@@ -36,6 +36,11 @@ const AssetManager = {
             'enemy_carrier': 'assets/enemy_carrier.png',
             'enemy_missile': 'assets/enemy_missile.png',
 
+            // Drone animation sprite sheets (64x64 frames)
+            'drone_fly': 'assets/64x64_Drone_Fly.png',
+            'drone_attack': 'assets/64x64_Drone_Attack.png',
+            'drone_death': 'assets/64x64_Drone_Death.png',
+
             // Phase 4 - Bosses & Mini-Bosses
             'boss_main': 'assets/boss_main.png',
             'miniboss_charger': 'assets/miniboss_charger.png',
