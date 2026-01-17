@@ -14,6 +14,9 @@ const EnemyState = {
     DEAD: 'dead'
 };
 
+// Global counter for carrier-spawned drones (don't count toward wave completion)
+let carrierSpawnedDroneCount = 0;
+
 class Enemy {
     constructor(x, y, type) {
         this.x = x;
@@ -75,6 +78,13 @@ class Enemy {
         this.attackVelX = 0;             // Stored velocity direction for projectiles
         this.attackVelY = 0;
 
+        // Carrier-specific properties
+        this.carrierMovingRight = false;  // Direction carrier is flying
+        this.carrierAttackCooldown = CONFIG.CARRIER_ATTACK_COOLDOWN_MIN +
+            Math.random() * (CONFIG.CARRIER_ATTACK_COOLDOWN_MAX - CONFIG.CARRIER_ATTACK_COOLDOWN_MIN);
+        this.carrierAttackFrameTriggered = false;  // Track if drones spawned this attack
+        this.isCarrierSpawned = false;    // Flag for drones spawned by carriers (don't count for wave)
+
         this.active = true;
     }
 
@@ -100,10 +110,12 @@ class Enemy {
                 this.attackTimeMin = 0.5; this.attackTimeMax = 1.0;
                 break;
 
-            case EnemyType.SPLITTER: // Carrier (Cyan)
-                this.speed = 50;
-                this.width = 40; this.height = 30; // +25% from 32x24
-                this.attackTimeMin = 2.0; this.attackTimeMax = 4.0;
+            case EnemyType.SPLITTER: // Carrier (96x96 sprite)
+                this.speed = CONFIG.CARRIER_SPEED;
+                this.health = 3;  // Takes 3 hits to kill
+                this.width = 96; this.height = 96;
+                this.attackTimeMin = CONFIG.CARRIER_ATTACK_COOLDOWN_MIN;
+                this.attackTimeMax = CONFIG.CARRIER_ATTACK_COOLDOWN_MAX;
                 break;
 
             case EnemyType.BOMBER: // Missile (Orange)
@@ -252,11 +264,75 @@ class Enemy {
         });
     }
 
+    /**
+     * Initialize animated sprites for CARRIER (SPLITTER type)
+     */
+    initCarrierAnimations() {
+        if (this.animations) return; // Already initialized
+        if (this.type !== EnemyType.SPLITTER) return; // Only for carriers
+        if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
+
+        this.animations = {};
+        const frameSize = 96;  // 96x96 frames for carrier
+        const scale = 1.0;
+
+        // Helper to create animation from sheet with valid frame detection
+        const createAnim = (assetKey, fps, mode) => {
+            const sheet = AssetManager.getImage(assetKey);
+            if (!sheet || sheet.width <= 0 || sheet.height <= 0) return null;
+
+            // Use countValidFrames to detect empty frames in the sprite sheet
+            let frameInfo;
+            if (typeof countValidFrames === 'function') {
+                frameInfo = countValidFrames(sheet, frameSize, frameSize);
+            } else {
+                const framesPerRow = Math.floor(sheet.width / frameSize);
+                const rowCount = Math.floor(sheet.height / frameSize);
+                frameInfo = {
+                    frameCount: framesPerRow * rowCount,
+                    framesPerRow: framesPerRow,
+                    validFrameIndices: null
+                };
+            }
+
+            if (frameInfo.frameCount <= 0) return null;
+
+            console.log(`Carrier ${assetKey}:`, {
+                sheetSize: `${sheet.width}x${sheet.height}`,
+                validFrames: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow
+            });
+
+            return new AnimatedSprite({
+                sheet: sheet,
+                frameWidth: frameSize,
+                frameHeight: frameSize,
+                frameCount: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow,
+                validFrameIndices: frameInfo.validFrameIndices,
+                fps: fps,
+                mode: mode,
+                scale: scale
+            });
+        };
+
+        // Create animations
+        this.animations.fly = createAnim('carrier_fly', 8, 'loop');
+        this.animations.attack = createAnim('carrier_attack', 10, 'once');
+        this.animations.death = createAnim('carrier_death', 10, 'once');
+
+        console.log('Carrier animations initialized:', {
+            fly: this.animations.fly ? 'loaded' : 'failed',
+            attack: this.animations.attack ? 'loaded' : 'failed',
+            death: this.animations.death ? 'loaded' : 'failed'
+        });
+    }
+
     update(deltaTime) {
         if (this.state === EnemyState.DEAD) return;
 
-        // Update animations for STANDARD and AGGRESSIVE drones
-        if ((this.type === EnemyType.STANDARD || this.type === EnemyType.AGGRESSIVE) && this.animations) {
+        // Update animations for STANDARD, AGGRESSIVE, and SPLITTER (carrier) types
+        if ((this.type === EnemyType.STANDARD || this.type === EnemyType.AGGRESSIVE || this.type === EnemyType.SPLITTER) && this.animations) {
             const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
                 currentAnim.update(deltaTime);
@@ -321,6 +397,62 @@ class Enemy {
             }
         }
 
+        // Carrier (SPLITTER) Logic - flies straight across screen at high altitude
+        if (this.type === EnemyType.SPLITTER) {
+            // Track facing direction for carrier
+            this.facingRight = this.carrierMovingRight;
+
+            // Calculate minimum altitude (tallest building + buffer)
+            let maxBuildingTop = CONFIG.SKY_TOP + 100;
+            if (typeof buildingManager !== 'undefined') {
+                for (const building of buildingManager.buildings) {
+                    if (building.y < maxBuildingTop) {
+                        maxBuildingTop = building.y;
+                    }
+                }
+            }
+            const minAltitude = maxBuildingTop - CONFIG.CARRIER_ALTITUDE_BUFFER;
+
+            // Clamp Y to never go below minimum altitude
+            if (this.y > minAltitude) {
+                this.y = minAltitude;
+            }
+
+            // Move straight across screen
+            const direction = this.carrierMovingRight ? 1 : -1;
+            this.x += direction * this.speed * deltaTime;
+
+            // Update attack cooldown
+            this.carrierAttackCooldown -= deltaTime;
+
+            // Check for attack (play attack animation, spawn drones at frame 28)
+            if (this.carrierAttackCooldown <= 0 && this.state === EnemyState.FLYING) {
+                // Check global drone limit before attacking
+                if (carrierSpawnedDroneCount < CONFIG.CARRIER_MAX_SPAWNED_DRONES) {
+                    this.state = EnemyState.ATTACKING;
+                    this.currentAnimName = 'attack';
+                    this.carrierAttackFrameTriggered = false;
+                    if (this.animations && this.animations.attack) {
+                        this.animations.attack.reset();
+                    }
+                    // Reset cooldown
+                    this.carrierAttackCooldown = CONFIG.CARRIER_ATTACK_COOLDOWN_MIN +
+                        Math.random() * (CONFIG.CARRIER_ATTACK_COOLDOWN_MAX - CONFIG.CARRIER_ATTACK_COOLDOWN_MIN);
+                }
+            }
+
+            // Check for despawn (completely off-screen)
+            const offScreenLeft = this.x < -this.width;
+            const offScreenRight = this.x > CONFIG.CANVAS_WIDTH + this.width;
+            if ((this.carrierMovingRight && offScreenRight) || (!this.carrierMovingRight && offScreenLeft)) {
+                // Silent despawn - counts toward wave, no points
+                this.state = EnemyState.DEAD;
+                this.active = false;
+                console.log('Carrier despawned off-screen');
+            }
+            return;
+        }
+
         // Standard Flight
         this.flightPhase += deltaTime * this.swoopFrequency;
 
@@ -338,17 +470,22 @@ class Enemy {
         if (this.type === EnemyType.AGGRESSIVE) {
             this.rangedAttackCooldown -= deltaTime;
 
-            // Random chance to attack (% per second), min 5s, max 20s between attacks
-            if (this.rangedAttackCooldown <= 0 && Math.random() < 0.1 * deltaTime) {
+            // Random chance to attack (20% per second), min 5s, max 20s between attacks
+            if (this.rangedAttackCooldown <= 0 && Math.random() < 0.2 * deltaTime) {
                 // Trigger ranged attack - switch to ATTACKING state
                 this.state = EnemyState.ATTACKING;
                 this.currentAnimName = 'attack';
                 if (this.animations && this.animations.attack) {
                     this.animations.attack.reset();
                 }
-                // Store current velocity direction for projectiles
+                // Store velocity direction for projectiles (horizontal or diagonal down, never up)
                 this.attackVelX = this.velX;
-                this.attackVelY = this.velY;
+                this.attackVelY = Math.max(0, this.velY); // Clamp to 0 or positive (down)
+                // If both are near zero, default to facing direction
+                if (Math.abs(this.attackVelX) < 0.1 && Math.abs(this.attackVelY) < 0.1) {
+                    this.attackVelX = this.facingRight ? 1 : -1;
+                    this.attackVelY = 0.3; // Slight downward angle
+                }
                 this.projectilesToFire = 3;
                 this.projectileFireTimer = 0;
                 // Reset cooldown (5-20 seconds)
@@ -588,6 +725,93 @@ class Enemy {
             return;
         }
 
+        // CARRIER (SPLITTER): continues moving, spawns drones at frame 28
+        if (this.type === EnemyType.SPLITTER) {
+            // Keep moving during attack (same as flying behavior)
+            const direction = this.carrierMovingRight ? 1 : -1;
+            this.x += direction * this.speed * deltaTime;
+
+            // Calculate minimum altitude and clamp
+            let maxBuildingTop = CONFIG.SKY_TOP + 100;
+            if (typeof buildingManager !== 'undefined') {
+                for (const building of buildingManager.buildings) {
+                    if (building.y < maxBuildingTop) {
+                        maxBuildingTop = building.y;
+                    }
+                }
+            }
+            const minAltitude = maxBuildingTop - CONFIG.CARRIER_ALTITUDE_BUFFER;
+            if (this.y > minAltitude) {
+                this.y = minAltitude;
+            }
+
+            if (this.animations && this.animations.attack) {
+                const anim = this.animations.attack;
+
+                // Check for frame 28 to spawn drones (only once per attack)
+                if (!this.carrierAttackFrameTriggered && anim.currentFrame >= CONFIG.CARRIER_SPAWN_FRAME) {
+                    this.carrierAttackFrameTriggered = true;
+
+                    // Spawn 2 drones if under global limit
+                    const dronesToSpawn = Math.min(2, CONFIG.CARRIER_MAX_SPAWNED_DRONES - carrierSpawnedDroneCount);
+                    for (let i = 0; i < dronesToSpawn; i++) {
+                        // Spawn drone at carrier position, slightly offset
+                        const droneX = this.x + (i === 0 ? -30 : 30);
+                        const droneY = this.y + 40;
+
+                        // Determine drone type based on config
+                        let droneType = EnemyType.STANDARD;
+                        if (CONFIG.CARRIER_SPAWN_DRONE_TYPE === 'aggressive') {
+                            droneType = EnemyType.AGGRESSIVE;
+                        } else if (CONFIG.CARRIER_SPAWN_DRONE_TYPE === 'random') {
+                            droneType = Math.random() < 0.5 ? EnemyType.STANDARD : EnemyType.AGGRESSIVE;
+                        }
+
+                        // Create the drone
+                        if (typeof enemyManager !== 'undefined') {
+                            const drone = new Enemy(droneX, droneY, droneType);
+                            drone.wasActive = true;
+                            drone.isCarrierSpawned = true;  // Mark as carrier-spawned
+                            drone.velY = 0.5;  // Start moving downward
+                            drone.velX = (Math.random() - 0.5) * 0.5;
+                            drone.normalizeVelocity();
+                            enemyManager.enemies.push(drone);
+                            carrierSpawnedDroneCount++;
+                        }
+                    }
+
+                    // Visual feedback
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addExplosion(this.x, this.y + 30, 15, '#00ffff');
+                    }
+                    console.log(`Carrier spawned ${dronesToSpawn} drones (global count: ${carrierSpawnedDroneCount})`);
+                }
+
+                // Check if animation complete - return to flying
+                if (anim.isComplete || anim.currentFrame === anim.frameCount - 1) {
+                    this.state = EnemyState.FLYING;
+                    this.currentAnimName = 'fly';
+                    if (this.animations.fly) {
+                        this.animations.fly.reset();
+                    }
+                }
+            } else {
+                // No animation, just return to flying
+                this.state = EnemyState.FLYING;
+                this.currentAnimName = 'fly';
+            }
+
+            // Check for despawn even during attack
+            const offScreenLeft = this.x < -this.width;
+            const offScreenRight = this.x > CONFIG.CANVAS_WIDTH + this.width;
+            if ((this.carrierMovingRight && offScreenRight) || (!this.carrierMovingRight && offScreenLeft)) {
+                this.state = EnemyState.DEAD;
+                this.active = false;
+                console.log('Carrier despawned off-screen during attack');
+            }
+            return;
+        }
+
         // Other enemy types: timer-based attack
         this.attackTimer += deltaTime;
 
@@ -638,6 +862,18 @@ class Enemy {
             }
         }
 
+        // Update death animation for CARRIER (SPLITTER) while falling
+        if (this.type === EnemyType.SPLITTER && this.animations && this.animations.death) {
+            if (this.currentAnimName !== 'death') {
+                this.currentAnimName = 'death';
+                this.animations.death.reset();
+            }
+            // Animation plays once (don't loop)
+            if (!this.animations.death.isComplete) {
+                this.animations.death.update(deltaTime);
+            }
+        }
+
         this.fallSpeed += this.fallGravity * deltaTime;
         this.y += this.fallSpeed * deltaTime;
         this.x += this.velX * 30 * deltaTime; // Drifting
@@ -654,13 +890,31 @@ class Enemy {
                     const row = Math.floor((this.y - building.y) / 20);
                     if (row >= 0 && row < building.heightBlocks && col >= 0 && col < building.widthBlocks) {
                         if (building.blocks[row][col]) {
-                            // Crash! Destroy 3-5 blocks for aggressive enemies
-                            const blocksToDestroy = 3 + Math.floor(Math.random() * 3); // 3-5 blocks
+                            // Determine damage based on enemy type
+                            let blocksToDestroy;
+                            let explosionSize;
+                            let shakeAmount;
+
+                            if (this.type === EnemyType.SPLITTER) {
+                                // Carrier crash: 6-10 blocks damage (CONFIG values)
+                                blocksToDestroy = CONFIG.CARRIER_DEATH_DAMAGE_MIN +
+                                    Math.floor(Math.random() * (CONFIG.CARRIER_DEATH_DAMAGE_MAX - CONFIG.CARRIER_DEATH_DAMAGE_MIN + 1));
+                                explosionSize = 50;
+                                shakeAmount = 15;
+                            } else {
+                                // Other enemies: 3-5 blocks
+                                blocksToDestroy = 3 + Math.floor(Math.random() * 3);
+                                explosionSize = 30;
+                                shakeAmount = 8;
+                            }
+
                             let destroyed = 0;
 
                             // Destroy blocks in a splash pattern around impact point
-                            for (let dr = -1; dr <= 1 && destroyed < blocksToDestroy; dr++) {
-                                for (let dc = -1; dc <= 1 && destroyed < blocksToDestroy; dc++) {
+                            // Use larger radius for carrier
+                            const maxRadius = this.type === EnemyType.SPLITTER ? 2 : 1;
+                            for (let dr = -maxRadius; dr <= maxRadius && destroyed < blocksToDestroy; dr++) {
+                                for (let dc = -maxRadius; dc <= maxRadius && destroyed < blocksToDestroy; dc++) {
                                     const nr = row + dr;
                                     const nc = col + dc;
                                     if (nr >= 0 && nr < building.heightBlocks &&
@@ -675,8 +929,8 @@ class Enemy {
                             // Visual feedback
                             if (typeof EffectsManager !== 'undefined') {
                                 const pos = building.getBlockWorldPosition(row, col);
-                                EffectsManager.addExplosion(pos.x + 10, pos.y + 10, 30, '#ff4400');
-                                EffectsManager.shake(8);
+                                EffectsManager.addExplosion(pos.x + 10, pos.y + 10, explosionSize, '#ff4400');
+                                EffectsManager.shake(shakeAmount);
                             }
 
                             this.die(true);
@@ -803,6 +1057,12 @@ class Enemy {
     }
 
     die(forceImmediate = false) {
+        // Decrement carrier-spawned drone count if this was spawned by a carrier
+        if (this.isCarrierSpawned) {
+            carrierSpawnedDroneCount = Math.max(0, carrierSpawnedDroneCount - 1);
+            console.log(`Carrier-spawned drone died (global count: ${carrierSpawnedDroneCount})`);
+        }
+
         // Handle Death Logic
         if (!forceImmediate && this.type === EnemyType.AGGRESSIVE && this.state !== EnemyState.FALLING) {
             // Aggressive ones fall first
@@ -822,11 +1082,28 @@ class Enemy {
             return;
         }
 
-        if (this.type === EnemyType.SPLITTER && this.state !== EnemyState.DEAD) {
-            // Split
-            this.spawnSplitEnemies();
-            if (typeof SoundManager !== 'undefined') SoundManager.enemySplit();
-        } else if (this.type === EnemyType.TANK && this.health > 1 && !forceImmediate) {
+        // CARRIER (SPLITTER): takes multiple hits, then falls with death animation
+        if (this.type === EnemyType.SPLITTER) {
+            if (this.health > 1 && !forceImmediate) {
+                this.health--;
+                if (typeof SoundManager !== 'undefined') SoundManager.tankHit();
+                if (typeof EffectsManager !== 'undefined') EffectsManager.addExplosion(this.x, this.y, 15, '#ffffff');
+                return; // Survives
+            }
+            // Final hit - fall with death animation
+            if (this.state !== EnemyState.FALLING) {
+                this.state = EnemyState.FALLING;
+                this.currentAnimName = 'death';
+                if (this.animations && this.animations.death) {
+                    this.animations.death.reset();
+                }
+                this.fallSpeed = -50; // Small hop up
+                if (typeof SoundManager !== 'undefined') SoundManager.enemyFalling();
+                return;
+            }
+        }
+
+        if (this.type === EnemyType.TANK && this.health > 1 && !forceImmediate) {
             this.health--;
             if (typeof SoundManager !== 'undefined') SoundManager.tankHit();
             // Flash
@@ -1060,31 +1337,83 @@ class Enemy {
         }
     }
 
-    renderCarrier(ctx) { // Splitter
-        // Try sprite first
+    renderCarrier(ctx) { // Splitter (96x96 sprite)
+        // Lazy initialize animations if needed
+        if (!this.animations) {
+            this.initCarrierAnimations();
+        }
+
+        // Try animated sprite first
+        if (this.animations) {
+            const currentAnim = this.animations[this.currentAnimName];
+            if (currentAnim) {
+                ctx.save();
+
+                // Apply horizontal flip based on movement direction (skip during falling)
+                if (this.state !== EnemyState.FALLING && !this.facingRight) {
+                    ctx.scale(-1, 1);
+                }
+
+                // Render the animation at center
+                currentAnim.render(ctx, 0, 0);
+
+                // Draw health bar above carrier (only when not falling)
+                if (this.state !== EnemyState.FALLING && this.health > 0) {
+                    // Need to unflip for health bar to render correctly
+                    if (!this.facingRight) {
+                        ctx.scale(-1, 1);
+                    }
+                    for (let i = 0; i < this.health; i++) {
+                        ctx.fillStyle = '#4ade80';
+                        ctx.fillRect(-20 + i * 14, -55, 10, 5);
+                    }
+                }
+
+                ctx.restore();
+                return;
+            }
+        }
+
+        // Fallback: Try static sprite
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_carrier') : null;
         if (sprite) {
-            // Draw solid at +25% size: 80x50 from 64x40
-            ctx.drawImage(sprite, -40, -25, 80, 50);
+            // Draw solid at 96x96 size
+            ctx.drawImage(sprite, -48, -48, 96, 96);
+
+            // Draw health bar
+            if (this.health > 0) {
+                for (let i = 0; i < this.health; i++) {
+                    ctx.fillStyle = '#4ade80';
+                    ctx.fillRect(-20 + i * 14, -55, 10, 5);
+                }
+            }
             return;
         }
 
         // Fallback: Cyan angular shape
         ctx.fillStyle = '#0e7490';
         ctx.beginPath();
-        ctx.moveTo(0, -12);
-        ctx.lineTo(16, 0);
-        ctx.lineTo(0, 12);
-        ctx.lineTo(-16, 0);
+        ctx.moveTo(0, -20);
+        ctx.lineTo(30, 0);
+        ctx.lineTo(0, 20);
+        ctx.lineTo(-30, 0);
         ctx.closePath();
         ctx.fill();
 
         ctx.fillStyle = '#06b6d4';
-        ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
 
         ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(20, 0); ctx.stroke();
+
+        // Draw health bar
+        if (this.health > 0) {
+            for (let i = 0; i < this.health; i++) {
+                ctx.fillStyle = '#4ade80';
+                ctx.fillRect(-20 + i * 14, -35, 10, 5);
+            }
+        }
     }
 
     renderMissile(ctx) { // Bomber
@@ -1848,26 +2177,58 @@ class EnemyManager {
         if (this.enemies.length >= this.maxConcurrentEnemies) return;
 
         const type = this.pickEnemyType();
-        const side = Math.floor(Math.random() * 3);
         let x, y;
+        let carrierFromLeft = false;
 
-        switch (side) {
-            case 0: // Top
-                x = 80 + Math.random() * (CONFIG.CANVAS_WIDTH - 160);
-                y = CONFIG.SKY_TOP;
-                break;
-            case 1: // Left
-                x = 0;
-                y = CONFIG.SKY_TOP + 30 + Math.random() * 100;
-                break;
-            case 2: // Right
-                x = CONFIG.CANVAS_WIDTH;
-                y = CONFIG.SKY_TOP + 30 + Math.random() * 100;
-                break;
+        // Carriers always spawn from left or right side
+        if (type === EnemyType.SPLITTER) {
+            carrierFromLeft = Math.random() < 0.5;
+
+            // Calculate spawn altitude (above tallest building)
+            let maxBuildingTop = CONFIG.SKY_TOP + 100;
+            if (typeof buildingManager !== 'undefined') {
+                for (const building of buildingManager.buildings) {
+                    if (building.y < maxBuildingTop) {
+                        maxBuildingTop = building.y;
+                    }
+                }
+            }
+            y = maxBuildingTop - CONFIG.CARRIER_ALTITUDE_BUFFER;
+
+            if (carrierFromLeft) {
+                x = -48; // Start just off-screen left
+            } else {
+                x = CONFIG.CANVAS_WIDTH + 48; // Start just off-screen right
+            }
+        } else {
+            // Other enemies use normal spawn logic
+            const side = Math.floor(Math.random() * 3);
+
+            switch (side) {
+                case 0: // Top
+                    x = 80 + Math.random() * (CONFIG.CANVAS_WIDTH - 160);
+                    y = CONFIG.SKY_TOP;
+                    break;
+                case 1: // Left
+                    x = 0;
+                    y = CONFIG.SKY_TOP + 30 + Math.random() * 100;
+                    break;
+                case 2: // Right
+                    x = CONFIG.CANVAS_WIDTH;
+                    y = CONFIG.SKY_TOP + 30 + Math.random() * 100;
+                    break;
+            }
         }
 
         const enemy = new Enemy(x, y, type);
         enemy.wasActive = true; // For death tracking
+
+        // Set carrier direction based on spawn side
+        if (type === EnemyType.SPLITTER) {
+            enemy.carrierMovingRight = carrierFromLeft; // If from left, move right
+            enemy.facingRight = carrierFromLeft;
+        }
+
         this.enemies.push(enemy);
         this.enemiesRemainingInWave--;
     }
