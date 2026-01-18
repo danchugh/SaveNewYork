@@ -19,7 +19,8 @@ const AssetManager = {
         'civilian_idle', 'civilian_help', 'civilian_fall',
         'drone_fly', 'drone_attack', 'drone_death',
         'drone_aggressive_fly', 'drone_aggressive_attack', 'drone_aggressive_death',
-        'carrier_fly', 'carrier_attack', 'carrier_death'
+        'carrier_fly', 'carrier_attack', 'carrier_death',
+        'gunship_fly', 'gunship_attack', 'gunship_death'
     ],
 
     // Asset manifest - add entries here as sprites are created
@@ -53,6 +54,11 @@ const AssetManager = {
             'carrier_fly': 'assets/96x96_Carrier_Fly.png',
             'carrier_attack': 'assets/96x96_Carrier_Attack.png',
             'carrier_death': 'assets/96x96_Carrier_Death.png',
+
+            // Gunship animation sprite sheets (96x96 frames)
+            'gunship_fly': 'assets/96x96_Gunship_Fly.png',
+            'gunship_attack': 'assets/96x96_Gunship_Attack.png',
+            'gunship_death': 'assets/96x96_Gunship_Death.png',
 
             // Phase 4 - Bosses & Mini-Bosses
             'boss_main': 'assets/boss_main.png',

@@ -102,12 +102,20 @@ class Enemy {
                 this.attackTimeMin = 0.5; this.attackTimeMax = 1.5;
                 break;
 
-            case EnemyType.TANK: // Heavy Gunship (Green)
-                this.speed = 35;
-                this.health = 4;
-                this.width = 50; this.height = 38; // +25% from 40x30
-                this.blocksToDestroy = 3; // Huge damage
-                this.attackTimeMin = 0.5; this.attackTimeMax = 1.0;
+            case EnemyType.TANK: // Heavy Gunship (96x96 sprite)
+                this.speed = CONFIG.GUNSHIP_SPEED;
+                this.health = CONFIG.GUNSHIP_HEALTH;
+                this.width = 96; this.height = 96;
+                this.blocksToDestroy = CONFIG.GUNSHIP_BOMB_DAMAGE;
+                this.attackTimeMin = CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN;
+                this.attackTimeMax = CONFIG.GUNSHIP_ATTACK_COOLDOWN_MAX;
+                // Gunship-specific properties
+                this.gunshipPatrolRight = Math.random() < 0.5;  // Direction of patrol
+                this.gunshipAttackCooldown = CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN +
+                    Math.random() * (CONFIG.GUNSHIP_ATTACK_COOLDOWN_MAX - CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN);
+                this.gunshipAttackFrameTriggered = false;  // Track if bombs fired this attack
+                this.currentAnimName = 'fly';
+                this.facingRight = this.gunshipPatrolRight;
                 break;
 
             case EnemyType.SPLITTER: // Carrier (96x96 sprite)
@@ -328,11 +336,75 @@ class Enemy {
         });
     }
 
+    /**
+     * Initialize animated sprites for GUNSHIP (TANK type)
+     */
+    initGunshipAnimations() {
+        if (this.animations) return; // Already initialized
+        if (this.type !== EnemyType.TANK) return; // Only for gunships
+        if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
+
+        this.animations = {};
+        const frameSize = 96;  // 96x96 frames for gunship
+        const scale = 1.0;
+
+        // Helper to create animation from sheet with valid frame detection
+        const createAnim = (assetKey, fps, mode) => {
+            const sheet = AssetManager.getImage(assetKey);
+            if (!sheet || sheet.width <= 0 || sheet.height <= 0) return null;
+
+            // Use countValidFrames to detect empty frames in the sprite sheet
+            let frameInfo;
+            if (typeof countValidFrames === 'function') {
+                frameInfo = countValidFrames(sheet, frameSize, frameSize);
+            } else {
+                const framesPerRow = Math.floor(sheet.width / frameSize);
+                const rowCount = Math.floor(sheet.height / frameSize);
+                frameInfo = {
+                    frameCount: framesPerRow * rowCount,
+                    framesPerRow: framesPerRow,
+                    validFrameIndices: null
+                };
+            }
+
+            if (frameInfo.frameCount <= 0) return null;
+
+            console.log(`Gunship ${assetKey}:`, {
+                sheetSize: `${sheet.width}x${sheet.height}`,
+                validFrames: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow
+            });
+
+            return new AnimatedSprite({
+                sheet: sheet,
+                frameWidth: frameSize,
+                frameHeight: frameSize,
+                frameCount: frameInfo.frameCount,
+                framesPerRow: frameInfo.framesPerRow,
+                validFrameIndices: frameInfo.validFrameIndices,
+                fps: fps,
+                mode: mode,
+                scale: scale
+            });
+        };
+
+        // Create animations
+        this.animations.fly = createAnim('gunship_fly', 10, 'loop');
+        this.animations.attack = createAnim('gunship_attack', 12, 'once');
+        this.animations.death = createAnim('gunship_death', 12, 'once');
+
+        console.log('Gunship animations initialized:', {
+            fly: this.animations.fly ? 'loaded' : 'failed',
+            attack: this.animations.attack ? 'loaded' : 'failed',
+            death: this.animations.death ? 'loaded' : 'failed'
+        });
+    }
+
     update(deltaTime) {
         if (this.state === EnemyState.DEAD) return;
 
-        // Update animations for STANDARD, AGGRESSIVE, and SPLITTER (carrier) types
-        if ((this.type === EnemyType.STANDARD || this.type === EnemyType.AGGRESSIVE || this.type === EnemyType.SPLITTER) && this.animations) {
+        // Update animations for STANDARD, AGGRESSIVE, SPLITTER (carrier), and TANK (gunship) types
+        if ((this.type === EnemyType.STANDARD || this.type === EnemyType.AGGRESSIVE || this.type === EnemyType.SPLITTER || this.type === EnemyType.TANK) && this.animations) {
             const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
                 currentAnim.update(deltaTime);
@@ -449,6 +521,89 @@ class Enemy {
                 this.state = EnemyState.DEAD;
                 this.active = false;
                 console.log('Carrier despawned off-screen');
+            }
+            return;
+        }
+
+        // Gunship (TANK) Logic - horizontal patrol with building bombardment
+        if (this.type === EnemyType.TANK) {
+            // Track facing direction for gunship
+            this.facingRight = this.gunshipPatrolRight;
+
+            // Calculate patrol altitude (above tallest building)
+            let maxBuildingTop = CONFIG.SKY_TOP + 100;
+            if (typeof buildingManager !== 'undefined') {
+                for (const building of buildingManager.buildings) {
+                    if (building.y < maxBuildingTop) {
+                        maxBuildingTop = building.y;
+                    }
+                }
+            }
+            const patrolAltitude = maxBuildingTop - CONFIG.GUNSHIP_PATROL_ALTITUDE_OFFSET;
+
+            // Smooth altitude adjustment
+            if (Math.abs(this.y - patrolAltitude) > 5) {
+                this.y += (patrolAltitude - this.y) * deltaTime * 2;
+            } else {
+                this.y = patrolAltitude;
+            }
+
+            // Move horizontally
+            const direction = this.gunshipPatrolRight ? 1 : -1;
+            this.x += direction * this.speed * deltaTime;
+
+            // Bounce off screen edges
+            if (this.x < 50) {
+                this.x = 50;
+                this.gunshipPatrolRight = true;
+                this.facingRight = true;
+            }
+            if (this.x > CONFIG.CANVAS_WIDTH - 50) {
+                this.x = CONFIG.CANVAS_WIDTH - 50;
+                this.gunshipPatrolRight = false;
+                this.facingRight = false;
+            }
+
+            // Update attack cooldown
+            this.gunshipAttackCooldown -= deltaTime;
+
+            // Check for attack (cooldown + building proximity)
+            if (this.gunshipAttackCooldown <= 0 && this.state === EnemyState.FLYING) {
+                // Check if there's a building below within attack range
+                let nearBuilding = false;
+                if (typeof buildingManager !== 'undefined') {
+                    for (const building of buildingManager.buildings) {
+                        // Check if gunship is horizontally over this building
+                        if (this.x >= building.x - CONFIG.GUNSHIP_ATTACK_RANGE &&
+                            this.x <= building.x + building.widthBlocks * CONFIG.BLOCK_SIZE + CONFIG.GUNSHIP_ATTACK_RANGE) {
+                            // Check if building has blocks
+                            let hasBlocks = false;
+                            for (let row = 0; row < building.heightBlocks && !hasBlocks; row++) {
+                                for (let col = 0; col < building.widthBlocks && !hasBlocks; col++) {
+                                    if (building.blocks[row]?.[col]) {
+                                        hasBlocks = true;
+                                    }
+                                }
+                            }
+                            if (hasBlocks) {
+                                nearBuilding = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (nearBuilding) {
+                    this.state = EnemyState.ATTACKING;
+                    this.currentAnimName = 'attack';
+                    this.gunshipAttackFrameTriggered = false;
+                    if (this.animations && this.animations.attack) {
+                        this.animations.attack.reset();
+                    }
+                    // Reset cooldown
+                    this.gunshipAttackCooldown = CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN +
+                        Math.random() * (CONFIG.GUNSHIP_ATTACK_COOLDOWN_MAX - CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN);
+                }
             }
             return;
         }
@@ -812,6 +967,64 @@ class Enemy {
             return;
         }
 
+        // GUNSHIP (TANK): hovers in place, fires bombs at frame 4
+        if (this.type === EnemyType.TANK) {
+            // Hover with slight shake during attack
+            this.x += (Math.random() - 0.5) * 1.5;
+            this.y += (Math.random() - 0.5) * 1.5;
+
+            if (this.animations && this.animations.attack) {
+                const anim = this.animations.attack;
+
+                // Check for attack frame to fire bombs (only once per attack)
+                if (!this.gunshipAttackFrameTriggered && anim.currentFrame >= CONFIG.GUNSHIP_ATTACK_FRAME) {
+                    this.gunshipAttackFrameTriggered = true;
+
+                    // Fire 3 bomb projectiles in downward spread (-120, -90, -60 degrees)
+                    // Angles: -120° = down-left, -90° = straight down, -60° = down-right
+                    const bombAngles = [240, 270, 300];  // In degrees (pointing down)
+                    if (typeof projectileManager !== 'undefined') {
+                        for (let i = 0; i < CONFIG.GUNSHIP_PROJECTILE_COUNT; i++) {
+                            const angle = bombAngles[i] || 270;
+                            projectileManager.addBomb(
+                                this.x,
+                                this.y + 30,  // Fire from below gunship
+                                angle,
+                                CONFIG.GUNSHIP_BOMB_SPEED
+                            );
+                        }
+                    }
+
+                    // Muzzle flash effect
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addExplosion(this.x, this.y + 35, 20, '#ff8800');
+                        EffectsManager.addSparks(this.x, this.y + 30, '#ffaa00');
+                    }
+
+                    // Sound effect
+                    if (typeof SoundManager !== 'undefined') {
+                        SoundManager.shoot();
+                    }
+
+                    console.log('Gunship fired bombs');
+                }
+
+                // Check if animation complete - return to flying
+                if (anim.isComplete || anim.currentFrame === anim.frameCount - 1) {
+                    this.state = EnemyState.FLYING;
+                    this.currentAnimName = 'fly';
+                    if (this.animations.fly) {
+                        this.animations.fly.reset();
+                    }
+                }
+            } else {
+                // No animation, just return to flying
+                this.state = EnemyState.FLYING;
+                this.currentAnimName = 'fly';
+            }
+            return;
+        }
+
         // Other enemy types: timer-based attack
         this.attackTimer += deltaTime;
 
@@ -1008,6 +1221,49 @@ class Enemy {
     }
 
     updateDying(deltaTime) {
+        // GUNSHIP (TANK): full explosion in place after death animation
+        if (this.type === EnemyType.TANK) {
+            if (this.animations && this.animations.death) {
+                const anim = this.animations.death;
+                const prevFrame = anim.currentFrame;
+                anim.update(deltaTime);
+
+                // Animation completed when we reach the last frame (once mode)
+                if (anim.currentFrame === anim.frameCount - 1 ||
+                    (prevFrame > 0 && anim.currentFrame === 0)) {
+                    // Death animation complete - large explosion effects
+                    this.state = EnemyState.DEAD;
+                    this.active = false;
+
+                    // Large explosion effect for gunship
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addAnimatedExplosion(this.x, this.y, 'enemy', 50);
+                        EffectsManager.addAnimatedExplosion(this.x - 30, this.y - 20, 'enemy', 35);
+                        EffectsManager.addAnimatedExplosion(this.x + 25, this.y + 15, 'enemy', 30);
+                        EffectsManager.addExplosion(this.x, this.y, 60, '#ff6600'); // Fire
+                        EffectsManager.addExplosion(this.x + 20, this.y - 10, 40, '#444444'); // Smoke
+                        EffectsManager.addSparks(this.x, this.y, '#ffaa00'); // Sparks
+                        EffectsManager.shake(12);
+                    }
+                    if (typeof SoundManager !== 'undefined') {
+                        SoundManager.enemyDeath();
+                    }
+                }
+            } else {
+                // Fallback: no animation, just die with explosions
+                this.state = EnemyState.DEAD;
+                this.active = false;
+                if (typeof EffectsManager !== 'undefined') {
+                    EffectsManager.addAnimatedExplosion(this.x, this.y, 'enemy', 50);
+                    EffectsManager.shake(10);
+                }
+                if (typeof SoundManager !== 'undefined') {
+                    SoundManager.enemyDeath();
+                }
+            }
+            return;
+        }
+
         // STANDARD drones: play death animation then explode
         // Position is frozen (no movement)
         // No collision detection (can't be hit again)
@@ -1163,12 +1419,25 @@ class Enemy {
             }
         }
 
-        if (this.type === EnemyType.TANK && this.health > 1 && !forceImmediate) {
-            this.health--;
-            if (typeof SoundManager !== 'undefined') SoundManager.tankHit();
-            // Flash
-            if (typeof EffectsManager !== 'undefined') EffectsManager.addExplosion(this.x, this.y, 10, '#ffffff');
-            return; // Survives
+        // GUNSHIP (TANK): takes multiple hits, then plays death animation in place (no falling)
+        if (this.type === EnemyType.TANK) {
+            if (this.health > 1 && !forceImmediate) {
+                this.health--;
+                if (typeof SoundManager !== 'undefined') SoundManager.tankHit();
+                // Flash white on hit
+                if (typeof EffectsManager !== 'undefined') EffectsManager.addExplosion(this.x, this.y, 15, '#ffffff');
+                return; // Survives
+            }
+            // Final hit - play death animation in place (not falling)
+            if (this.state !== EnemyState.DYING && !forceImmediate) {
+                this.state = EnemyState.DYING;
+                this.currentAnimName = 'death';
+                if (this.animations && this.animations.death) {
+                    this.animations.death.reset();
+                }
+                if (typeof SoundManager !== 'undefined') SoundManager.enemyFalling();
+                return;
+            }
         }
 
         // Final Death
@@ -1360,39 +1629,77 @@ class Enemy {
         ctx.fillRect(4, -8, 4, -4 - thrust);
     }
 
-    renderGunship(ctx) { // Tank
-        // Try sprite first
+    renderGunship(ctx) { // Tank (96x96 animated sprite)
+        // Lazy initialize animations if needed
+        if (!this.animations) {
+            this.initGunshipAnimations();
+        }
+
+        // Try animated sprite first
+        if (this.animations) {
+            const currentAnim = this.animations[this.currentAnimName];
+            if (currentAnim) {
+                ctx.save();
+
+                // Apply horizontal flip based on facing direction (skip during dying)
+                // Sprites face RIGHT by default, so flip when facing left
+                if (this.state !== EnemyState.DYING && !this.facingRight) {
+                    ctx.scale(-1, 1);
+                }
+
+                // Render the animation at center
+                currentAnim.render(ctx, 0, 0);
+
+                // Draw health bar above gunship (only when not dying)
+                if (this.state !== EnemyState.DYING && this.health > 0) {
+                    // Need to unflip for health bar to render correctly
+                    if (!this.facingRight) {
+                        ctx.scale(-1, 1);
+                    }
+                    for (let i = 0; i < this.health; i++) {
+                        ctx.fillStyle = '#4ade80';
+                        ctx.fillRect(-20 + i * 12, -55, 8, 5);
+                    }
+                }
+
+                ctx.restore();
+                return;
+            }
+        }
+
+        // Fallback: Try static sprite
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('enemy_gunship') : null;
         if (sprite) {
-            // Draw solid at +25% size: 70x60 from 56x48
-            ctx.drawImage(sprite, -35, -30, 70, 60);
-            // Still draw health bar on top
+            // Draw solid at 96x96 size
+            ctx.drawImage(sprite, -48, -48, 96, 96);
+
+            // Draw health bar
             if (this.health > 0) {
                 for (let i = 0; i < this.health; i++) {
                     ctx.fillStyle = '#4ade80';
-                    ctx.fillRect(-15 + i * 8, -38, 6, 4);
+                    ctx.fillRect(-20 + i * 12, -55, 8, 5);
                 }
             }
             return;
         }
 
-        // Fallback: Bulky Rectangle
+        // Fallback: Bulky Rectangle (original geometry)
         ctx.fillStyle = '#064e3b';
-        ctx.fillRect(-20, -15, 40, 30);
+        ctx.fillRect(-40, -30, 80, 60);
 
         ctx.strokeStyle = '#22c55e';
         ctx.lineWidth = 2;
-        ctx.strokeRect(-18, -13, 36, 26);
-        ctx.strokeRect(-10, -5, 20, 10);
+        ctx.strokeRect(-38, -28, 76, 56);
+        ctx.strokeRect(-20, -10, 40, 20);
 
         ctx.fillStyle = '#111';
-        ctx.fillRect(-22, 5, -4, 8);
-        ctx.fillRect(22, 5, 4, 8);
+        ctx.fillRect(-44, 10, -8, 16);
+        ctx.fillRect(44, 10, 8, 16);
 
         if (this.health > 0) {
             for (let i = 0; i < this.health; i++) {
                 ctx.fillStyle = '#4ade80';
-                ctx.fillRect(-15 + i * 8, -22, 6, 4);
+                ctx.fillRect(-20 + i * 12, -40, 8, 5);
             }
         }
     }

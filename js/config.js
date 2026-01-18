@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.20',
+    VERSION: 'v1.0.21',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -102,6 +102,18 @@ const CONFIG = {
     CARRIER_SPAWN_FRAME: 28,          // Frame to spawn drones during attack
     CARRIER_DEATH_DAMAGE_MIN: 6,      // Min blocks destroyed on impact
     CARRIER_DEATH_DAMAGE_MAX: 10,     // Max blocks destroyed on impact
+
+    // Gunship Configuration
+    GUNSHIP_SPEED: 35,
+    GUNSHIP_HEALTH: 4,
+    GUNSHIP_ATTACK_COOLDOWN_MIN: 6,   // Seconds
+    GUNSHIP_ATTACK_COOLDOWN_MAX: 12,  // Seconds
+    GUNSHIP_ATTACK_FRAME: 4,          // Frame to fire bombs during attack
+    GUNSHIP_PROJECTILE_COUNT: 3,      // Number of bombs per attack
+    GUNSHIP_BOMB_SPEED: 150,
+    GUNSHIP_PATROL_ALTITUDE_OFFSET: 80, // Pixels above tallest building
+    GUNSHIP_ATTACK_RANGE: 150,        // Proximity to building to trigger attack
+    GUNSHIP_BOMB_DAMAGE: 4,           // 2x2 blocks
 
     // Win/Lose
     CITY_DESTRUCTION_THRESHOLD: 0.8
