@@ -159,7 +159,7 @@ class BombProjectile {
                                 EffectsManager.shake(3);
                             }
                             if (typeof SoundManager !== 'undefined') {
-                                SoundManager.blockDestroy();
+                                SoundManager.blockDestroyed();
                             }
 
                             this.active = false;
@@ -178,7 +178,7 @@ class BombProjectile {
                 EffectsManager.addSparks(this.x, CONFIG.STREET_Y - 5, '#ffaa00');
             }
             if (typeof SoundManager !== 'undefined') {
-                SoundManager.blockDestroy();
+                SoundManager.blockDestroyed();
             }
             this.active = false;
             return;

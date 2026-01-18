@@ -1647,12 +1647,17 @@ class Enemy {
                     ctx.scale(-1, 1);
                 }
 
+                // Apply slight nose-down tilt (about 10 degrees)
+                const noseTilt = 0.17;  // ~10 degrees in radians
+                ctx.rotate(noseTilt);
+
                 // Render the animation at center
                 currentAnim.render(ctx, 0, 0);
 
                 // Draw health bar above gunship (only when not dying)
                 if (this.state !== EnemyState.DYING && this.health > 0) {
-                    // Need to unflip for health bar to render correctly
+                    // Undo rotation and flip for health bar to render level
+                    ctx.rotate(-noseTilt);
                     if (!this.facingRight) {
                         ctx.scale(-1, 1);
                     }
