@@ -931,6 +931,16 @@ class Enemy {
                                 const pos = building.getBlockWorldPosition(row, col);
                                 EffectsManager.addExplosion(pos.x + 10, pos.y + 10, explosionSize, '#ff4400');
                                 EffectsManager.shake(shakeAmount);
+
+                                // Carrier gets additional fire/smoke/debris explosions
+                                if (this.type === EnemyType.SPLITTER) {
+                                    // Multiple offset explosions for bigger impact
+                                    EffectsManager.addAnimatedExplosion(pos.x - 30, pos.y - 20, 'enemy', 40);
+                                    EffectsManager.addAnimatedExplosion(pos.x + 40, pos.y + 10, 'enemy', 35);
+                                    EffectsManager.addExplosion(pos.x + 20, pos.y - 30, 40, '#ff6600'); // Fire
+                                    EffectsManager.addExplosion(pos.x - 20, pos.y + 20, 35, '#444444'); // Smoke
+                                    EffectsManager.addSparks(pos.x, pos.y, '#ffaa00'); // Sparks
+                                }
                             }
 
                             this.die(true);
@@ -942,7 +952,57 @@ class Enemy {
             }
         }
 
+        // Neutral falling damage: carrier and aggressive drone can damage other enemies while falling
+        if ((this.type === EnemyType.SPLITTER || this.type === EnemyType.AGGRESSIVE) &&
+            typeof enemyManager !== 'undefined') {
+            const collisionRadius = this.type === EnemyType.SPLITTER ? 48 : 24; // Carrier is larger
+            for (const other of enemyManager.enemies) {
+                // Skip self, inactive enemies, and other falling enemies
+                if (other === this || !other.active || other.state === EnemyState.FALLING) continue;
+
+                // Simple distance-based collision
+                const dx = other.x - this.x;
+                const dy = other.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const otherRadius = other.type === EnemyType.SPLITTER ? 48 :
+                                   other.type === EnemyType.TANK ? 30 : 20;
+
+                if (dist < collisionRadius + otherRadius) {
+                    // Deal 1 damage to the other enemy (die() handles health decrement)
+                    other.die();
+
+                    // Explosion at collision point
+                    if (typeof EffectsManager !== 'undefined') {
+                        const impactX = (this.x + other.x) / 2;
+                        const impactY = (this.y + other.y) / 2;
+                        EffectsManager.addExplosion(impactX, impactY, 30, '#ff6600');
+                        EffectsManager.addSparks(impactX, impactY, '#ffaa00');
+                        EffectsManager.shake(8);
+                    }
+                    if (typeof SoundManager !== 'undefined') SoundManager.fallingCrash();
+
+                    // Destroy this falling enemy
+                    this.die(true);
+                    return;
+                }
+            }
+        }
+
         if (this.y > CONFIG.STREET_Y) {
+            // Ground impact explosion
+            if (typeof EffectsManager !== 'undefined') {
+                if (this.type === EnemyType.SPLITTER) {
+                    // Carrier gets massive ground explosion with fire/smoke/debris
+                    EffectsManager.addExplosion(this.x, CONFIG.STREET_Y - 20, 60, '#ff4400');
+                    EffectsManager.addAnimatedExplosion(this.x - 40, CONFIG.STREET_Y - 15, 'enemy', 45);
+                    EffectsManager.addAnimatedExplosion(this.x + 40, CONFIG.STREET_Y - 10, 'enemy', 40);
+                    EffectsManager.addExplosion(this.x + 25, CONFIG.STREET_Y - 30, 45, '#ff6600'); // Fire
+                    EffectsManager.addExplosion(this.x - 25, CONFIG.STREET_Y - 25, 40, '#444444'); // Smoke
+                    EffectsManager.addSparks(this.x, CONFIG.STREET_Y - 20, '#ffaa00'); // Sparks
+                    EffectsManager.shake(20);
+                }
+            }
+            if (typeof SoundManager !== 'undefined') SoundManager.fallingCrash();
             this.die(true); // Crash
         }
     }
@@ -1151,8 +1211,8 @@ class Enemy {
 
         if (this.state === EnemyState.FALLING || this.type === EnemyType.BOMBER) {
             ctx.rotate(this.rotation);
-        } else {
-            // Slight bank based on velocity
+        } else if (this.type !== EnemyType.SPLITTER) {
+            // Slight bank based on velocity (skip for carrier - stays horizontal)
             ctx.rotate(this.velX * 0.2);
         }
 
