@@ -98,14 +98,23 @@ if (typeof IntroManager !== 'undefined') IntroManager.init();
 let numPlayers = 1;
 
 // Initialize game
-function initGame(playerCount = 1) {
+function initGame(playerCount = 1, zoneNumber = 1) {
+    // Set zone early so all managers can reference it
+    game.currentZone = zoneNumber;
+
     numPlayers = playerCount;
-    buildingManager.init();
+    buildingManager.init(zoneNumber);
     playerManager.init(numPlayers);
     // Legacy compat - point player to P1
     player = playerManager.getPlayer(1);
     projectileManager.clear();
     enemyManager.reset();
+
+    // Inform enemyManager about the zone if supported
+    if (enemyManager.setZone) {
+        enemyManager.setZone(zoneNumber);
+    }
+
     enemyManager.startWave(1);
     civilianManager.reset();
     DayCycle.init();
@@ -121,7 +130,7 @@ function initGame(playerCount = 1) {
     game.state = GameState.PLAYING;
 
     // Show zone splash
-    const zoneName = CONFIG.ZONES[game.currentZone].name;
+    const zoneName = CONFIG.ZONES[zoneNumber].name;
     showZoneSplash(zoneName);
 }
 

@@ -18,7 +18,6 @@ const StageSelect = {
         // Check if zone is unlocked before allowing selection
         if (input.isKeyPressed('Enter') || input.isKeyPressed('Space')) {
             if (game.zoneUnlocked[this.selectedZone - 1]) {
-                game.currentZone = this.selectedZone;
                 initGame(1, this.selectedZone);
             }
         }
