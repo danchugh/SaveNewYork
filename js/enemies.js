@@ -89,15 +89,27 @@ class Enemy {
     }
 
     configureStats(type) {
+        // Get zone-specific stats (default to zone 1 if not available)
+        const currentZone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
+        const zoneStats = CONFIG.ZONE_ENEMY_STATS[currentZone] || CONFIG.ZONE_ENEMY_STATS[1];
+
         switch (type) {
             case EnemyType.STANDARD: // Scout Drone
-                this.speed = 60;
+                const stdStats = zoneStats.STANDARD || { speed: 60, health: 1 };
+                this.speed = stdStats.speed;
+                this.health = stdStats.health;
+                this.maxHealth = stdStats.health;
                 this.width = 30; this.height = 20; // +25% from 24x16
                 this.attackTimeMin = 1.0; this.attackTimeMax = 3.0;
                 break;
 
             case EnemyType.AGGRESSIVE: // Hunter Chopper (Red)
-                this.speed = 100;
+                const aggStats = zoneStats.AGGRESSIVE || { speed: 100, health: 1, shotCount: 3 };
+                this.speed = aggStats.speed;
+                this.health = aggStats.health;
+                this.maxHealth = aggStats.health;
+                this.shotCount = aggStats.shotCount || 3;
+                this.erraticMovement = aggStats.erratic || false;
                 this.width = 35; this.height = 25; // +25% from 28x20
                 this.attackTimeMin = 0.5; this.attackTimeMax = 1.5;
                 break;
