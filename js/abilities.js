@@ -171,9 +171,74 @@ const AbilityManager = {
         }
     },
     triggerAirstrike() {
-        console.log('Airstrike triggered - implementation pending');
+        const jet = {
+            x: -100,
+            y: 150 + Math.random() * 100,
+            duration: 3,
+            speed: 600,
+            hasFired: false,
+
+            update(deltaTime) {
+                this.x += this.speed * deltaTime;
+
+                // Fire at all airborne enemies when crossing screen center
+                if (!this.hasFired && this.x > CONFIG.CANVAS_WIDTH / 2) {
+                    this.hasFired = true;
+
+                    if (typeof enemyManager !== 'undefined') {
+                        for (const enemy of enemyManager.enemies) {
+                            if (!enemy.active) continue;
+                            // Damage all flying enemies
+                            if (enemy.state === EnemyState.FLYING || enemy.state === EnemyState.ATTACKING) {
+                                enemy.takeDamage(999); // Instant kill
+                                if (typeof addScore === 'function') addScore(100);
+                            }
+                        }
+                    }
+
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.shake(10);
+                        // Explosion trail across screen
+                        for (let x = 100; x < CONFIG.CANVAS_WIDTH - 100; x += 80) {
+                            EffectsManager.addExplosion(x, this.y, 30, '#ff6600');
+                        }
+                    }
+                    if (typeof SoundManager !== 'undefined') SoundManager.explosion();
+                }
+            },
+
+            render(ctx) {
+                // Simple jet shape (procedural)
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // Fuselage
+                ctx.fillStyle = '#4a5568';
+                ctx.beginPath();
+                ctx.moveTo(30, 0);
+                ctx.lineTo(-20, -10);
+                ctx.lineTo(-30, -5);
+                ctx.lineTo(-30, 5);
+                ctx.lineTo(-20, 10);
+                ctx.closePath();
+                ctx.fill();
+
+                // Afterburner flame
+                ctx.fillStyle = '#ff8800';
+                ctx.beginPath();
+                ctx.moveTo(-30, -3);
+                ctx.lineTo(-50 - Math.random() * 10, 0);
+                ctx.lineTo(-30, 3);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.restore();
+            }
+        };
+
+        this.activeAbilities.push(jet);
         if (typeof EffectsManager !== 'undefined') {
-            EffectsManager.addTextPopup(CONFIG.CANVAS_WIDTH / 2, 100, 'AIRSTRIKE!', '#ff4444');
+            EffectsManager.addTextPopup(CONFIG.CANVAS_WIDTH / 2, 100, 'AIRSTRIKE INCOMING!', '#ff4444');
         }
     },
     triggerBellSlow() {
