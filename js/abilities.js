@@ -63,7 +63,66 @@ const AbilityManager = {
 
     // Ability implementations (stubs - will be detailed in Phase 5)
     spawnAABattery(building) {
-        console.log('AA Battery spawned - implementation pending');
+        const turret = {
+            x: building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2,
+            y: building.y - 10,
+            duration: 20,
+            fireRate: 0.5,
+            fireTimer: 0,
+            target: null,
+
+            update(deltaTime) {
+                this.fireTimer -= deltaTime;
+
+                // Find nearest enemy
+                if (typeof enemyManager !== 'undefined') {
+                    let nearest = null;
+                    let nearestDist = 300; // Max range
+
+                    for (const enemy of enemyManager.enemies) {
+                        if (!enemy.active || enemy.state === EnemyState.DYING || enemy.state === EnemyState.DEAD) continue;
+                        const dist = Math.sqrt((enemy.x - this.x) ** 2 + (enemy.y - this.y) ** 2);
+                        if (dist < nearestDist) {
+                            nearestDist = dist;
+                            nearest = enemy;
+                        }
+                    }
+                    this.target = nearest;
+                }
+
+                // Fire at target
+                if (this.target && this.fireTimer <= 0) {
+                    this.fireTimer = this.fireRate;
+                    const angle = Math.atan2(this.target.y - this.y, this.target.x - this.x) * 180 / Math.PI;
+                    if (typeof projectileManager !== 'undefined') {
+                        projectileManager.add(this.x, this.y, angle, 400, true, 0);
+                    }
+                    if (typeof SoundManager !== 'undefined') SoundManager.shoot();
+                }
+            },
+
+            render(ctx) {
+                // Draw turret base
+                ctx.fillStyle = '#4a5568';
+                ctx.fillRect(this.x - 12, this.y - 5, 24, 10);
+
+                // Draw barrel pointing at target
+                ctx.strokeStyle = '#718096';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+
+                if (this.target) {
+                    const angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+                    ctx.lineTo(this.x + Math.cos(angle) * 15, this.y + Math.sin(angle) * 15);
+                } else {
+                    ctx.lineTo(this.x, this.y - 15);
+                }
+                ctx.stroke();
+            }
+        };
+
+        this.activeAbilities.push(turret);
         if (typeof EffectsManager !== 'undefined') {
             EffectsManager.addTextPopup(building.x + 30, building.y - 30, 'AA BATTERY!', '#00ff88');
         }
