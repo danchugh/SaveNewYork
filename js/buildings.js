@@ -501,11 +501,21 @@ class BuildingManager {
         this.totalOriginalBlocks = 0;
     }
 
-    init(zone = 1) {
-        const zoneDefs = BUILDING_DEFS[zone] || BUILDING_DEFS[1];
-        this.buildings = zoneDefs.map(def =>
-            new Building(def.x, def.width, def.height)
-        );
+    init(zoneNumber = 1) {
+        this.buildings = [];
+        this.currentZone = zoneNumber;
+        const defs = BUILDING_DEFS[zoneNumber] || BUILDING_DEFS[1];
+
+        for (const def of defs) {
+            const building = new Building(def.x, def.width, def.height);
+            building.name = def.name || 'building';
+            building.abilityKills = def.abilityKills || 0;
+            building.ability = def.ability || null;
+            building.chargeKills = 0;  // Current kill charge
+            building.isCharged = false;
+            this.buildings.push(building);
+        }
+
         this.totalOriginalBlocks = this.buildings.reduce(
             (sum, b) => sum + b.originalBlockCount, 0
         );
