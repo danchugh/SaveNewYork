@@ -1010,3 +1010,55 @@ function startGame() {
 }
 
 startGame();
+
+// ============================================
+// DEBUG CONSOLE COMMANDS
+// ============================================
+// Usage: Type these in browser console
+window.debug = {
+    // Load specific zone: debug.zone(2)
+    zone(zoneNumber) {
+        if (zoneNumber < 1 || zoneNumber > CONFIG.TOTAL_ZONES) {
+            console.error(`Invalid zone. Valid zones: 1-${CONFIG.TOTAL_ZONES}`);
+            return;
+        }
+        console.log(`Loading Zone ${zoneNumber}...`);
+        initGame(1, zoneNumber);
+    },
+
+    // Load specific wave in current zone: debug.wave(3)
+    wave(waveNumber) {
+        const zone = game.currentZone || 1;
+        console.log(`Loading Zone ${zone}, Wave ${waveNumber}...`);
+        initGame(waveNumber, zone);
+    },
+
+    // Unlock all zones
+    unlockAll() {
+        for (let i = 0; i < CONFIG.TOTAL_ZONES; i++) {
+            game.zoneUnlocked[i] = true;
+        }
+        saveZoneProgress();
+        console.log('All zones unlocked!');
+    },
+
+    // Give player lives
+    lives(count) {
+        player.lives = Math.min(count, CONFIG.MAX_LIVES);
+        console.log(`Player now has ${player.lives} lives`);
+    },
+
+    // Add score
+    score(points) {
+        addScore(points);
+        console.log(`Added ${points} points. Total: ${game.score}`);
+    },
+
+    // Give shield
+    shield() {
+        player.activateShield();
+        console.log('Shield activated!');
+    }
+};
+
+console.log('Debug commands available: debug.zone(n), debug.wave(n), debug.unlockAll(), debug.lives(n), debug.score(n), debug.shield()');

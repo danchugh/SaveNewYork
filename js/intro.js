@@ -155,7 +155,7 @@ const IntroManager = {
         ctx.fillStyle = '#666666';
         ctx.font = '10px monospace';
         ctx.textAlign = 'right';
-        ctx.fillText('v1.2', CONFIG.CANVAS_WIDTH - 10, CONFIG.CANVAS_HEIGHT - 10);
+        ctx.fillText(CONFIG.VERSION, CONFIG.CANVAS_WIDTH - 10, CONFIG.CANVAS_HEIGHT - 10);
 
         ctx.textAlign = 'left';
         ctx.fillText('HIGH SCORE: ' + HighScoreManager.getHighestScore(), 10, CONFIG.CANVAS_HEIGHT - 10);
