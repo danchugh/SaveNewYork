@@ -149,6 +149,17 @@ class Enemy {
                 this.attackTimeMin = 999; this.attackTimeMax = 999;
                 this.diveTimer = 2 + Math.random() * 4;
                 break;
+
+            case EnemyType.DUST_DEVIL:
+                this.speed = 80;
+                this.health = 1;
+                this.maxHealth = 1;
+                this.width = 24;
+                this.height = 24;
+                this.spiralAngle = 0;
+                this.spiralRadius = 30;
+                this.targetBuilding = null;
+                break;
         }
     }
 
@@ -446,6 +457,47 @@ class Enemy {
     }
 
     updateFlying(deltaTime) {
+        // Dust Devil: Spiral toward building target
+        if (this.type === EnemyType.DUST_DEVIL) {
+            // Pick target building if none
+            if (!this.targetBuilding && typeof buildingManager !== 'undefined') {
+                const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+                if (buildings.length > 0) {
+                    this.targetBuilding = buildings[Math.floor(Math.random() * buildings.length)];
+                }
+            }
+
+            if (this.targetBuilding) {
+                const targetX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                const targetY = this.targetBuilding.y;
+
+                // Move toward target with spiral
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                this.spiralAngle += deltaTime * 5;
+                const spiralX = Math.cos(this.spiralAngle) * this.spiralRadius;
+                const spiralY = Math.sin(this.spiralAngle) * this.spiralRadius;
+
+                const speedMod = this.bellSlowed ? 0.3 : 1.0;
+
+                if (dist > 20) {
+                    this.x += ((dx / dist) * this.speed * speedMod + spiralX) * deltaTime;
+                    this.y += ((dy / dist) * this.speed * speedMod + spiralY) * deltaTime;
+                } else {
+                    // Hit building - destroy a block
+                    const col = Math.floor(this.targetBuilding.widthBlocks / 2);
+                    this.targetBuilding.destroyBlock(0, col);
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addExplosion(this.x, this.y, 20, '#cc9944');
+                    }
+                    this.die(true); // Die without score (kamikaze)
+                }
+            }
+            return;
+        }
+
         // Bomber Logic
         if (this.type === EnemyType.BOMBER) {
             if (!this.divingAtPlayer) {
@@ -1536,6 +1588,7 @@ class Enemy {
             case EnemyType.TANK: this.renderGunship(ctx); break;
             case EnemyType.SPLITTER: this.renderCarrier(ctx); break;
             case EnemyType.BOMBER: this.renderMissile(ctx); break;
+            case EnemyType.DUST_DEVIL: this.renderDustDevil(ctx); break;
         }
 
         ctx.restore();
@@ -1858,6 +1911,29 @@ class Enemy {
         // Flame
         ctx.fillStyle = Math.random() > 0.5 ? '#ffff00' : '#ff0000';
         ctx.beginPath(); ctx.moveTo(-4, -10); ctx.lineTo(0, -20 - Math.random() * 10); ctx.lineTo(4, -10); ctx.fill();
+    }
+
+    renderDustDevil(ctx) {
+        const time = Date.now() / 100;
+        ctx.save();
+        ctx.rotate(time);
+
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 + time;
+            const dist = 8 + Math.sin(time + i) * 3;
+            const px = Math.cos(angle) * dist;
+            const py = Math.sin(angle) * dist;
+            ctx.fillStyle = `rgba(194, 154, 108, ${0.6 + Math.sin(time + i) * 0.3})`;
+            ctx.beginPath();
+            ctx.arc(px, py, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.fillStyle = '#a08060';
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
     }
 }
 
