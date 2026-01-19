@@ -135,6 +135,18 @@ const CONFIG = {
             background: 'desert'
         }
     },
-    TOTAL_ZONES: 2
+    TOTAL_ZONES: 2,
+
+    // Zone-specific enemy stat modifiers
+    ZONE_ENEMY_STATS: {
+        1: {
+            STANDARD: { speed: 60, health: 1 },
+            AGGRESSIVE: { speed: 100, health: 1, shotCount: 3 }
+        },
+        2: {
+            STANDARD: { speed: 75, health: 2 },      // +25% speed, +1 HP
+            AGGRESSIVE: { speed: 100, health: 1, shotCount: 4, erratic: true }  // 4-shot, erratic movement
+        }
+    }
 };
 
