@@ -329,9 +329,61 @@ const AbilityManager = {
         }
     },
     triggerArtillery() {
-        console.log('Artillery triggered - implementation pending');
+        const shellCount = 3 + Math.floor(Math.random() * 2); // 3-4 shells
+
+        // Find enemy positions for targeting
+        const targets = [];
+        if (typeof enemyManager !== 'undefined') {
+            for (const enemy of enemyManager.enemies) {
+                if (enemy.active && enemy.state !== EnemyState.DYING && enemy.state !== EnemyState.DEAD) {
+                    targets.push({ x: enemy.x, y: enemy.y });
+                }
+            }
+        }
+
+        // Fire shells at random targets or positions
+        for (let i = 0; i < shellCount; i++) {
+            const delay = i * 0.3;
+
+            setTimeout(() => {
+                let targetX, targetY;
+
+                if (targets.length > 0) {
+                    const target = targets[Math.floor(Math.random() * targets.length)];
+                    targetX = target.x + (Math.random() - 0.5) * 50;
+                    targetY = target.y + (Math.random() - 0.5) * 50;
+                } else {
+                    targetX = 100 + Math.random() * (CONFIG.CANVAS_WIDTH - 200);
+                    targetY = 100 + Math.random() * 300;
+                }
+
+                // Create explosion at target
+                if (typeof EffectsManager !== 'undefined') {
+                    EffectsManager.addExplosion(targetX, targetY, 40, '#ff6600');
+                    if (EffectsManager.addAnimatedExplosion) {
+                        EffectsManager.addAnimatedExplosion(targetX, targetY, 'enemy', 35);
+                    }
+                    EffectsManager.shake(5);
+                }
+
+                // Damage enemies in radius
+                if (typeof enemyManager !== 'undefined') {
+                    for (const enemy of enemyManager.enemies) {
+                        if (!enemy.active) continue;
+                        const dist = Math.sqrt((enemy.x - targetX) ** 2 + (enemy.y - targetY) ** 2);
+                        if (dist < 60) {
+                            enemy.takeDamage(999); // Instant kill
+                            if (typeof addScore === 'function') addScore(100);
+                        }
+                    }
+                }
+
+                if (typeof SoundManager !== 'undefined') SoundManager.explosion();
+            }, delay * 1000);
+        }
+
         if (typeof EffectsManager !== 'undefined') {
-            EffectsManager.addTextPopup(CONFIG.CANVAS_WIDTH / 2, 80, 'ARTILLERY!', '#ff8800');
+            EffectsManager.addTextPopup(CONFIG.CANVAS_WIDTH / 2, 80, 'ARTILLERY BARRAGE!', '#ff8800');
         }
     }
 };
