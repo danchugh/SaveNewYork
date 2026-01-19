@@ -203,3 +203,36 @@ function renderPlayerHUD(ctx, p, x, y, label, color) {
         ctx.fillText('S', shieldX, shipY + 3);
     }
 }
+
+// Zone splash screen overlay
+let zoneSplashTimer = 0;
+let zoneSplashText = '';
+
+function showZoneSplash(zoneName) {
+    zoneSplashText = `ENTERING ${zoneName.toUpperCase()}`;
+    zoneSplashTimer = 3.0; // 3 seconds
+}
+
+function updateZoneSplash(deltaTime) {
+    if (zoneSplashTimer > 0) {
+        zoneSplashTimer -= deltaTime;
+    }
+}
+
+function renderZoneSplash(ctx) {
+    if (zoneSplashTimer <= 0) return;
+
+    const alpha = Math.min(1, zoneSplashTimer / 0.5); // Fade out in last 0.5s
+
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, CONFIG.CANVAS_HEIGHT / 2 - 50, CONFIG.CANVAS_WIDTH, 100);
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = 'bold 36px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(zoneSplashText, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 10);
+    ctx.restore();
+}

@@ -100,6 +100,10 @@ function initGame(playerCount = 1) {
     game.score = 0;
     game.nextBonusLifeAt = CONFIG.BONUS_LIFE_THRESHOLD;
     game.state = GameState.PLAYING;
+
+    // Show zone splash
+    const zoneName = CONFIG.ZONES[game.currentZone].name;
+    showZoneSplash(zoneName);
 }
 
 // ============================================
@@ -525,6 +529,7 @@ function update(deltaTime) {
             VolcanoManager.update(game.deltaTime);
             EffectsManager.update(game.deltaTime);
             PowerupManager.update(game.deltaTime);
+            updateZoneSplash(game.deltaTime);
 
             // Process lightning damage
             if (typeof WeatherManager !== 'undefined') {
@@ -784,6 +789,9 @@ function renderGame() {
 
     // Draw HUD contents
     renderHUD(ctx, buildingManager, enemyManager, playerManager.getTotalScore());
+
+    // Draw zone splash overlay (on top of everything)
+    renderZoneSplash(ctx);
 }
 
 function renderGameOver() {
