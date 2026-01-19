@@ -28,6 +28,24 @@ const game = {
     zoneUnlocked: [true, false] // Zone unlock status [zone1, zone2]
 };
 
+// ============================================
+// ZONE PROGRESS PERSISTENCE
+// ============================================
+function saveZoneProgress() {
+    localStorage.setItem('zoneUnlocked', JSON.stringify(game.zoneUnlocked));
+}
+
+function loadZoneProgress() {
+    const saved = localStorage.getItem('zoneUnlocked');
+    if (saved) {
+        try {
+            game.zoneUnlocked = JSON.parse(saved);
+        } catch (e) {
+            console.warn('Failed to load zone progress:', e);
+        }
+    }
+}
+
 // Helper function to add score and check for bonus lives
 // In 2P mode, total combined score triggers bonus lives for all players
 function addScore(points, playerId = null) {
@@ -277,6 +295,13 @@ function checkCollisions() {
                     game.state = GameState.VICTORY;
                     SoundManager.victory();
                     console.log('BOSS DEFEATED! VICTORY!');
+
+                    // Unlock next zone
+                    if (game.currentZone < CONFIG.TOTAL_ZONES) {
+                        game.zoneUnlocked[game.currentZone] = true;
+                        saveZoneProgress();
+                        console.log(`Zone ${game.currentZone + 1} unlocked!`);
+                    }
                 }
                 break;
             }
@@ -924,6 +949,9 @@ function startGame() {
             loadingScreen.classList.add('hidden');
             setTimeout(() => loadingScreen.style.display = 'none', 500);
         }
+
+        // Load saved zone progress
+        loadZoneProgress();
 
         // Switch to title state and start loop
         game.state = GameState.TITLE;
