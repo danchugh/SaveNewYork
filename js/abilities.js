@@ -128,7 +128,44 @@ const AbilityManager = {
         }
     },
     spawnInfantry(building) {
-        console.log('Infantry spawned - implementation pending');
+        const soldierCount = 3 + Math.floor(Math.random() * 2); // 3-4 soldiers
+
+        for (let i = 0; i < soldierCount; i++) {
+            const soldier = {
+                x: building.x + 10 + i * 15,
+                y: building.y - 5,
+                duration: 17 + Math.random() * 3, // 15-20 seconds
+                fireRate: 1.0,
+                fireTimer: Math.random(),
+
+                update(deltaTime) {
+                    this.fireTimer -= deltaTime;
+
+                    if (this.fireTimer <= 0) {
+                        this.fireTimer = this.fireRate;
+
+                        // Fire at random angle upward
+                        const angle = -90 + (Math.random() - 0.5) * 60; // -120 to -60 degrees
+                        if (typeof projectileManager !== 'undefined') {
+                            projectileManager.add(this.x, this.y, angle, 250, true, 0);
+                        }
+                    }
+                },
+
+                render(ctx) {
+                    // Simple soldier sprite (procedural)
+                    ctx.fillStyle = '#2d5016'; // Army green body
+                    ctx.fillRect(this.x - 3, this.y - 8, 6, 8);
+                    ctx.fillStyle = '#f5deb3'; // Skin tone head
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y - 10, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            };
+
+            this.activeAbilities.push(soldier);
+        }
+
         if (typeof EffectsManager !== 'undefined') {
             EffectsManager.addTextPopup(building.x + 30, building.y - 30, 'INFANTRY!', '#00ff88');
         }
