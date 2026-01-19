@@ -92,6 +92,14 @@ class Building {
 
         // Debris particles for collapse animation
         this.debris = [];
+
+        // Zone 2 ability charge system
+        this.name = 'building';
+        this.ability = null;
+        this.abilityKills = 0;
+        this.chargeKills = 0;
+        this.isCharged = false;
+        this.chargeDisabled = false; // True if > 60% destroyed
     }
 
     getBlockCount() {
@@ -102,6 +110,46 @@ class Building {
             }
         }
         return count;
+    }
+
+    canCharge() {
+        if (!this.ability) return false;
+        if (this.chargeDisabled) return false;
+
+        const destructionPercent = 1 - (this.getBlockCount() / this.originalBlockCount);
+        if (destructionPercent >= 0.6) {
+            this.chargeDisabled = true;
+            this.isCharged = false;
+            return false;
+        }
+        return true;
+    }
+
+    getChargeDiscount() {
+        const destructionPercent = 1 - (this.getBlockCount() / this.originalBlockCount);
+        // 50% destruction = 50% discount
+        return Math.min(0.5, destructionPercent);
+    }
+
+    getEffectiveAbilityKills() {
+        const discount = this.getChargeDiscount();
+        return Math.ceil(this.abilityKills * (1 - discount));
+    }
+
+    addKillCharge() {
+        if (!this.canCharge()) return;
+        if (this.isCharged) return;
+
+        this.chargeKills++;
+        if (this.chargeKills >= this.getEffectiveAbilityKills()) {
+            this.isCharged = true;
+            console.log(`${this.name} is fully charged!`);
+        }
+    }
+
+    resetCharge() {
+        this.chargeKills = 0;
+        this.isCharged = false;
     }
 
     destroyBlock(row, col) {
