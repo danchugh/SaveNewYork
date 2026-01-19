@@ -291,7 +291,39 @@ const AbilityManager = {
         }
     },
     triggerTargetingBoost(player) {
-        console.log('Targeting boost triggered - implementation pending');
+        const boost = {
+            duration: 10,
+            player: player,
+
+            update(deltaTime) {
+                if (this.player) {
+                    this.player.targetingBoost = true;
+                    this.player.fireRateBoost = true;
+                }
+            },
+
+            onEnd() {
+                if (this.player) {
+                    this.player.targetingBoost = false;
+                    this.player.fireRateBoost = false;
+                }
+            },
+
+            render(ctx) {
+                // Glow around player
+                if (this.player) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillStyle = '#00ff88';
+                    ctx.beginPath();
+                    ctx.arc(this.player.x, this.player.y, 40, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        };
+
+        this.activeAbilities.push(boost);
         if (typeof EffectsManager !== 'undefined' && player) {
             EffectsManager.addTextPopup(player.x, player.y - 30, 'TARGETING BOOST!', '#00ff88');
         }

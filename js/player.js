@@ -76,6 +76,9 @@ class Player {
         this.invulnerabilityTimer = 0;
         this.bounceVx = 0;
         this.bounceVy = 0;
+
+        this.targetingBoost = false;
+        this.fireRateBoost = false;
     }
 
     // Get input state for this player from InputManager
@@ -166,7 +169,9 @@ class Player {
         this.fireCooldown -= deltaTime;
         if (this.getInput(Actions.FIRE) && this.fireCooldown <= 0) {
             this.shoot();
-            this.fireCooldown = this.fireRate;
+            // Apply fire rate boost if active
+            const effectiveFireRate = this.fireRateBoost ? this.fireRate * 0.5 : this.fireRate;
+            this.fireCooldown = effectiveFireRate;
         }
 
         // Movement
