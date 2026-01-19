@@ -25,7 +25,7 @@ const game = {
     finalWave: 0,
     highScoreRank: 0,
     currentZone: 1,           // Current zone (1 or 2)
-    zoneUnlocked: [true, false] // Zone unlock status [zone1, zone2]
+    zoneUnlocked: [true, true] // Zone unlock status [zone1, zone2] - Zone 2 enabled for testing
 };
 
 // ============================================

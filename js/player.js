@@ -129,6 +129,7 @@ class Player {
     }
 
     updateDocked() {
+        // Launch on UP
         if (this.getInputJustPressed(Actions.UP)) {
             this.state = PlayerState.FLYING;
             this.currentSpeed = this.speed;
@@ -136,6 +137,42 @@ class Player {
             console.log(`Player ${this.id} launched!`);
             if (typeof EffectsManager !== 'undefined') {
                 EffectsManager.addExplosion(this.x, this.y + 10, 10, '#ffffff');
+            }
+        }
+
+        // Switch pads on LEFT/RIGHT (teleport to opposite pad if unoccupied)
+        if (this.getInputJustPressed(Actions.LEFT) || this.getInputJustPressed(Actions.RIGHT)) {
+            // Determine which pad we're on and which to switch to
+            const leftPad = CONFIG.REFUEL_PAD_LEFT;
+            const rightPad = CONFIG.REFUEL_PAD_RIGHT;
+            const onLeftPad = Math.abs(this.x - leftPad.x) < 50;
+            const targetPad = onLeftPad ? rightPad : leftPad;
+
+            // Check if target pad is occupied by another player
+            let padOccupied = false;
+            if (typeof playerManager !== 'undefined') {
+                for (const p of playerManager.players) {
+                    if (p !== this && (p.state === PlayerState.DOCKED || p.state === PlayerState.REFUELING)) {
+                        const onTarget = Math.abs(p.x - targetPad.x) < 50;
+                        if (onTarget) {
+                            padOccupied = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!padOccupied) {
+                // Teleport to the other pad
+                this.x = targetPad.x;
+                this.y = targetPad.y - CONFIG.REFUEL_PAD_HEIGHT - 15;
+                this.assignedPad = targetPad;
+                console.log(`Player ${this.id} switched to ${onLeftPad ? 'right' : 'left'} pad`);
+
+                // Small visual effect
+                if (typeof EffectsManager !== 'undefined') {
+                    EffectsManager.addExplosion(this.x, this.y, 8, '#00ffff');
+                }
             }
         }
     }

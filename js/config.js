@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.23',
+    VERSION: 'v1.0.25',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -92,16 +92,23 @@ const CONFIG = {
     ENEMY_MELEE_DAMAGE_TIME_MIN: 3,
     ENEMY_MELEE_DAMAGE_TIME_MAX: 10,
 
+    // Civilian System
+    CIVILIAN_RESCUE_RADIUS: 50,       // Doubled from 25 for easier rescues
+
     // Carrier Configuration
     CARRIER_SPEED: 30,
     CARRIER_ALTITUDE_BUFFER: 50,      // Pixels above tallest building
-    CARRIER_ATTACK_COOLDOWN_MIN: 10,  // Seconds
-    CARRIER_ATTACK_COOLDOWN_MAX: 20,  // Seconds
+    CARRIER_ATTACK_COOLDOWN_MIN: 5,   // Seconds (increased frequency for Zone 1)
+    CARRIER_ATTACK_COOLDOWN_MAX: 7,   // Seconds
     CARRIER_SPAWN_DRONE_TYPE: 'standard', // 'standard', 'aggressive', or 'random'
     CARRIER_MAX_SPAWNED_DRONES: 10,   // Global limit across all carriers
     CARRIER_SPAWN_FRAME: 28,          // Frame to spawn drones during attack
     CARRIER_DEATH_DAMAGE_MIN: 6,      // Min blocks destroyed on impact
     CARRIER_DEATH_DAMAGE_MAX: 10,     // Max blocks destroyed on impact
+
+    // Sandworm Configuration (Zone 2)
+    SANDWORM_FLY_DURATION: 5,         // Seconds to fly before burrowing (configurable)
+    SANDWORM_MAX_ATTACKS: 4,          // Max attacks before despawning
 
     // Gunship Configuration
     GUNSHIP_SPEED: 35,

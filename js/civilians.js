@@ -419,7 +419,7 @@ class CivilianManager {
                 Math.pow(playerY - civilian.y, 2)
             );
 
-            if (dist < 25) {
+            if (dist < (CONFIG.CIVILIAN_RESCUE_RADIUS || 50)) {
                 civilian.state = CivilianState.RESCUED;
                 civilian.active = false;
                 rescuedBuilding = civilian.building;

@@ -215,12 +215,18 @@ class Enemy {
                 this.maxHealth = 2;
                 this.width = 30;
                 this.height = 20;
-                this.currentBuildingIndex = 0;
+                // New flying/burrowing behavior
+                this.sandwormMode = 'flying'; // 'flying', 'burrowing', 'surfacing', 'leaving'
+                this.flyTimer = CONFIG.SANDWORM_FLY_DURATION || 5;
+                this.attackCount = 0;
+                this.maxAttacks = CONFIG.SANDWORM_MAX_ATTACKS || 4;
+                this.targetBuilding = null;
                 this.isSurfacing = false;
                 this.surfaceTimer = 0;
                 this.hasAttacked = false;
-                this.targetX = 0;
-                this.y = CONFIG.STREET_Y - 10; // Just below ground level
+                this.flyDirection = Math.random() < 0.5 ? 1 : -1;
+                // Start in the sky
+                this.y = CONFIG.SKY_TOP + 100 + Math.random() * 100;
                 break;
 
             case EnemyType.SAND_CARRIER:
@@ -637,53 +643,127 @@ class Enemy {
             return;
         }
 
-        // Sandworm: Travels underground, surfaces at buildings
+        // Sandworm: New behavior - fly around, burrow, attack, emerge, repeat (max 4 attacks)
         if (this.type === EnemyType.SANDWORM) {
             if (typeof buildingManager === 'undefined') return;
-
-            const buildings = buildingManager.buildings;
-            if (this.currentBuildingIndex >= buildings.length) {
-                // Visited all buildings, despawn (no score)
-                this.active = false;
-                this.state = EnemyState.DEAD;
-                return;
-            }
-
-            const targetBuilding = buildings[this.currentBuildingIndex];
-            this.targetX = targetBuilding.x + (targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
             const speedMod = this.bellSlowed ? 0.3 : 1.0;
 
-            if (!this.isSurfacing) {
-                const dx = this.targetX - this.x;
-                if (Math.abs(dx) > 10) {
-                    this.x += Math.sign(dx) * this.speed * speedMod * deltaTime;
-                } else {
-                    this.isSurfacing = true;
-                    this.surfaceTimer = 1.5;
-                    this.hasAttacked = false;
-                }
-            } else {
-                this.surfaceTimer -= deltaTime;
+            switch (this.sandwormMode) {
+                case 'flying':
+                    // Fly around the map
+                    this.x += this.flyDirection * this.speed * 1.5 * speedMod * deltaTime;
 
-                if (this.surfaceTimer <= 1.0 && !this.hasAttacked) {
-                    this.hasAttacked = true;
-                    const blocksToDestroy = 1 + Math.floor(Math.random() * 2);
-                    for (let i = 0; i < blocksToDestroy; i++) {
-                        const col = Math.floor(targetBuilding.widthBlocks / 2) + i - 1;
-                        const row = targetBuilding.heightBlocks - 1;
-                        if (col >= 0 && col < targetBuilding.widthBlocks) {
-                            targetBuilding.destroyBlock(row, col);
+                    // Slight vertical bobbing
+                    this.y += Math.sin(Date.now() / 500) * 0.5;
+
+                    // Bounce off screen edges
+                    if (this.x < 50) {
+                        this.x = 50;
+                        this.flyDirection = 1;
+                    } else if (this.x > CONFIG.CANVAS_WIDTH - 50) {
+                        this.x = CONFIG.CANVAS_WIDTH - 50;
+                        this.flyDirection = -1;
+                    }
+
+                    // Count down fly timer
+                    this.flyTimer -= deltaTime;
+                    if (this.flyTimer <= 0) {
+                        // Pick a random building to attack
+                        const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+                        if (buildings.length > 0 && this.attackCount < this.maxAttacks) {
+                            this.targetBuilding = buildings[Math.floor(Math.random() * buildings.length)];
+                            this.sandwormMode = 'burrowing';
+                            // Dive down toward ground
+                        } else {
+                            // No buildings or max attacks reached - leave
+                            this.sandwormMode = 'leaving';
                         }
                     }
-                    if (typeof EffectsManager !== 'undefined') {
-                        EffectsManager.addExplosion(this.x, CONFIG.STREET_Y - 20, 25, '#cc9944');
-                    }
-                }
+                    break;
 
-                if (this.surfaceTimer <= 0) {
-                    this.isSurfacing = false;
-                    this.currentBuildingIndex++;
-                }
+                case 'burrowing':
+                    // Dive down to ground level
+                    this.y += 200 * speedMod * deltaTime;
+
+                    if (this.y >= CONFIG.STREET_Y - 10) {
+                        this.y = CONFIG.STREET_Y - 10;
+                        // Now travel underground toward target
+                        this.sandwormMode = 'underground';
+                    }
+                    break;
+
+                case 'underground':
+                    // Travel underground toward target building (dust trail rendered)
+                    if (this.targetBuilding) {
+                        const targetX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                        const dx = targetX - this.x;
+
+                        if (Math.abs(dx) > 10) {
+                            this.x += Math.sign(dx) * this.speed * speedMod * deltaTime;
+                        } else {
+                            // Arrived - surface and attack
+                            this.sandwormMode = 'surfacing';
+                            this.surfaceTimer = 1.5;
+                            this.hasAttacked = false;
+                        }
+                    }
+                    break;
+
+                case 'surfacing':
+                    // Surface and attack the building
+                    this.surfaceTimer -= deltaTime;
+
+                    if (this.surfaceTimer <= 1.0 && !this.hasAttacked) {
+                        this.hasAttacked = true;
+                        this.attackCount++;
+
+                        // Destroy foundation blocks
+                        const blocksToDestroy = 1 + Math.floor(Math.random() * 2);
+                        for (let i = 0; i < blocksToDestroy; i++) {
+                            const col = Math.floor(this.targetBuilding.widthBlocks / 2) + i - 1;
+                            const row = this.targetBuilding.heightBlocks - 1;
+                            if (col >= 0 && col < this.targetBuilding.widthBlocks) {
+                                this.targetBuilding.destroyBlock(row, col);
+                            }
+                        }
+                        if (typeof EffectsManager !== 'undefined') {
+                            EffectsManager.addExplosion(this.x, CONFIG.STREET_Y - 20, 25, '#cc9944');
+                        }
+                    }
+
+                    if (this.surfaceTimer <= 0) {
+                        // Check if we should attack more or leave
+                        if (this.attackCount >= this.maxAttacks) {
+                            this.sandwormMode = 'leaving';
+                        } else {
+                            // Go back to flying
+                            this.sandwormMode = 'emerging';
+                        }
+                    }
+                    break;
+
+                case 'emerging':
+                    // Fly back up into the sky
+                    this.y -= 150 * speedMod * deltaTime;
+
+                    if (this.y <= CONFIG.SKY_TOP + 100) {
+                        this.y = CONFIG.SKY_TOP + 100;
+                        this.sandwormMode = 'flying';
+                        this.flyTimer = CONFIG.SANDWORM_FLY_DURATION || 5;
+                        this.targetBuilding = null;
+                    }
+                    break;
+
+                case 'leaving':
+                    // Fly off screen
+                    this.x += this.flyDirection * this.speed * 2 * speedMod * deltaTime;
+                    this.y -= 50 * deltaTime; // Rise as it leaves
+
+                    if (this.x < -50 || this.x > CONFIG.CANVAS_WIDTH + 50) {
+                        this.active = false;
+                        this.state = EnemyState.DEAD;
+                    }
+                    break;
             }
             return;
         }
@@ -1761,7 +1841,7 @@ class Enemy {
                 const dy = other.y - this.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 const otherRadius = other.type === EnemyType.SPLITTER ? 48 :
-                                   other.type === EnemyType.TANK ? 30 : 20;
+                    other.type === EnemyType.TANK ? 30 : 20;
 
                 if (dist < collisionRadius + otherRadius) {
                     // Deal 1 damage to the other enemy (die() handles health decrement)
@@ -2208,7 +2288,13 @@ class Enemy {
 
         // Try animated sprite first
         if (this.animations) {
-            const currentAnim = this.animations[this.currentAnimName];
+            let currentAnim = this.animations[this.currentAnimName];
+
+            // If attack animation is complete, use fly animation as fallback to prevent disappearing
+            if (this.currentAnimName === 'attack' && currentAnim && currentAnim.isComplete) {
+                currentAnim = this.animations.fly;
+            }
+
             if (currentAnim) {
                 ctx.save();
 
