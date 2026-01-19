@@ -3,7 +3,12 @@ const EnemyType = {
     AGGRESSIVE: 'aggressive', // Hunter Chopper
     TANK: 'tank',            // Heavy Gunship
     SPLITTER: 'splitter',    // Carrier
-    BOMBER: 'bomber'         // Kamikaze Missile
+    BOMBER: 'bomber',        // Kamikaze Missile
+    // Zone 2 enemies
+    DUST_DEVIL: 'dust_devil',
+    SANDWORM: 'sandworm',
+    SAND_CARRIER: 'sand_carrier',
+    SCORPION: 'scorpion'
 };
 
 const EnemyState = {
