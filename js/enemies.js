@@ -754,6 +754,22 @@ class Enemy {
             this.y = newY;
         }
 
+        // Add erratic movement for Zone 2 aggressive drones
+        if (this.type === EnemyType.AGGRESSIVE && this.erraticMovement) {
+            // More frequent direction changes
+            if (!this.erraticTimer) this.erraticTimer = 0;
+            this.erraticTimer -= deltaTime;
+
+            if (this.erraticTimer <= 0) {
+                this.erraticTimer = 0.1 + Math.random() * 0.2; // Change direction every 0.1-0.3 seconds
+                this.erraticAngle = (Math.random() - 0.5) * Math.PI; // Random angle adjustment
+            }
+
+            // Add random jitter to position
+            this.x += (Math.random() - 0.5) * 3;
+            this.y += (Math.random() - 0.5) * 2;
+        }
+
         // Screen bounds
         if (this.x < 20) { this.x = 20; this.velX = Math.abs(this.velX); }
         if (this.x > CONFIG.CANVAS_WIDTH - 20) { this.x = CONFIG.CANVAS_WIDTH - 20; this.velX = -Math.abs(this.velX); }
