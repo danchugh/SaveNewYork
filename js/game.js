@@ -508,10 +508,13 @@ function update(deltaTime) {
             if (input.isKeyJustPressed(Keys.ENTER)) {
                 SoundManager.init(); // Ensure audio context is ready
                 SoundManager.gameStart();
-                setTimeout(() => SoundManager.takeoff(), 300); // Takeoff sound after start
-                initGame();
-                console.log('Game started!');
+                StageSelect.init();
+                game.state = GameState.STAGE_SELECT;
+                console.log('Entering stage select');
             }
+            break;
+        case GameState.STAGE_SELECT:
+            StageSelect.update(deltaTime);
             break;
         case GameState.PLAYING:
             // Update input state for all players
@@ -621,6 +624,9 @@ function render() {
             if (typeof IntroManager !== 'undefined') {
                 IntroManager.render(ctx);
             }
+            break;
+        case GameState.STAGE_SELECT:
+            StageSelect.render(ctx);
             break;
         case GameState.PLAYING:
             renderGame();
