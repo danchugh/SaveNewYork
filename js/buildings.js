@@ -540,6 +540,64 @@ class Building {
 
         // Render debris particles
         this.debris.forEach(d => d.render(ctx));
+
+        // Render charge flag if building is charged (Zone 2)
+        if (this.isCharged && this.ability) {
+            this.renderChargeFlag(ctx);
+        }
+
+        // Render charge progress bar (Zone 2)
+        if (this.ability && !this.isCharged && !this.chargeDisabled && this.chargeKills > 0) {
+            this.renderChargeProgress(ctx);
+        }
+    }
+
+    renderChargeFlag(ctx) {
+        const flagX = this.x + (this.widthBlocks * this.blockSize) / 2;
+        const flagY = this.y - 20;
+
+        // Flag pole
+        ctx.strokeStyle = '#888888';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(flagX, this.y);
+        ctx.lineTo(flagX, flagY);
+        ctx.stroke();
+
+        // Glowing flag
+        const time = Date.now() / 200;
+        const glow = 0.7 + Math.sin(time) * 0.3;
+
+        ctx.fillStyle = `rgba(255, 204, 0, ${glow})`;
+        ctx.beginPath();
+        ctx.moveTo(flagX, flagY);
+        ctx.lineTo(flagX + 20, flagY + 8);
+        ctx.lineTo(flagX, flagY + 16);
+        ctx.closePath();
+        ctx.fill();
+
+        // Glow effect
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ffcc00';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+
+    renderChargeProgress(ctx) {
+        const barWidth = this.widthBlocks * this.blockSize - 4;
+        const barHeight = 4;
+        const barX = this.x + 2;
+        const barY = this.y - 10;
+
+        const progress = this.chargeKills / this.getEffectiveAbilityKills();
+
+        // Background
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
+        // Progress
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillRect(barX, barY, barWidth * progress, barHeight);
     }
 }
 
