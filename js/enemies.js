@@ -160,6 +160,20 @@ class Enemy {
                 this.spiralRadius = 30;
                 this.targetBuilding = null;
                 break;
+
+            case EnemyType.SANDWORM:
+                this.speed = 60;
+                this.health = 2;
+                this.maxHealth = 2;
+                this.width = 30;
+                this.height = 20;
+                this.currentBuildingIndex = 0;
+                this.isSurfacing = false;
+                this.surfaceTimer = 0;
+                this.hasAttacked = false;
+                this.targetX = 0;
+                this.y = CONFIG.STREET_Y - 10; // Just below ground level
+                break;
         }
     }
 
@@ -493,6 +507,57 @@ class Enemy {
                         EffectsManager.addExplosion(this.x, this.y, 20, '#cc9944');
                     }
                     this.die(true); // Die without score (kamikaze)
+                }
+            }
+            return;
+        }
+
+        // Sandworm: Travels underground, surfaces at buildings
+        if (this.type === EnemyType.SANDWORM) {
+            if (typeof buildingManager === 'undefined') return;
+
+            const buildings = buildingManager.buildings;
+            if (this.currentBuildingIndex >= buildings.length) {
+                // Visited all buildings, despawn (no score)
+                this.active = false;
+                this.state = EnemyState.DEAD;
+                return;
+            }
+
+            const targetBuilding = buildings[this.currentBuildingIndex];
+            this.targetX = targetBuilding.x + (targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+            const speedMod = this.bellSlowed ? 0.3 : 1.0;
+
+            if (!this.isSurfacing) {
+                const dx = this.targetX - this.x;
+                if (Math.abs(dx) > 10) {
+                    this.x += Math.sign(dx) * this.speed * speedMod * deltaTime;
+                } else {
+                    this.isSurfacing = true;
+                    this.surfaceTimer = 1.5;
+                    this.hasAttacked = false;
+                }
+            } else {
+                this.surfaceTimer -= deltaTime;
+
+                if (this.surfaceTimer <= 1.0 && !this.hasAttacked) {
+                    this.hasAttacked = true;
+                    const blocksToDestroy = 1 + Math.floor(Math.random() * 2);
+                    for (let i = 0; i < blocksToDestroy; i++) {
+                        const col = Math.floor(targetBuilding.widthBlocks / 2) + i - 1;
+                        const row = targetBuilding.heightBlocks - 1;
+                        if (col >= 0 && col < targetBuilding.widthBlocks) {
+                            targetBuilding.destroyBlock(row, col);
+                        }
+                    }
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addExplosion(this.x, CONFIG.STREET_Y - 20, 25, '#cc9944');
+                    }
+                }
+
+                if (this.surfaceTimer <= 0) {
+                    this.isSurfacing = false;
+                    this.currentBuildingIndex++;
                 }
             }
             return;
@@ -1589,6 +1654,7 @@ class Enemy {
             case EnemyType.SPLITTER: this.renderCarrier(ctx); break;
             case EnemyType.BOMBER: this.renderMissile(ctx); break;
             case EnemyType.DUST_DEVIL: this.renderDustDevil(ctx); break;
+            case EnemyType.SANDWORM: this.renderSandworm(ctx); break;
         }
 
         ctx.restore();
@@ -1934,6 +2000,38 @@ class Enemy {
         ctx.arc(0, 0, 6, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
+    }
+
+    renderSandworm(ctx) {
+        // Note: ctx already translated to (this.x, this.y) by render()
+        if (!this.isSurfacing) {
+            // Burrowing - sand trail
+            ctx.fillStyle = '#d4a574';
+            for (let i = 0; i < 5; i++) {
+                const tx = -i * 15 - Math.random() * 5;
+                ctx.beginPath();
+                ctx.arc(tx, 5, 6 - i, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Bulge
+            ctx.fillStyle = '#c49464';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 15, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // Surfaced worm
+            ctx.fillStyle = '#8b6914';
+            ctx.beginPath();
+            ctx.moveTo(0, -30);
+            ctx.bezierCurveTo(15, -20, 15, 10, 0, 20);
+            ctx.bezierCurveTo(-15, 10, -15, -20, 0, -30);
+            ctx.fill();
+            // Mouth
+            ctx.fillStyle = '#ff4444';
+            ctx.beginPath();
+            ctx.arc(0, -25, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 }
 
