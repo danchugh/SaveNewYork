@@ -125,6 +125,7 @@ function initGame(playerCount = 1, zoneNumber = 1) {
     EffectsManager.reset();
     ConstructionManager.reset();
     PowerupManager.reset();
+    if (typeof AbilityManager !== 'undefined') AbilityManager.reset();
     game.score = 0;
     game.nextBonusLifeAt = CONFIG.BONUS_LIFE_THRESHOLD;
     game.state = GameState.PLAYING;
@@ -567,7 +568,31 @@ function update(deltaTime) {
             VolcanoManager.update(game.deltaTime);
             EffectsManager.update(game.deltaTime);
             PowerupManager.update(game.deltaTime);
+            if (typeof AbilityManager !== 'undefined') AbilityManager.update(game.deltaTime);
             updateZoneSplash(game.deltaTime);
+
+            // Check player collision with charged building flags (Zone 2)
+            if (game.currentZone === 2) {
+                for (const p of playerManager.getActivePlayers()) {
+                    if (p.state !== 'flying') continue;
+
+                    for (const building of buildingManager.buildings) {
+                        if (building.isCharged) {
+                            const flagX = building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                            const flagY = building.y - 20;
+
+                            // Check collision with flag area
+                            const dx = p.x - flagX;
+                            const dy = p.y - flagY;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+
+                            if (dist < 30) {
+                                AbilityManager.triggerAbility(building, p);
+                            }
+                        }
+                    }
+                }
+            }
 
             // Process lightning damage
             if (typeof WeatherManager !== 'undefined') {
@@ -754,6 +779,9 @@ function renderGame() {
 
     // Draw visual effects (explosions, sparks, etc.)
     EffectsManager.render(ctx);
+
+    // Draw active abilities (Zone 2)
+    if (typeof AbilityManager !== 'undefined') AbilityManager.render(ctx);
 
     // Draw street (extends to bottom of canvas)
     ctx.fillStyle = DayCycle.getStreetColor();
