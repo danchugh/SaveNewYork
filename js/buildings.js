@@ -1,13 +1,23 @@
 // Building definitions: [x position, width in blocks, height in blocks]
-// Taller buildings for dramatic cityscape
-const BUILDING_DEFS = [
-    { x: 100, width: 5, height: 14 },   // Medium
-    { x: 240, width: 6, height: 22 },   // Tall
-    { x: 400, width: 5, height: 16 },   // Medium
-    { x: 540, width: 7, height: 25 },   // Tallest
-    { x: 700, width: 5, height: 18 },   // Medium-tall
-    { x: 820, width: 5, height: 10 }    // Short (near right spawn)
-];
+// Zone-indexed object for different environments
+const BUILDING_DEFS = {
+    1: [ // Zone 1: New York City
+        { x: 100, width: 5, height: 14, name: 'building' },   // Medium
+        { x: 240, width: 6, height: 22, name: 'building' },   // Tall
+        { x: 400, width: 5, height: 16, name: 'building' },   // Medium
+        { x: 540, width: 7, height: 25, name: 'building' },   // Tallest
+        { x: 700, width: 5, height: 18, name: 'building' },   // Medium-tall
+        { x: 820, width: 5, height: 10, name: 'building' }    // Short (near right spawn)
+    ],
+    2: [ // Zone 2: Desert Outpost
+        { x: 80,  width: 4, height: 8,  name: 'bunker',        abilityKills: 5,  ability: 'aa_battery' },
+        { x: 220, width: 5, height: 12, name: 'barracks',      abilityKills: 6,  ability: 'infantry' },
+        { x: 380, width: 4, height: 18, name: 'radar_tower',   abilityKills: 10, ability: 'airstrike' },
+        { x: 520, width: 5, height: 20, name: 'church',        abilityKills: 12, ability: 'bell_slow' },
+        { x: 660, width: 5, height: 14, name: 'control_tower', abilityKills: 8,  ability: 'targeting_boost' },
+        { x: 820, width: 4, height: 10, name: 'ammo_depot',    abilityKills: 5,  ability: 'artillery' }
+    ]
+};
 
 // Debris particle for collapse animation
 class Debris {
@@ -491,8 +501,9 @@ class BuildingManager {
         this.totalOriginalBlocks = 0;
     }
 
-    init() {
-        this.buildings = BUILDING_DEFS.map(def =>
+    init(zone = 1) {
+        const zoneDefs = BUILDING_DEFS[zone] || BUILDING_DEFS[1];
+        this.buildings = zoneDefs.map(def =>
             new Building(def.x, def.width, def.height)
         );
         this.totalOriginalBlocks = this.buildings.reduce(
