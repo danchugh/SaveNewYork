@@ -126,6 +126,7 @@ function initGame(playerCount = 1, zoneNumber = 1) {
     ConstructionManager.reset();
     PowerupManager.reset();
     if (typeof AbilityManager !== 'undefined') AbilityManager.reset();
+    if (typeof HeatShimmer !== 'undefined') HeatShimmer.reset();
     game.score = 0;
     game.nextBonusLifeAt = CONFIG.BONUS_LIFE_THRESHOLD;
     game.state = GameState.PLAYING;
@@ -569,6 +570,7 @@ function update(deltaTime) {
             EffectsManager.update(game.deltaTime);
             PowerupManager.update(game.deltaTime);
             if (typeof AbilityManager !== 'undefined') AbilityManager.update(game.deltaTime);
+            if (typeof HeatShimmer !== 'undefined') HeatShimmer.update(game.deltaTime);
             updateZoneSplash(game.deltaTime);
 
             // Check player collision with charged building flags (Zone 2)
@@ -782,6 +784,9 @@ function renderGame() {
 
     // Draw active abilities (Zone 2)
     if (typeof AbilityManager !== 'undefined') AbilityManager.render(ctx);
+
+    // Draw heat shimmer effect (Zone 2 day only)
+    if (typeof HeatShimmer !== 'undefined') HeatShimmer.render(ctx, canvas);
 
     // Draw street (extends to bottom of canvas)
     ctx.fillStyle = DayCycle.getStreetColor();
