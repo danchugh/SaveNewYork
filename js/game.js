@@ -22,7 +22,9 @@ const game = {
     score: 0,
     nextBonusLifeAt: CONFIG.BONUS_LIFE_THRESHOLD,
     finalWave: 0,
-    highScoreRank: 0
+    highScoreRank: 0,
+    currentZone: 1,           // Current zone (1 or 2)
+    zoneUnlocked: [true, false] // Zone unlock status [zone1, zone2]
 };
 
 // Helper function to add score and check for bonus lives
