@@ -466,7 +466,8 @@ class Enemy {
                     this.velX = dx / dist;
                     this.velY = dy / dist;
                 }
-                const diveSpeed = this.speed * 2.5;
+                const bomberSpeedMod = this.bellSlowed ? 0.3 : 1.0;
+                const diveSpeed = this.speed * 2.5 * bomberSpeedMod;
                 this.x += this.velX * diveSpeed * deltaTime;
                 this.y += this.velY * diveSpeed * deltaTime;
 
@@ -504,7 +505,8 @@ class Enemy {
 
             // Move straight across screen
             const direction = this.carrierMovingRight ? 1 : -1;
-            this.x += direction * this.speed * deltaTime;
+            const carrierSpeedMod = this.bellSlowed ? 0.3 : 1.0;
+            this.x += direction * this.speed * carrierSpeedMod * deltaTime;
 
             // Update attack cooldown
             this.carrierAttackCooldown -= deltaTime;
@@ -562,7 +564,8 @@ class Enemy {
 
             // Move horizontally
             const direction = this.gunshipPatrolRight ? 1 : -1;
-            this.x += direction * this.speed * deltaTime;
+            const gunshipSpeedMod = this.bellSlowed ? 0.3 : 1.0;
+            this.x += direction * this.speed * gunshipSpeedMod * deltaTime;
 
             // Bounce off screen edges
             if (this.x < 50) {
@@ -722,7 +725,8 @@ class Enemy {
         }
 
         // Apply movement
-        const speed = this.speed;
+        const speedMod = this.bellSlowed ? 0.3 : 1.0;
+        const speed = this.speed * speedMod;
         const newX = this.x + this.velX * speed * deltaTime;
         const newY = this.y + this.velY * speed * deltaTime + Math.sin(this.flightPhase) * 20 * deltaTime;
 

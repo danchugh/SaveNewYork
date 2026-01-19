@@ -13,9 +13,10 @@ class Projectile {
 
     update(deltaTime) {
         this.frame += deltaTime * 10;
+        const speedMod = this.bellSlowed ? 0.3 : 1.0;
         const radians = this.angle * (Math.PI / 180);
-        this.x += Math.cos(radians) * this.speed * deltaTime;
-        this.y += Math.sin(radians) * this.speed * deltaTime;
+        this.x += Math.cos(radians) * this.speed * speedMod * deltaTime;
+        this.y += Math.sin(radians) * this.speed * speedMod * deltaTime;
 
         // Deactivate if off screen (with margin for long tails)
         if (this.x < -20 || this.x > CONFIG.CANVAS_WIDTH + 20 ||

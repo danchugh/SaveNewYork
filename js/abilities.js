@@ -242,9 +242,52 @@ const AbilityManager = {
         }
     },
     triggerBellSlow() {
-        console.log('Bell slow triggered - implementation pending');
+        const bellEffect = {
+            duration: 9, // 8-10 seconds
+            slowFactor: 0.3, // 30% speed
+
+            update(deltaTime) {
+                // Apply slow to all enemies
+                if (typeof enemyManager !== 'undefined') {
+                    for (const enemy of enemyManager.enemies) {
+                        enemy.bellSlowed = true;
+                    }
+                }
+                // Apply slow to enemy projectiles
+                if (typeof projectileManager !== 'undefined') {
+                    for (const proj of projectileManager.projectiles) {
+                        if (!proj.isPlayerProjectile) {
+                            proj.bellSlowed = true;
+                        }
+                    }
+                }
+            },
+
+            onEnd() {
+                // Remove slow from all enemies
+                if (typeof enemyManager !== 'undefined') {
+                    for (const enemy of enemyManager.enemies) {
+                        enemy.bellSlowed = false;
+                    }
+                }
+                if (typeof projectileManager !== 'undefined') {
+                    for (const proj of projectileManager.projectiles) {
+                        proj.bellSlowed = false;
+                    }
+                }
+            },
+
+            render(ctx) {
+                // Screen-wide blue tint
+                ctx.fillStyle = 'rgba(100, 150, 255, 0.1)';
+                ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+            }
+        };
+
+        this.activeAbilities.push(bellEffect);
         if (typeof EffectsManager !== 'undefined') {
             EffectsManager.addTextPopup(CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2, 'TIME SLOW!', '#4488ff');
+            EffectsManager.shake(5);
         }
     },
     triggerTargetingBoost(player) {
