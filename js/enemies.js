@@ -3459,6 +3459,9 @@ class EnemyManager {
         this.maxConcurrentEnemies = 1;
         this.aggressiveRatio = 0;
         this.availableTypes = [EnemyType.STANDARD];
+
+        // Zone tracking
+        this.currentZone = 1;
     }
 
     reset() {
@@ -3476,6 +3479,7 @@ class EnemyManager {
         this.maxConcurrentEnemies = 1;
         this.aggressiveRatio = 0;
         this.availableTypes = [EnemyType.STANDARD];
+        this.currentZone = 1;
 
         // Enemy kill tracking for powerup drops
         this.enemiesKilledThisWave = 0;
@@ -3531,27 +3535,8 @@ class EnemyManager {
     }
 
     pickEnemyType() {
-        const weights = {
-            [EnemyType.STANDARD]: 50,
-            [EnemyType.AGGRESSIVE]: 20,
-            [EnemyType.SPLITTER]: 15,
-            [EnemyType.BOMBER]: 10,
-            [EnemyType.TANK]: 5
-        };
-
-        // Filter valid
-        let totalWeight = 0;
-        for (const type of this.availableTypes) {
-            totalWeight += weights[type];
-        }
-
-        let random = Math.random() * totalWeight;
-        for (const type of this.availableTypes) {
-            random -= weights[type];
-            if (random <= 0) return type;
-        }
-
-        return EnemyType.STANDARD;
+        // Use zone-aware weighted random type selection
+        return this.getWeightedRandomType(this.waveNumber);
     }
 
     spawnEnemy() {
@@ -3742,6 +3727,73 @@ class EnemyManager {
         if (this.waveNumber === 3) return 'gunner';
         if (this.waveNumber >= 5) return 'boss';
         return null;
+    }
+
+    // Zone management
+    setZone(zoneNumber) {
+        this.currentZone = zoneNumber;
+        console.log(`EnemyManager: Zone set to ${zoneNumber}`);
+    }
+
+    // Get spawn weights based on current zone
+    getSpawnWeights(waveNumber) {
+        // Check game's currentZone first, then fall back to local currentZone
+        const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : this.currentZone;
+        if (zone === 2) {
+            return this.getZone2SpawnWeights(waveNumber);
+        }
+        return this.getZone1SpawnWeights(waveNumber);
+    }
+
+    // Zone 1 spawn weights (preserves existing behavior)
+    getZone1SpawnWeights(waveNumber) {
+        const weights = {};
+        weights[EnemyType.STANDARD] = 50;
+        if (waveNumber >= 2) weights[EnemyType.AGGRESSIVE] = 20;
+        if (waveNumber >= 3) weights[EnemyType.SPLITTER] = 15;
+        if (waveNumber >= 4) weights[EnemyType.BOMBER] = 10;
+        if (waveNumber >= 5) weights[EnemyType.TANK] = 5;
+        return weights;
+    }
+
+    // Zone 2 spawn weights (desert enemies)
+    getZone2SpawnWeights(waveNumber) {
+        const weights = {};
+
+        // Wave 1: Standard only
+        weights[EnemyType.STANDARD] = 40;
+
+        // Wave 2+: Add Aggressive
+        if (waveNumber >= 2) weights[EnemyType.AGGRESSIVE] = 20;
+
+        // Wave 3+: Add Dust Devil and Sandworm
+        if (waveNumber >= 3) {
+            weights[EnemyType.DUST_DEVIL] = 15;
+            weights[EnemyType.SANDWORM] = 10;
+        }
+
+        // Wave 4+: Add Sand Carrier
+        if (waveNumber >= 4) weights[EnemyType.SAND_CARRIER] = 10;
+
+        // Wave 5+: Add Scorpion
+        if (waveNumber >= 5) weights[EnemyType.SCORPION] = 5;
+
+        return weights;
+    }
+
+    // Get weighted random enemy type based on zone and wave
+    getWeightedRandomType(waveNumber) {
+        const weights = this.getSpawnWeights(waveNumber);
+        const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+        let random = Math.random() * totalWeight;
+
+        for (const [type, weight] of Object.entries(weights)) {
+            random -= weight;
+            if (random <= 0) {
+                return type;
+            }
+        }
+        return EnemyType.STANDARD; // Fallback
     }
 }
 
