@@ -116,6 +116,25 @@ const CONFIG = {
     GUNSHIP_BOMB_DAMAGE: 4,           // 2x2 blocks
 
     // Win/Lose
-    CITY_DESTRUCTION_THRESHOLD: 0.8
+    CITY_DESTRUCTION_THRESHOLD: 0.8,
+
+    // Zone Configuration
+    ZONES: {
+        1: {
+            name: 'New York',
+            key: 'city',
+            waves: 5,
+            miniBossWaves: [2, 4],
+            background: 'city'
+        },
+        2: {
+            name: 'Desert Outpost',
+            key: 'desert',
+            waves: 5,
+            miniBossWaves: [2, 4],
+            background: 'desert'
+        }
+    },
+    TOTAL_ZONES: 2
 };
 
