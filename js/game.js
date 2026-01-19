@@ -10,6 +10,7 @@ const FRAME_TIME = 1000 / TARGET_FPS;
 const GameState = {
     LOADING: 'loading',
     TITLE: 'title',
+    STAGE_SELECT: 'stageselect',
     PLAYING: 'playing',
     GAME_OVER: 'gameover',
     VICTORY: 'victory'
