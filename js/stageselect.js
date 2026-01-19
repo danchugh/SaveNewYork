@@ -8,22 +8,22 @@ const StageSelect = {
 
     update(deltaTime) {
         // Handle input
-        if (input.isKeyPressed('ArrowUp') || input.isKeyPressed('KeyW')) {
+        if (input.isKeyJustPressed('ArrowUp') || input.isKeyJustPressed('KeyW')) {
             this.selectedZone = Math.max(1, this.selectedZone - 1);
         }
-        if (input.isKeyPressed('ArrowDown') || input.isKeyPressed('KeyS')) {
+        if (input.isKeyJustPressed('ArrowDown') || input.isKeyJustPressed('KeyS')) {
             this.selectedZone = Math.min(CONFIG.TOTAL_ZONES, this.selectedZone + 1);
         }
 
         // Check if zone is unlocked before allowing selection
-        if (input.isKeyPressed('Enter') || input.isKeyPressed('Space')) {
+        if (input.isKeyJustPressed('Enter') || input.isKeyJustPressed('Space')) {
             if (game.zoneUnlocked[this.selectedZone - 1]) {
                 initGame(1, this.selectedZone);
             }
         }
 
         // Back to title
-        if (input.isKeyPressed('Escape')) {
+        if (input.isKeyJustPressed('Escape')) {
             game.state = GameState.TITLE;
         }
     },
