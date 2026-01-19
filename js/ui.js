@@ -53,7 +53,7 @@ function renderHUD(ctx, buildingManager, enemyManager, totalScore) {
         ctx.textAlign = 'left';
         ctx.fillStyle = '#ffffff';
         ctx.fillText('WAVE', 280, hudY + 16);
-        ctx.fillText(`${enemyManager.waveNumber}-1`, 338, hudY + 16);
+        ctx.fillText(`${game.currentZone}-${enemyManager.waveNumber}`, 338, hudY + 16);
 
         // DMG (for 1P mode, on right)
         const destruction = Math.floor(buildingManager.getDestructionPercentage() * 100);
@@ -80,11 +80,11 @@ function renderHUD(ctx, buildingManager, enemyManager, totalScore) {
         const type = enemyManager.miniBoss.type.toUpperCase();
         ctx.fillText(`!! MINI-BOSS: ${type} !!`, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
     } else if (enemyManager.betweenWaves) {
-        ctx.fillText(`WAVE ${enemyManager.waveNumber + 1} INCOMING...`, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
+        ctx.fillText(`WAVE ${game.currentZone}-${enemyManager.waveNumber + 1} INCOMING...`, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
     } else {
         const multiplier = DayCycle.getScoreMultiplier();
         const timeDisplay = DayCycle.getDisplayName();
-        let waveText = `WAVE ${enemyManager.waveNumber} - ${timeDisplay}`;
+        let waveText = `WAVE ${game.currentZone}-${enemyManager.waveNumber} - ${timeDisplay}`;
         if (multiplier > 1) {
             waveText += ` (x${multiplier})`;
         }
