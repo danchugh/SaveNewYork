@@ -1444,6 +1444,14 @@ class Enemy {
         this.state = EnemyState.DEAD;
         this.active = false;
 
+        // Credit kill to nearest building for charge system (Zone 2)
+        if (typeof game !== 'undefined' && game.currentZone === 2 && typeof buildingManager !== 'undefined') {
+            const nearestBuilding = buildingManager.getNearestBuilding(this.x, this.y);
+            if (nearestBuilding) {
+                nearestBuilding.addKillCharge();
+            }
+        }
+
         // Explosion Juice
         if (typeof EffectsManager !== 'undefined') {
             // Smaller explosions for regular enemies, bigger for tanks

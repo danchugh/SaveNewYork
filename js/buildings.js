@@ -589,6 +589,24 @@ class BuildingManager {
     render(ctx) {
         this.buildings.forEach(b => b.render(ctx));
     }
+
+    getNearestBuilding(x, y) {
+        let nearest = null;
+        let nearestDist = Infinity;
+
+        for (const building of this.buildings) {
+            // Calculate distance to building's bottom-center
+            const bx = building.x + (building.widthBlocks * building.blockSize) / 2;
+            const by = building.y + building.heightBlocks * building.blockSize; // Bottom
+
+            const dist = Math.sqrt((x - bx) ** 2 + (y - by) ** 2);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearest = building;
+            }
+        }
+        return nearest;
+    }
 }
 
 const buildingManager = new BuildingManager();
