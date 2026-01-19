@@ -230,6 +230,21 @@ class Enemy {
                 this.podDropInterval = 3;
                 this.carrierMovingRight = Math.random() < 0.5;
                 break;
+
+            case EnemyType.SCORPION:
+                this.speed = 20;
+                this.health = 6;
+                this.maxHealth = 6;
+                this.width = 48;
+                this.height = 32;
+                this.climbingBuilding = null;
+                this.climbRow = 0;
+                this.climbTimer = 0;
+                this.attackTimer = 2;
+                this.onRooftop = false;
+                this.rooftopTimer = 0;
+                this.y = CONFIG.STREET_Y - 16;
+                break;
         }
     }
 
@@ -643,6 +658,81 @@ class Enemy {
                 this.podDropTimer = this.podDropInterval;
                 const pod = new BurrowingPod(this.x, CONFIG.STREET_Y - 5);
                 burrowingPods.push(pod);
+            }
+            return;
+        }
+
+        // Scorpion: Climbs buildings, destroys blocks, fires stingers
+        if (this.type === EnemyType.SCORPION) {
+            const speedMod = this.bellSlowed ? 0.3 : 1.0;
+
+            if (!this.climbingBuilding) {
+                // Find a building to climb
+                if (typeof buildingManager !== 'undefined') {
+                    const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+                    if (buildings.length > 0) {
+                        this.climbingBuilding = buildings[Math.floor(Math.random() * buildings.length)];
+                        this.x = this.climbingBuilding.x + (this.climbingBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                        this.y = CONFIG.STREET_Y - 16;
+                        this.climbRow = this.climbingBuilding.heightBlocks - 1;
+                        this.onRooftop = false;
+                    }
+                }
+                return;
+            }
+
+            const building = this.climbingBuilding;
+
+            if (!this.onRooftop) {
+                // Climbing phase
+                this.climbTimer += deltaTime * speedMod;
+
+                if (this.climbTimer >= 2.0) {
+                    this.climbTimer = 0;
+                    // Destroy block at current position
+                    const col = Math.floor(building.widthBlocks / 2);
+                    if (building.blocks && building.blocks[this.climbRow] && building.blocks[this.climbRow][col]) {
+                        building.destroyBlock(this.climbRow, col);
+                    }
+                    this.climbRow--;
+                    this.y = building.y + this.climbRow * CONFIG.BLOCK_SIZE;
+
+                    if (this.climbRow < 0) {
+                        this.onRooftop = true;
+                        this.rooftopTimer = 2.0;
+                        this.y = building.y - 20;
+                    }
+                }
+
+                // Fire stinger at player while climbing
+                this.attackTimer -= deltaTime * speedMod;
+                if (this.attackTimer <= 0) {
+                    this.attackTimer = 2.0;
+                    if (typeof player !== 'undefined' && typeof projectileManager !== 'undefined') {
+                        const angle = Math.atan2(player.y - this.y, player.x - this.x) * 180 / Math.PI;
+                        projectileManager.add(this.x, this.y, angle, 200, false);
+                    }
+                }
+            } else {
+                // On rooftop - rapid fire burst then leap
+                this.rooftopTimer -= deltaTime * speedMod;
+
+                if (this.rooftopTimer > 1.5) {
+                    this.attackTimer -= deltaTime * speedMod;
+                    if (this.attackTimer <= 0) {
+                        this.attackTimer = 0.2;
+                        if (typeof player !== 'undefined' && typeof projectileManager !== 'undefined') {
+                            const angle = Math.atan2(player.y - this.y, player.x - this.x) * 180 / Math.PI;
+                            projectileManager.add(this.x, this.y, angle, 250, false);
+                        }
+                    }
+                }
+
+                if (this.rooftopTimer <= 0) {
+                    this.onRooftop = false;
+                    this.climbingBuilding = null;
+                    this.attackTimer = 2.0;
+                }
             }
             return;
         }
@@ -1740,6 +1830,7 @@ class Enemy {
             case EnemyType.DUST_DEVIL: this.renderDustDevil(ctx); break;
             case EnemyType.SANDWORM: this.renderSandworm(ctx); break;
             case EnemyType.SAND_CARRIER: this.renderSandCarrier(ctx); break;
+            case EnemyType.SCORPION: this.renderScorpion(ctx); break;
         }
 
         ctx.restore();
@@ -2167,6 +2258,57 @@ class Enemy {
         }
 
         ctx.restore();
+    }
+
+    renderScorpion(ctx) {
+        // Note: ctx already translated to (this.x, this.y) by render()
+
+        // Body
+        ctx.fillStyle = '#5c3d2e';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 20, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Claws
+        ctx.fillStyle = '#4a2f23';
+        ctx.beginPath();
+        ctx.ellipse(-18, -8, 8, 5, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(-18, 8, 8, 5, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tail (stinger)
+        ctx.strokeStyle = '#5c3d2e';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(15, 0);
+        ctx.quadraticCurveTo(30, -20, 25, -35);
+        ctx.stroke();
+
+        // Stinger tip
+        ctx.fillStyle = '#ff4444';
+        ctx.beginPath();
+        ctx.arc(25, -35, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Legs
+        ctx.strokeStyle = '#4a2f23';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+            const legX = -5 + i * 8;
+            ctx.beginPath();
+            ctx.moveTo(legX, 10);
+            ctx.lineTo(legX + 5, 20);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(legX, -10);
+            ctx.lineTo(legX + 5, -20);
+            ctx.stroke();
+        }
+
+        // Health bar
+        this.renderHealthBar(ctx);
     }
 }
 
