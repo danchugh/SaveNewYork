@@ -9,7 +9,8 @@ const EnemyType = {
     SANDWORM: 'sandworm',
     SAND_CARRIER: 'sand_carrier',
     SCORPION: 'scorpion',
-    VULTURE_KING: 'vulture_king'
+    VULTURE_KING: 'vulture_king',
+    SANDSTORM_COLOSSUS: 'sandstorm_colossus'
 };
 
 const EnemyState = {
@@ -262,6 +263,19 @@ class Enemy {
                 this.diveTimer = 3; // Time before first dive
                 this.recoveryTimer = 0;
                 this.hasDebris = false;
+                break;
+
+            case EnemyType.SANDSTORM_COLOSSUS:
+                this.speed = 25;
+                this.health = 16;
+                this.maxHealth = 16;
+                this.width = 128;
+                this.height = 96;
+                this.isBoss = true;
+                this.movingRight = Math.random() < 0.5;
+                this.droneSpawnTimer = 0;
+                this.droneSpawnInterval = 3.5;
+                this.sandstormAlpha = 0;
                 break;
         }
     }
@@ -833,6 +847,41 @@ class Enemy {
                     this.bossPhase = 'circling';
                     this.diveTimer = 3 + Math.random() * 2;
                     this.targetBuilding = null;
+                }
+            }
+            return;
+        }
+
+        // Sandstorm Colossus Mini-Boss
+        if (this.type === EnemyType.SANDSTORM_COLOSSUS) {
+            const speedMod = this.bellSlowed ? 0.3 : 1.0;
+
+            // Slow horizontal movement
+            if (this.movingRight) {
+                this.x += this.speed * speedMod * deltaTime;
+                if (this.x > CONFIG.CANVAS_WIDTH + 100) this.movingRight = false;
+            } else {
+                this.x -= this.speed * speedMod * deltaTime;
+                if (this.x < -100) this.movingRight = true;
+            }
+
+            // Maintain altitude
+            const targetY = 180;
+            if (this.y < targetY) this.y += 10 * deltaTime;
+            if (this.y > targetY) this.y -= 10 * deltaTime;
+
+            // Sandstorm effect intensity
+            this.sandstormAlpha = Math.min(0.4, this.sandstormAlpha + deltaTime * 0.1);
+
+            // Spawn drones periodically
+            this.droneSpawnTimer -= deltaTime;
+            if (this.droneSpawnTimer <= 0) {
+                this.droneSpawnTimer = this.droneSpawnInterval;
+                if (typeof enemyManager !== 'undefined') {
+                    const spawnX = this.x + (Math.random() - 0.5) * 60;
+                    const spawnY = this.y + 40;
+                    const drone = new Enemy(spawnX, spawnY, EnemyType.STANDARD);
+                    enemyManager.enemies.push(drone);
                 }
             }
             return;
@@ -1933,6 +1982,7 @@ class Enemy {
             case EnemyType.SAND_CARRIER: this.renderSandCarrier(ctx); break;
             case EnemyType.SCORPION: this.renderScorpion(ctx); break;
             case EnemyType.VULTURE_KING: this.renderVultureKing(ctx); break;
+            case EnemyType.SANDSTORM_COLOSSUS: this.renderSandstormColossus(ctx); break;
         }
 
         ctx.restore();
@@ -2471,6 +2521,75 @@ class Enemy {
 
         // Health bar (larger for boss)
         this.renderHealthBar(ctx, 60);
+    }
+
+    renderSandstormColossus(ctx) {
+        // Render sandstorm overlay first (behind everything)
+        if (this.sandstormAlpha > 0) {
+            ctx.save();
+            ctx.globalAlpha = this.sandstormAlpha;
+            ctx.fillStyle = '#c4a35a';
+            ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+
+            // Swirling dust particles
+            const time = Date.now() / 500;
+            for (let i = 0; i < 20; i++) {
+                const px = (Math.sin(time + i * 0.5) * 0.5 + 0.5) * CONFIG.CANVAS_WIDTH;
+                const py = (Math.cos(time * 0.7 + i * 0.3) * 0.5 + 0.5) * CONFIG.CANVAS_HEIGHT;
+                ctx.globalAlpha = this.sandstormAlpha * 0.5;
+                ctx.beginPath();
+                ctx.arc(px, py, 10 + Math.sin(time + i) * 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        if (!this.movingRight) ctx.scale(-1, 1);
+
+        // Massive carrier body
+        ctx.fillStyle = '#5a4a3a';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 60, 35, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sand armor plating
+        ctx.fillStyle = '#8b7355';
+        ctx.beginPath();
+        ctx.ellipse(0, -10, 50, 25, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Drone bay (glowing)
+        const glow = 0.5 + Math.sin(Date.now() / 200) * 0.3;
+        ctx.fillStyle = `rgba(255, 100, 50, ${glow})`;
+        ctx.fillRect(-30, 20, 60, 15);
+
+        // Wing-like protrusions
+        ctx.fillStyle = '#4a3a2a';
+        ctx.beginPath();
+        ctx.moveTo(-40, 0);
+        ctx.lineTo(-70, -25);
+        ctx.lineTo(-65, 15);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(40, 0);
+        ctx.lineTo(70, -25);
+        ctx.lineTo(65, 15);
+        ctx.closePath();
+        ctx.fill();
+
+        // Eye/sensor
+        ctx.fillStyle = '#ff4400';
+        ctx.beginPath();
+        ctx.arc(-20, -20, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        // Health bar (large for boss)
+        this.renderHealthBar(ctx, 100);
     }
 
     renderHealthBar(ctx, width = 40) {
