@@ -22,6 +22,51 @@ const EnemyState = {
 // Global counter for carrier-spawned drones (don't count toward wave completion)
 let carrierSpawnedDroneCount = 0;
 
+// Global array for burrowing pods (Sand Carrier)
+let burrowingPods = [];
+
+class BurrowingPod {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.burstTimer = 4 + Math.random(); // 4-5 seconds
+        this.active = true;
+    }
+
+    update(deltaTime) {
+        if (!this.active) return;
+        this.burstTimer -= deltaTime;
+
+        if (this.burstTimer <= 0) {
+            this.active = false;
+            // Spawn drone
+            if (typeof enemyManager !== 'undefined') {
+                const drone = new Enemy(this.x, this.y - 30, EnemyType.STANDARD);
+                drone.velY = -0.5;
+                enemyManager.enemies.push(drone);
+            }
+            if (typeof EffectsManager !== 'undefined') {
+                EffectsManager.addExplosion(this.x, this.y, 20, '#cc9944');
+            }
+        }
+    }
+
+    render(ctx) {
+        if (!this.active) return;
+        const pulse = 0.5 + Math.sin(Date.now() / 200) * 0.3;
+        ctx.fillStyle = `rgba(139, 90, 43, ${pulse})`;
+        ctx.beginPath();
+        ctx.ellipse(this.x, this.y, 12, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (this.burstTimer < 1) {
+            ctx.strokeStyle = '#ff4444';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+    }
+}
+
 class Enemy {
     constructor(x, y, type) {
         this.x = x;
@@ -173,6 +218,17 @@ class Enemy {
                 this.hasAttacked = false;
                 this.targetX = 0;
                 this.y = CONFIG.STREET_Y - 10; // Just below ground level
+                break;
+
+            case EnemyType.SAND_CARRIER:
+                this.speed = CONFIG.CARRIER_SPEED || 30;
+                this.health = 3;
+                this.maxHealth = 3;
+                this.width = 96;
+                this.height = 96;
+                this.podDropTimer = 2;
+                this.podDropInterval = 3;
+                this.carrierMovingRight = Math.random() < 0.5;
                 break;
         }
     }
@@ -559,6 +615,34 @@ class Enemy {
                     this.isSurfacing = false;
                     this.currentBuildingIndex++;
                 }
+            }
+            return;
+        }
+
+        // Sand Carrier: Flies across, drops burrowing pods
+        if (this.type === EnemyType.SAND_CARRIER) {
+            const speedMod = this.bellSlowed ? 0.3 : 1.0;
+
+            // Horizontal movement
+            if (this.carrierMovingRight) {
+                this.x += this.speed * speedMod * deltaTime;
+                if (this.x > CONFIG.CANVAS_WIDTH + 50) this.carrierMovingRight = false;
+            } else {
+                this.x -= this.speed * speedMod * deltaTime;
+                if (this.x < -50) this.carrierMovingRight = true;
+            }
+
+            // Maintain altitude above buildings
+            const targetAltitude = 150;
+            if (this.y > targetAltitude) this.y -= 20 * deltaTime;
+            if (this.y < targetAltitude) this.y += 20 * deltaTime;
+
+            // Drop pods periodically
+            this.podDropTimer -= deltaTime;
+            if (this.podDropTimer <= 0) {
+                this.podDropTimer = this.podDropInterval;
+                const pod = new BurrowingPod(this.x, CONFIG.STREET_Y - 5);
+                burrowingPods.push(pod);
             }
             return;
         }
@@ -1655,6 +1739,7 @@ class Enemy {
             case EnemyType.BOMBER: this.renderMissile(ctx); break;
             case EnemyType.DUST_DEVIL: this.renderDustDevil(ctx); break;
             case EnemyType.SANDWORM: this.renderSandworm(ctx); break;
+            case EnemyType.SAND_CARRIER: this.renderSandCarrier(ctx); break;
         }
 
         ctx.restore();
@@ -2032,6 +2117,56 @@ class Enemy {
             ctx.arc(0, -25, 8, 0, Math.PI * 2);
             ctx.fill();
         }
+    }
+
+    renderSandCarrier(ctx) {
+        // Note: ctx already translated to (this.x, this.y) by render()
+        ctx.save();
+        if (!this.carrierMovingRight) ctx.scale(-1, 1);
+
+        // Large carrier body (procedural)
+        ctx.fillStyle = '#5c4a3d';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 45, 25, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sand/dust texture
+        ctx.fillStyle = '#8b7355';
+        ctx.beginPath();
+        ctx.ellipse(0, -5, 35, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pod bay
+        ctx.fillStyle = '#3d3020';
+        ctx.fillRect(-20, 15, 40, 10);
+
+        // Wings
+        ctx.fillStyle = '#4a3d30';
+        ctx.beginPath();
+        ctx.moveTo(-30, 0);
+        ctx.lineTo(-50, -15);
+        ctx.lineTo(-45, 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(30, 0);
+        ctx.lineTo(50, -15);
+        ctx.lineTo(45, 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Health bar (unflip if needed for correct rendering)
+        if (this.health > 0) {
+            if (!this.carrierMovingRight) {
+                ctx.scale(-1, 1);
+            }
+            for (let i = 0; i < this.health; i++) {
+                ctx.fillStyle = '#4ade80';
+                ctx.fillRect(-20 + i * 14, -35, 10, 5);
+            }
+        }
+
+        ctx.restore();
     }
 }
 
@@ -2906,6 +3041,10 @@ class EnemyManager {
 
         this.enemies = this.enemies.filter(e => e.active);
 
+        // Update burrowing pods
+        burrowingPods.forEach(pod => pod.update(deltaTime));
+        burrowingPods = burrowingPods.filter(pod => pod.active);
+
         // Check wave progress for parachute drops
         if (this.totalEnemiesInWave > 0 && typeof PowerupManager !== 'undefined') {
             const waveProgress = this.enemiesKilledThisWave / this.totalEnemiesInWave;
@@ -2937,6 +3076,8 @@ class EnemyManager {
         if (this.boss && this.boss.active) {
             this.boss.render(ctx);
         }
+        // Render burrowing pods
+        burrowingPods.forEach(pod => pod.render(ctx));
     }
 
     getUpcomingBoss() {
