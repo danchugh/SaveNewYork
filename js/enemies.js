@@ -10,7 +10,8 @@ const EnemyType = {
     SAND_CARRIER: 'sand_carrier',
     SCORPION: 'scorpion',
     VULTURE_KING: 'vulture_king',
-    SANDSTORM_COLOSSUS: 'sandstorm_colossus'
+    SANDSTORM_COLOSSUS: 'sandstorm_colossus',
+    SIEGE_CRAWLER: 'siege_crawler'
 };
 
 const EnemyState = {
@@ -276,6 +277,27 @@ class Enemy {
                 this.droneSpawnTimer = 0;
                 this.droneSpawnInterval = 3.5;
                 this.sandstormAlpha = 0;
+                break;
+
+            case EnemyType.SIEGE_CRAWLER:
+                this.speed = 15;
+                this.health = 15; // Core HP (only damageable when shield down)
+                this.maxHealth = 15;
+                this.width = 160;
+                this.height = 120;
+                this.isBoss = true;
+                this.y = CONFIG.STREET_Y - 60;
+
+                // Destructible weapon systems
+                this.weapons = {
+                    missilePods: { hp: 4, maxHp: 4, active: true },
+                    droneBay: { hp: 8, maxHp: 8, active: true },
+                    mortarCannon: { hp: 10, maxHp: 10, active: true },
+                    shieldGenerator: { hp: 6, maxHp: 6, active: true }
+                };
+                this.coreExposed = false;
+                this.targetBuilding = null;
+                this.attackTimers = { missile: 2, drone: 4, mortar: 5 };
                 break;
         }
     }
@@ -882,6 +904,89 @@ class Enemy {
                     const spawnY = this.y + 40;
                     const drone = new Enemy(spawnX, spawnY, EnemyType.STANDARD);
                     enemyManager.enemies.push(drone);
+                }
+            }
+            return;
+        }
+
+        // Siege Crawler Final Boss
+        if (this.type === EnemyType.SIEGE_CRAWLER) {
+            const speedMod = this.bellSlowed ? 0.3 : 1.0;
+
+            // Check if shield is down - expose core
+            this.coreExposed = !this.weapons.shieldGenerator.active;
+
+            // Find nearest building target
+            if (!this.targetBuilding && typeof buildingManager !== 'undefined') {
+                const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+                if (buildings.length > 0) {
+                    let nearest = buildings[0];
+                    let nearestDist = Math.abs(this.x - nearest.x);
+                    for (const b of buildings) {
+                        const dist = Math.abs(this.x - b.x);
+                        if (dist < nearestDist) {
+                            nearestDist = dist;
+                            nearest = b;
+                        }
+                    }
+                    this.targetBuilding = nearest;
+                }
+            }
+
+            // Advance toward building
+            if (this.targetBuilding) {
+                const targetX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                const dx = targetX - this.x;
+
+                if (Math.abs(dx) > 30) {
+                    this.x += Math.sign(dx) * this.speed * speedMod * deltaTime;
+                } else {
+                    // Reached building - massive damage
+                    for (let i = 0; i < 15; i++) {
+                        const col = Math.floor(Math.random() * this.targetBuilding.widthBlocks);
+                        const row = Math.floor(Math.random() * this.targetBuilding.heightBlocks);
+                        this.targetBuilding.destroyBlock(row, col);
+                    }
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.shake(15);
+                        EffectsManager.addExplosion(this.x, this.y - 30, 50, '#ff4400');
+                    }
+                    this.targetBuilding = null; // Find next target
+                }
+            }
+
+            // Weapon attacks
+            if (this.weapons.missilePods.active) {
+                this.attackTimers.missile -= deltaTime;
+                if (this.attackTimers.missile <= 0) {
+                    this.attackTimers.missile = 3;
+                    if (typeof player !== 'undefined' && typeof projectileManager !== 'undefined') {
+                        const angle = Math.atan2(player.y - this.y, player.x - this.x) * 180 / Math.PI;
+                        projectileManager.add(this.x - 40, this.y - 30, angle, 180, false);
+                        projectileManager.add(this.x + 40, this.y - 30, angle, 180, false);
+                    }
+                }
+            }
+
+            if (this.weapons.droneBay.active) {
+                this.attackTimers.drone -= deltaTime;
+                if (this.attackTimers.drone <= 0) {
+                    this.attackTimers.drone = 5;
+                    if (typeof enemyManager !== 'undefined') {
+                        const drone = new Enemy(this.x, this.y - 50, EnemyType.STANDARD);
+                        enemyManager.enemies.push(drone);
+                    }
+                }
+            }
+
+            if (this.weapons.mortarCannon.active && this.targetBuilding) {
+                this.attackTimers.mortar -= deltaTime;
+                if (this.attackTimers.mortar <= 0) {
+                    this.attackTimers.mortar = 4;
+                    const targetX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                    if (typeof projectileManager !== 'undefined') {
+                        projectileManager.addBomb(this.x, this.y - 40, -60, 100);
+                    }
                 }
             }
             return;
@@ -1918,6 +2023,37 @@ class Enemy {
             }
         }
 
+        // SIEGE CRAWLER: weapon targeting - damage weapons first, then core when exposed
+        if (this.type === EnemyType.SIEGE_CRAWLER) {
+            if (!this.coreExposed) {
+                // Damage a random active weapon system
+                const activeWeapons = Object.entries(this.weapons).filter(([k, v]) => v.active);
+                if (activeWeapons.length > 0) {
+                    const [weaponName, weapon] = activeWeapons[Math.floor(Math.random() * activeWeapons.length)];
+                    weapon.hp -= 1;
+                    if (weapon.hp <= 0) {
+                        weapon.active = false;
+                        if (typeof EffectsManager !== 'undefined') {
+                            EffectsManager.addExplosion(this.x, this.y - 20, 35, '#ff6600');
+                            EffectsManager.addTextPopup(this.x, this.y - 50, `${weaponName.toUpperCase()} DESTROYED!`, '#ff4444');
+                        }
+                    } else {
+                        if (typeof SoundManager !== 'undefined') SoundManager.tankHit();
+                        if (typeof EffectsManager !== 'undefined') EffectsManager.addExplosion(this.x, this.y, 15, '#ffffff');
+                    }
+                    return; // Don't damage core while shielded
+                }
+            }
+            // Core is exposed - take damage
+            if (this.health > 1 && !forceImmediate) {
+                this.health--;
+                if (typeof SoundManager !== 'undefined') SoundManager.tankHit();
+                if (typeof EffectsManager !== 'undefined') EffectsManager.addExplosion(this.x, this.y, 20, '#ff4444');
+                return; // Survives
+            }
+            // Final hit - die with massive explosion
+        }
+
         // Final Death
         this.state = EnemyState.DEAD;
         this.active = false;
@@ -1966,8 +2102,8 @@ class Enemy {
 
         if (this.state === EnemyState.FALLING || this.type === EnemyType.BOMBER) {
             ctx.rotate(this.rotation);
-        } else if (this.type !== EnemyType.SPLITTER) {
-            // Slight bank based on velocity (skip for carrier - stays horizontal)
+        } else if (this.type !== EnemyType.SPLITTER && this.type !== EnemyType.SIEGE_CRAWLER) {
+            // Slight bank based on velocity (skip for carrier and ground units - stays horizontal)
             ctx.rotate(this.velX * 0.2);
         }
 
@@ -1983,6 +2119,7 @@ class Enemy {
             case EnemyType.SCORPION: this.renderScorpion(ctx); break;
             case EnemyType.VULTURE_KING: this.renderVultureKing(ctx); break;
             case EnemyType.SANDSTORM_COLOSSUS: this.renderSandstormColossus(ctx); break;
+            case EnemyType.SIEGE_CRAWLER: this.renderSiegeCrawler(ctx); break;
         }
 
         ctx.restore();
@@ -2590,6 +2727,79 @@ class Enemy {
 
         // Health bar (large for boss)
         this.renderHealthBar(ctx, 100);
+    }
+
+    renderSiegeCrawler(ctx) {
+        // Note: ctx already translated to (this.x, this.y) by render()
+
+        // Treads
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(-70, 30, 60, 20);
+        ctx.fillRect(10, 30, 60, 20);
+
+        // Main body
+        ctx.fillStyle = '#4a4a4a';
+        ctx.fillRect(-60, -20, 120, 50);
+
+        // Armor plating
+        ctx.fillStyle = '#5a5a5a';
+        ctx.fillRect(-50, -30, 100, 15);
+
+        // Weapon systems (color-coded by status)
+        // Missile Pods (left/right)
+        ctx.fillStyle = this.weapons.missilePods.active ? '#666666' : '#333333';
+        ctx.fillRect(-55, -25, 20, 25);
+        ctx.fillRect(35, -25, 20, 25);
+
+        // Drone Bay (center top)
+        ctx.fillStyle = this.weapons.droneBay.active ? '#556655' : '#333333';
+        ctx.fillRect(-20, -40, 40, 15);
+
+        // Mortar Cannon (center)
+        ctx.fillStyle = this.weapons.mortarCannon.active ? '#665555' : '#333333';
+        ctx.beginPath();
+        ctx.arc(0, -15, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shield Generator (back)
+        ctx.fillStyle = this.weapons.shieldGenerator.active ? '#4488ff' : '#333333';
+        ctx.fillRect(-15, 5, 30, 20);
+        if (this.weapons.shieldGenerator.active) {
+            // Shield effect
+            ctx.strokeStyle = `rgba(68, 136, 255, ${0.3 + Math.sin(Date.now() / 200) * 0.2})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 75, 55, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // Core (glows when exposed)
+        if (this.coreExposed) {
+            const pulse = 0.5 + Math.sin(Date.now() / 150) * 0.3;
+            ctx.fillStyle = `rgba(255, 50, 50, ${pulse})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, 12, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Health bar showing total weapon HP + core (relative to translated origin)
+        const totalMaxHp = 4 + 8 + 10 + 6 + 15; // 43 total
+        const currentHp =
+            (this.weapons.missilePods.active ? this.weapons.missilePods.hp : 0) +
+            (this.weapons.droneBay.active ? this.weapons.droneBay.hp : 0) +
+            (this.weapons.mortarCannon.active ? this.weapons.mortarCannon.hp : 0) +
+            (this.weapons.shieldGenerator.active ? this.weapons.shieldGenerator.hp : 0) +
+            this.health;
+
+        const barWidth = 120;
+        const barHeight = 8;
+        const barX = -barWidth / 2;
+        const barY = -70;
+
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+        ctx.fillStyle = this.coreExposed ? '#ff4444' : '#44ff44';
+        ctx.fillRect(barX, barY, barWidth * (currentHp / totalMaxHp), barHeight);
     }
 
     renderHealthBar(ctx, width = 40) {
