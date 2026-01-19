@@ -8,7 +8,8 @@ const EnemyType = {
     DUST_DEVIL: 'dust_devil',
     SANDWORM: 'sandworm',
     SAND_CARRIER: 'sand_carrier',
-    SCORPION: 'scorpion'
+    SCORPION: 'scorpion',
+    VULTURE_KING: 'vulture_king'
 };
 
 const EnemyState = {
@@ -244,6 +245,23 @@ class Enemy {
                 this.onRooftop = false;
                 this.rooftopTimer = 0;
                 this.y = CONFIG.STREET_Y - 16;
+                break;
+
+            case EnemyType.VULTURE_KING:
+                this.speed = 120;
+                this.health = 11;
+                this.maxHealth = 11;
+                this.width = 64;
+                this.height = 64;
+                this.isBoss = true;
+                this.bossPhase = 'circling'; // circling, diving, recovering
+                this.circleAngle = 0;
+                this.circleRadius = 200;
+                this.circleCenter = { x: CONFIG.CANVAS_WIDTH / 2, y: 200 };
+                this.targetBuilding = null;
+                this.diveTimer = 3; // Time before first dive
+                this.recoveryTimer = 0;
+                this.hasDebris = false;
                 break;
         }
     }
@@ -732,6 +750,89 @@ class Enemy {
                     this.onRooftop = false;
                     this.climbingBuilding = null;
                     this.attackTimer = 2.0;
+                }
+            }
+            return;
+        }
+
+        // Vulture King Mini-Boss
+        if (this.type === EnemyType.VULTURE_KING) {
+            const speedMod = this.bellSlowed ? 0.3 : 1.0;
+
+            if (this.bossPhase === 'circling') {
+                // Circle high above battlefield
+                this.circleAngle += deltaTime * 1.5 * speedMod;
+                this.x = this.circleCenter.x + Math.cos(this.circleAngle) * this.circleRadius;
+                this.y = this.circleCenter.y + Math.sin(this.circleAngle) * this.circleRadius * 0.3;
+
+                this.diveTimer -= deltaTime;
+                if (this.diveTimer <= 0) {
+                    // Pick a building target
+                    if (typeof buildingManager !== 'undefined') {
+                        const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+                        if (buildings.length > 0) {
+                            this.targetBuilding = buildings[Math.floor(Math.random() * buildings.length)];
+                            this.bossPhase = 'diving';
+                        }
+                    }
+                }
+            } else if (this.bossPhase === 'diving') {
+                // Dive toward target building
+                if (this.targetBuilding) {
+                    const targetX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                    const targetY = this.targetBuilding.y;
+                    const dx = targetX - this.x;
+                    const dy = targetY - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist > 30) {
+                        this.x += (dx / dist) * this.speed * 1.5 * speedMod * deltaTime;
+                        this.y += (dy / dist) * this.speed * 1.5 * speedMod * deltaTime;
+                    } else {
+                        // Hit building - damage it
+                        for (let i = 0; i < 3; i++) {
+                            const col = Math.floor(Math.random() * this.targetBuilding.widthBlocks);
+                            const row = Math.floor(Math.random() * Math.min(5, this.targetBuilding.heightBlocks));
+                            this.targetBuilding.destroyBlock(row, col);
+                        }
+                        if (typeof EffectsManager !== 'undefined') {
+                            EffectsManager.addExplosion(this.x, this.y, 30, '#cc9944');
+                            EffectsManager.shake(8);
+                        }
+                        this.hasDebris = true;
+                        this.bossPhase = 'recovering';
+                        this.recoveryTimer = 2.0;
+                    }
+                }
+            } else if (this.bossPhase === 'recovering') {
+                // Hover briefly then return to circling
+                this.y -= 30 * speedMod * deltaTime; // Rise up
+                this.recoveryTimer -= deltaTime;
+
+                // Drop debris on another building
+                if (this.hasDebris && this.recoveryTimer < 1.0) {
+                    this.hasDebris = false;
+                    if (typeof buildingManager !== 'undefined') {
+                        const buildings = buildingManager.buildings.filter(b => b !== this.targetBuilding && b.getBlockCount() > 0);
+                        if (buildings.length > 0) {
+                            const dropTarget = buildings[Math.floor(Math.random() * buildings.length)];
+                            // Damage drop target
+                            for (let i = 0; i < 2; i++) {
+                                const col = Math.floor(Math.random() * dropTarget.widthBlocks);
+                                dropTarget.destroyBlock(0, col);
+                            }
+                            if (typeof EffectsManager !== 'undefined') {
+                                const dropX = dropTarget.x + (dropTarget.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                                EffectsManager.addExplosion(dropX, dropTarget.y, 25, '#996633');
+                            }
+                        }
+                    }
+                }
+
+                if (this.recoveryTimer <= 0) {
+                    this.bossPhase = 'circling';
+                    this.diveTimer = 3 + Math.random() * 2;
+                    this.targetBuilding = null;
                 }
             }
             return;
@@ -1831,6 +1932,7 @@ class Enemy {
             case EnemyType.SANDWORM: this.renderSandworm(ctx); break;
             case EnemyType.SAND_CARRIER: this.renderSandCarrier(ctx); break;
             case EnemyType.SCORPION: this.renderScorpion(ctx); break;
+            case EnemyType.VULTURE_KING: this.renderVultureKing(ctx); break;
         }
 
         ctx.restore();
@@ -2309,6 +2411,89 @@ class Enemy {
 
         // Health bar
         this.renderHealthBar(ctx);
+    }
+
+    renderVultureKing(ctx) {
+        ctx.save();
+
+        const flapAngle = Math.sin(Date.now() / 100) * 0.3;
+
+        // Wings
+        ctx.fillStyle = '#2d1f1a';
+        ctx.save();
+        ctx.rotate(-flapAngle);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-50, -20);
+        ctx.lineTo(-45, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.rotate(flapAngle);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(50, -20);
+        ctx.lineTo(45, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Body
+        ctx.fillStyle = '#3d2a20';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 20, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = '#8b0000';
+        ctx.beginPath();
+        ctx.arc(-15, -10, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Beak
+        ctx.fillStyle = '#ffcc00';
+        ctx.beginPath();
+        ctx.moveTo(-25, -10);
+        ctx.lineTo(-35, -8);
+        ctx.lineTo(-25, -5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Debris if carrying
+        if (this.hasDebris) {
+            ctx.fillStyle = '#666666';
+            ctx.fillRect(-10, 15, 20, 10);
+        }
+
+        ctx.restore();
+
+        // Health bar (larger for boss)
+        this.renderHealthBar(ctx, 60);
+    }
+
+    renderHealthBar(ctx, width = 40) {
+        // Draw health bar above enemy
+        if (this.health > 0 && this.maxHealth > 1) {
+            const barWidth = width;
+            const barHeight = 4;
+            const barY = -this.height / 2 - 10;
+
+            // Background
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(-barWidth / 2, barY, barWidth, barHeight);
+
+            // Health fill
+            const healthPct = this.health / this.maxHealth;
+            ctx.fillStyle = healthPct > 0.5 ? '#4ade80' : (healthPct > 0.25 ? '#fbbf24' : '#ef4444');
+            ctx.fillRect(-barWidth / 2, barY, barWidth * healthPct, barHeight);
+
+            // Border
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-barWidth / 2, barY, barWidth, barHeight);
+        }
     }
 }
 
