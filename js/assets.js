@@ -20,7 +20,10 @@ const AssetManager = {
         'drone_fly', 'drone_attack', 'drone_death',
         'drone_aggressive_fly', 'drone_aggressive_attack', 'drone_aggressive_death',
         'carrier_fly', 'carrier_attack', 'carrier_death',
-        'gunship_fly', 'gunship_attack', 'gunship_death'
+        'gunship_fly', 'gunship_attack', 'gunship_death',
+        // Zone 2 enemies
+        'zone2_dust_devil', 'zone2_sandworm', 'zone2_scorpion',
+        'zone2_sand_carrier', 'zone2_vulture_king', 'zone2_sandstorm_colossus'
     ],
 
     // Asset manifest - add entries here as sprites are created
@@ -95,7 +98,15 @@ const AssetManager = {
             'civilian_fall': 'assets/32x32_Civilian_Fall.png',
 
             // Test sprite for animation debugging
-            'test_civilian': 'assets/test_civilian.png'
+            'test_civilian': 'assets/test_civilian.png',
+
+            // Zone 2 - Desert enemies (all with black backgrounds)
+            'zone2_dust_devil': 'assets/sprites/enemies/zone2/dust_devil.png',
+            'zone2_sandworm': 'assets/sprites/enemies/zone2/sandworm.png',
+            'zone2_scorpion': 'assets/sprites/enemies/zone2/scorpion.png',
+            'zone2_sand_carrier': 'assets/sprites/enemies/zone2/sand_carrier.png',
+            'zone2_vulture_king': 'assets/sprites/enemies/zone2/vulture_king.png',
+            'zone2_sandstorm_colossus': 'assets/sprites/enemies/zone2/sandstorm_colossus.png'
         },
         sounds: {
             // Phase 3 - Audio Overhaul (royalty-free samples)

@@ -32,7 +32,7 @@ class BurrowingPod {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.burstTimer = 4 + Math.random(); // 4-5 seconds
+        this.burstTimer = 1.5 + Math.random(); // 1.5-2.5 seconds (reduced from 4-5)
         this.active = true;
     }
 
@@ -200,8 +200,8 @@ class Enemy {
 
             case EnemyType.DUST_DEVIL:
                 this.speed = 80;
-                this.health = 1;
-                this.maxHealth = 1;
+                this.health = 2;  // Increased from 1
+                this.maxHealth = 2;
                 this.width = 24;
                 this.height = 24;
                 this.spiralAngle = 0;
@@ -211,13 +211,13 @@ class Enemy {
 
             case EnemyType.SANDWORM:
                 this.speed = 60;
-                this.health = 2;
-                this.maxHealth = 2;
+                this.health = 4;  // Increased from 2
+                this.maxHealth = 4;
                 this.width = 30;
                 this.height = 20;
                 // New flying/burrowing behavior
                 this.sandwormMode = 'flying'; // 'flying', 'burrowing', 'surfacing', 'leaving'
-                this.flyTimer = CONFIG.SANDWORM_FLY_DURATION || 5;
+                this.flyTimer = CONFIG.SANDWORM_FLY_DURATION || 2.5;  // Reduced from 5
                 this.attackCount = 0;
                 this.maxAttacks = CONFIG.SANDWORM_MAX_ATTACKS || 4;
                 this.targetBuilding = null;
@@ -231,8 +231,8 @@ class Enemy {
 
             case EnemyType.SAND_CARRIER:
                 this.speed = CONFIG.CARRIER_SPEED || 30;
-                this.health = 3;
-                this.maxHealth = 3;
+                this.health = 5;  // Increased from 3
+                this.maxHealth = 5;
                 this.width = 96;
                 this.height = 96;
                 this.podDropTimer = 2;
@@ -749,7 +749,7 @@ class Enemy {
                     if (this.y <= CONFIG.SKY_TOP + 100) {
                         this.y = CONFIG.SKY_TOP + 100;
                         this.sandwormMode = 'flying';
-                        this.flyTimer = CONFIG.SANDWORM_FLY_DURATION || 5;
+                        this.flyTimer = CONFIG.SANDWORM_FLY_DURATION || 2.5;  // Reduced from 5
                         this.targetBuilding = null;
                     }
                     break;
@@ -2531,6 +2531,28 @@ class Enemy {
     }
 
     renderDustDevil(ctx) {
+        // Try sprite-based rendering first
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_dust_devil') : null;
+
+        if (sprite && sprite.width > 0) {
+            // Sprite sheet: 2x2 grid of frames
+            const frameSize = sprite.width / 2; // 2 columns
+            const frameIndex = Math.floor(Date.now() / 100) % 4; // 4 frames, animate at 10fps
+            const row = Math.floor(frameIndex / 2);
+            const col = frameIndex % 2;
+
+            ctx.save();
+            ctx.rotate(Date.now() / 500); // Slow rotation for spinning effect
+            ctx.drawImage(
+                sprite,
+                col * frameSize, row * frameSize, frameSize, frameSize,
+                -frameSize / 2, -frameSize / 2, frameSize, frameSize
+            );
+            ctx.restore();
+            return;
+        }
+
+        // Procedural fallback
         const time = Date.now() / 100;
         ctx.save();
         ctx.rotate(time);
@@ -2554,6 +2576,25 @@ class Enemy {
     }
 
     renderSandworm(ctx) {
+        // Try sprite-based rendering first
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_sandworm') : null;
+
+        if (sprite && sprite.width > 0) {
+            // Sprite sheet: 2 rows (flying, surfacing), 4 frames each
+            const frameWidth = sprite.width / 4;
+            const frameHeight = sprite.height / 2;
+            const frameIndex = Math.floor(Date.now() / 150) % 4;
+            const row = this.isSurfacing ? 1 : 0;
+
+            ctx.drawImage(
+                sprite,
+                frameIndex * frameWidth, row * frameHeight, frameWidth, frameHeight,
+                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight
+            );
+            return;
+        }
+
+        // Procedural fallback
         // Note: ctx already translated to (this.x, this.y) by render()
         if (!this.isSurfacing) {
             // Burrowing - sand trail
@@ -2586,6 +2627,37 @@ class Enemy {
     }
 
     renderSandCarrier(ctx) {
+        // Try sprite-based rendering first
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_sand_carrier') : null;
+
+        if (sprite && sprite.width > 0) {
+            // Sprite sheet: vertical strip of 4 frames
+            const frameCount = 4;
+            const frameWidth = sprite.width;
+            const frameHeight = sprite.height / frameCount;
+            const frameIndex = Math.floor(Date.now() / 200) % frameCount;
+
+            ctx.save();
+            if (!this.carrierMovingRight) ctx.scale(-1, 1);
+            ctx.drawImage(
+                sprite,
+                0, frameIndex * frameHeight, frameWidth, frameHeight,
+                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight
+            );
+
+            // Health bar (unflip if needed)
+            if (this.health > 0) {
+                if (!this.carrierMovingRight) ctx.scale(-1, 1);
+                for (let i = 0; i < this.health; i++) {
+                    ctx.fillStyle = '#4ade80';
+                    ctx.fillRect(-20 + i * 14, -35, 10, 5);
+                }
+            }
+            ctx.restore();
+            return;
+        }
+
+        // Procedural fallback
         // Note: ctx already translated to (this.x, this.y) by render()
         ctx.save();
         if (!this.carrierMovingRight) ctx.scale(-1, 1);
@@ -2636,6 +2708,26 @@ class Enemy {
     }
 
     renderScorpion(ctx) {
+        // Try sprite-based rendering first
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_scorpion') : null;
+
+        if (sprite && sprite.width > 0) {
+            // Sprite sheet: horizontal strip of 6 frames
+            const frameCount = 6;
+            const frameWidth = sprite.width / frameCount;
+            const frameHeight = sprite.height;
+            const frameIndex = Math.floor(Date.now() / 120) % frameCount;
+
+            ctx.drawImage(
+                sprite,
+                frameIndex * frameWidth, 0, frameWidth, frameHeight,
+                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight
+            );
+            this.renderHealthBar(ctx);
+            return;
+        }
+
+        // Procedural fallback
         // Note: ctx already translated to (this.x, this.y) by render()
 
         // Body
@@ -2687,6 +2779,37 @@ class Enemy {
     }
 
     renderVultureKing(ctx) {
+        // Try sprite-based rendering first
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_vulture_king') : null;
+
+        if (sprite && sprite.width > 0) {
+            // Sprite sheet: grid layout (assume 3x3 or calculate)
+            const cols = 3;
+            const rows = Math.ceil(8 / cols); // 8 frames total
+            const frameWidth = sprite.width / cols;
+            const frameHeight = sprite.height / rows;
+
+            // Choose frame based on phase
+            let frameIndex;
+            if (this.bossPhase === 'diving') {
+                frameIndex = 4 + (Math.floor(Date.now() / 100) % 4); // Frames 4-7 for diving
+            } else {
+                frameIndex = Math.floor(Date.now() / 150) % 4; // Frames 0-3 for flying
+            }
+
+            const row = Math.floor(frameIndex / cols);
+            const col = frameIndex % cols;
+
+            ctx.drawImage(
+                sprite,
+                col * frameWidth, row * frameHeight, frameWidth, frameHeight,
+                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight
+            );
+            this.renderHealthBar(ctx, 60);
+            return;
+        }
+
+        // Procedural fallback
         ctx.save();
 
         const flapAngle = Math.sin(Date.now() / 100) * 0.3;
@@ -3897,27 +4020,27 @@ class EnemyManager {
         return weights;
     }
 
-    // Zone 2 spawn weights (desert enemies)
+    // Zone 2 spawn weights (desert enemies) - rebalanced for more Zone 2 variety
     getZone2SpawnWeights(waveNumber) {
         const weights = {};
 
-        // Wave 1: Standard only
-        weights[EnemyType.STANDARD] = 40;
+        // Wave 1: Mostly standard but some variety
+        weights[EnemyType.STANDARD] = 25;  // Reduced from 40
 
-        // Wave 2+: Add Aggressive
-        if (waveNumber >= 2) weights[EnemyType.AGGRESSIVE] = 20;
+        // Wave 2+: Add Aggressive and Dust Devil
+        if (waveNumber >= 2) {
+            weights[EnemyType.AGGRESSIVE] = 15;
+            weights[EnemyType.DUST_DEVIL] = 20;  // Added earlier, increased weight
+        }
 
-        // Wave 3+: Add Dust Devil and Sandworm
+        // Wave 3+: Add Sandworm and Scorpion
         if (waveNumber >= 3) {
-            weights[EnemyType.DUST_DEVIL] = 15;
-            weights[EnemyType.SANDWORM] = 10;
+            weights[EnemyType.SANDWORM] = 20;  // Increased from 10
+            weights[EnemyType.SCORPION] = 15;  // Moved from wave 5, increased from 5
         }
 
         // Wave 4+: Add Sand Carrier
-        if (waveNumber >= 4) weights[EnemyType.SAND_CARRIER] = 10;
-
-        // Wave 5+: Add Scorpion
-        if (waveNumber >= 5) weights[EnemyType.SCORPION] = 5;
+        if (waveNumber >= 4) weights[EnemyType.SAND_CARRIER] = 15;  // Increased from 10
 
         return weights;
     }

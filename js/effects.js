@@ -30,10 +30,13 @@ const EffectsManager = {
     // JUICE FUNCTIONS
     // ============================================
 
-    // Trigger a screen shake
+    // Trigger a screen shake (capped per 2D game best practices)
     shake(intensity) {
+        // Cap intensity to prevent excessive shake
+        const cappedIntensity = Math.min(intensity, 25);
         // Keep the larger shake if already shaking
-        this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
+        this.shakeIntensity = Math.max(this.shakeIntensity, cappedIntensity);
+        // Max shake duration is ~200ms (handled by SCREEN_SHAKE_DECAY)
     },
 
     // Trigger a frame freeze (hit stop)
