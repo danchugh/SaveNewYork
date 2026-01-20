@@ -63,8 +63,9 @@ const AbilityManager = {
 
     // Ability implementations (stubs - will be detailed in Phase 5)
     spawnAABattery(building) {
-        // Place turret on top of rooftop blocks (building.y is already the top)
-        const roofY = building.y;
+        // Place turret on top of rooftop blocks
+        // building.y is the top coordinate, add BLOCK_SIZE so turret sits on visible roof
+        const roofY = building.y + CONFIG.BLOCK_SIZE;
         const turret = {
             x: building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2,
             y: roofY,
@@ -132,7 +133,9 @@ const AbilityManager = {
     spawnInfantry(building) {
         const soldierCount = 3 + Math.floor(Math.random() * 2); // 3-4 soldiers
         // Place soldiers on rooftop blocks, spaced across the building width
-        const roofY = building.y;
+        // building.y is the top coordinate, but soldiers need to stand ON the blocks
+        // Add offset so soldier feet (at y) are on the visible roof surface
+        const roofY = building.y + CONFIG.BLOCK_SIZE; // Stand on top block surface
         const buildingWidth = building.widthBlocks * CONFIG.BLOCK_SIZE;
         const spacing = buildingWidth / (soldierCount + 1);
 

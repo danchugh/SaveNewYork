@@ -47,37 +47,38 @@ function loadZoneProgress() {
 }
 
 // Helper function to add score and check for bonus lives
-// In 2P mode, total combined score triggers bonus lives for all players
+// In 2P mode, each player's individual score triggers their own bonus lives
 function addScore(points, playerId = null) {
     if (points <= 0) return;
 
-    // Add to game total (for combined tracking)
+    // Add to game total (for combined tracking/high score)
     game.score += points;
 
-    // Also add to specific player if identified
+    // Also add to specific player if identified and check for individual bonus lives
     if (playerId && typeof playerManager !== 'undefined') {
         const p = playerManager.getPlayer(playerId);
-        if (p) p.score += points;
-    }
+        if (p) {
+            p.score += points;
 
-    // Check for bonus lives based on combined score
-    while (game.score >= game.nextBonusLifeAt) {
-        // Award bonus life to all active players
-        for (const p of playerManager.getActivePlayers()) {
-            if (p.lives < CONFIG.MAX_LIVES) {
-                p.lives++;
-                console.log(`Bonus life awarded to P${p.id}! Lives: ${p.lives}`);
+            // Check for bonus life based on individual player score
+            if (!p.nextBonusLifeAt) p.nextBonusLifeAt = CONFIG.BONUS_LIFE_THRESHOLD;
+
+            while (p.score >= p.nextBonusLifeAt) {
+                if (p.lives < CONFIG.MAX_LIVES) {
+                    p.lives++;
+                    console.log(`Bonus life awarded to P${p.id}! Lives: ${p.lives}, Score: ${p.score}`);
+
+                    if (typeof SoundManager !== 'undefined') {
+                        SoundManager.oneUp();
+                    }
+                    if (typeof EffectsManager !== 'undefined') {
+                        const xPos = p.id === 1 ? 150 : CONFIG.CANVAS_WIDTH - 150;
+                        EffectsManager.addTextPopup(xPos, 60, `P${p.id} 1UP!`, p.colors.shield);
+                    }
+                }
+                p.nextBonusLifeAt += CONFIG.BONUS_LIFE_THRESHOLD;
             }
         }
-
-        if (typeof SoundManager !== 'undefined') {
-            SoundManager.oneUp();
-        }
-        if (typeof EffectsManager !== 'undefined') {
-            EffectsManager.addTextPopup(CONFIG.CANVAS_WIDTH / 2, 80, '1UP!', '#00ff88');
-        }
-
-        game.nextBonusLifeAt += CONFIG.BONUS_LIFE_THRESHOLD;
     }
 }
 
@@ -202,7 +203,7 @@ function checkCollisions() {
                     baseScore = 75;
                 }
 
-                addScore(Math.floor(baseScore * DayCycle.getScoreMultiplier()));
+                addScore(Math.floor(baseScore * DayCycle.getScoreMultiplier()), proj.ownerId);
                 break;
             }
         }
