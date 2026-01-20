@@ -2579,20 +2579,18 @@ class Enemy {
     }
 
     renderSandworm(ctx) {
-        // Try sprite-based rendering first
+        // Sprite disabled - generated sheet layout is not a uniform grid
+        // TODO: Regenerate sandworm as proper horizontal sprite strip
+        /*
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_sandworm') : null;
 
         if (sprite && sprite.width > 0) {
-            // Sprite sheet: 2 rows (flying top, surfacing bottom), 4 frames each
             const frameWidth = sprite.width / 4;
             const frameHeight = sprite.height / 2;
             const frameIndex = Math.floor(Date.now() / 150) % 4;
             const row = this.isSurfacing ? 1 : 0;
-
-            // Scale to match enemy actual size (this.width = 30, this.height = 20)
-            const displayWidth = this.width * 2;  // 60px display width
-            const displayHeight = this.height * 2; // 40px display height
-
+            const displayWidth = this.width * 2;
+            const displayHeight = this.height * 2;
             ctx.drawImage(
                 sprite,
                 frameIndex * frameWidth, row * frameHeight, frameWidth, frameHeight,
@@ -2600,6 +2598,7 @@ class Enemy {
             );
             return;
         }
+        */
 
         // Procedural fallback
         // Note: ctx already translated to (this.x, this.y) by render()
@@ -2719,20 +2718,18 @@ class Enemy {
     }
 
     renderScorpion(ctx) {
-        // Try sprite-based rendering first
+        // Sprite disabled - generated sheet has decorative text/border breaking frame parsing
+        // TODO: Regenerate scorpion as clean horizontal sprite strip without labels
+        /*
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_scorpion') : null;
 
         if (sprite && sprite.width > 0) {
-            // Sprite sheet: horizontal strip of 6 frames
             const frameCount = 6;
             const frameWidth = sprite.width / frameCount;
             const frameHeight = sprite.height;
             const frameIndex = Math.floor(Date.now() / 120) % frameCount;
-
-            // Scale to match enemy actual size (this.width = 40, this.height = 24)
-            const displayWidth = this.width * 1.5;  // 60px display width
-            const displayHeight = this.height * 1.5; // 36px display height
-
+            const displayWidth = this.width * 1.5;
+            const displayHeight = this.height * 1.5;
             ctx.drawImage(
                 sprite,
                 frameIndex * frameWidth, 0, frameWidth, frameHeight,
@@ -2741,6 +2738,7 @@ class Enemy {
             this.renderHealthBar(ctx);
             return;
         }
+        */
 
         // Procedural fallback
         // Note: ctx already translated to (this.x, this.y) by render()
