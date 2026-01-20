@@ -2541,12 +2541,15 @@ class Enemy {
             const row = Math.floor(frameIndex / 2);
             const col = frameIndex % 2;
 
+            // Scale to match enemy actual size (this.width = 24)
+            const displaySize = this.width * 1.5; // Slightly larger than hitbox for visual
+
             ctx.save();
             ctx.rotate(Date.now() / 500); // Slow rotation for spinning effect
             ctx.drawImage(
                 sprite,
                 col * frameSize, row * frameSize, frameSize, frameSize,
-                -frameSize / 2, -frameSize / 2, frameSize, frameSize
+                -displaySize / 2, -displaySize / 2, displaySize, displaySize
             );
             ctx.restore();
             return;
@@ -2580,16 +2583,20 @@ class Enemy {
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_sandworm') : null;
 
         if (sprite && sprite.width > 0) {
-            // Sprite sheet: 2 rows (flying, surfacing), 4 frames each
+            // Sprite sheet: 2 rows (flying top, surfacing bottom), 4 frames each
             const frameWidth = sprite.width / 4;
             const frameHeight = sprite.height / 2;
             const frameIndex = Math.floor(Date.now() / 150) % 4;
             const row = this.isSurfacing ? 1 : 0;
 
+            // Scale to match enemy actual size (this.width = 30, this.height = 20)
+            const displayWidth = this.width * 2;  // 60px display width
+            const displayHeight = this.height * 2; // 40px display height
+
             ctx.drawImage(
                 sprite,
                 frameIndex * frameWidth, row * frameHeight, frameWidth, frameHeight,
-                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight
+                -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight
             );
             return;
         }
@@ -2637,12 +2644,16 @@ class Enemy {
             const frameHeight = sprite.height / frameCount;
             const frameIndex = Math.floor(Date.now() / 200) % frameCount;
 
+            // Scale to match enemy actual size (this.width = 96, this.height = 96)
+            const displayWidth = this.width;
+            const displayHeight = this.height;
+
             ctx.save();
             if (!this.carrierMovingRight) ctx.scale(-1, 1);
             ctx.drawImage(
                 sprite,
                 0, frameIndex * frameHeight, frameWidth, frameHeight,
-                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight
+                -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight
             );
 
             // Health bar (unflip if needed)
@@ -2718,10 +2729,14 @@ class Enemy {
             const frameHeight = sprite.height;
             const frameIndex = Math.floor(Date.now() / 120) % frameCount;
 
+            // Scale to match enemy actual size (this.width = 40, this.height = 24)
+            const displayWidth = this.width * 1.5;  // 60px display width
+            const displayHeight = this.height * 1.5; // 36px display height
+
             ctx.drawImage(
                 sprite,
                 frameIndex * frameWidth, 0, frameWidth, frameHeight,
-                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight
+                -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight
             );
             this.renderHealthBar(ctx);
             return;
@@ -2800,10 +2815,13 @@ class Enemy {
             const row = Math.floor(frameIndex / cols);
             const col = frameIndex % cols;
 
+            // Scale to match enemy actual size (this.width = 60, this.height = 60 for mini-boss)
+            const displaySize = Math.max(this.width, 60);  // Ensure minimum 60px display
+
             ctx.drawImage(
                 sprite,
                 col * frameWidth, row * frameHeight, frameWidth, frameHeight,
-                -frameWidth / 2, -frameHeight / 2, frameWidth, frameHeight
+                -displaySize / 2, -displaySize / 2, displaySize, displaySize
             );
             this.renderHealthBar(ctx, 60);
             return;
