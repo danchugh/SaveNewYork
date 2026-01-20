@@ -523,13 +523,13 @@ function checkCollisions() {
         console.log('City destroyed! Game Over!');
     }
 
-    // Check player lives
-    if (player.lives <= 0) {
+    // Check player lives - game over only when ALL players are dead
+    if (playerManager.allPlayersDead()) {
         game.finalWave = enemyManager.waveNumber;
         game.highScoreRank = HighScoreManager.addScore(game.score, game.finalWave);
         game.state = GameState.GAME_OVER;
         SoundManager.gameOver();
-        console.log('No lives remaining! Game Over!');
+        console.log('All players eliminated! Game Over!');
     }
 }
 
