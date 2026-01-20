@@ -63,9 +63,11 @@ const AbilityManager = {
 
     // Ability implementations (stubs - will be detailed in Phase 5)
     spawnAABattery(building) {
+        // Place turret on top of rooftop blocks (building.y is already the top)
+        const roofY = building.y;
         const turret = {
             x: building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2,
-            y: building.y - 10,
+            y: roofY,
             duration: 20,
             fireRate: 0.5,
             fireTimer: 0,
@@ -129,11 +131,15 @@ const AbilityManager = {
     },
     spawnInfantry(building) {
         const soldierCount = 3 + Math.floor(Math.random() * 2); // 3-4 soldiers
+        // Place soldiers on rooftop blocks, spaced across the building width
+        const roofY = building.y;
+        const buildingWidth = building.widthBlocks * CONFIG.BLOCK_SIZE;
+        const spacing = buildingWidth / (soldierCount + 1);
 
         for (let i = 0; i < soldierCount; i++) {
             const soldier = {
-                x: building.x + 10 + i * 15,
-                y: building.y - 5,
+                x: building.x + spacing * (i + 1),
+                y: roofY,
                 duration: 17 + Math.random() * 3, // 15-20 seconds
                 fireRate: 1.0,
                 fireTimer: Math.random(),

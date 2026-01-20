@@ -639,14 +639,16 @@ function update(deltaTime) {
                 }
             }
 
-            // Check civilian rescue and trigger construction crew
-            const rescueResult = civilianManager.checkRescue(player.x, player.y, player.state);
-            if (rescueResult.count > 0) {
-                addScore(rescueResult.count * 500);
-                // Trigger construction crew if building exists
-                if (rescueResult.building) {
-                    console.log('Triggering construction for building at x:', rescueResult.building.x);
-                    ConstructionManager.triggerRepair(rescueResult.building);
+            // Check civilian rescue for all active players and trigger construction crew
+            for (const pl of playerManager.getActivePlayers()) {
+                const rescueResult = civilianManager.checkRescue(pl.x, pl.y, pl.state);
+                if (rescueResult.count > 0) {
+                    pl.addScore(rescueResult.count * 500);
+                    // Trigger construction crew if building exists
+                    if (rescueResult.building) {
+                        console.log(`P${pl.id} triggered construction for building at x:`, rescueResult.building.x);
+                        ConstructionManager.triggerRepair(rescueResult.building);
+                    }
                 }
             }
 

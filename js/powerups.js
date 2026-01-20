@@ -188,20 +188,24 @@ const PowerupManager = {
         // Update all powerups
         this.powerups.forEach(p => p.update(deltaTime));
 
-        // Check player collision
-        this.powerups.forEach(p => {
-            if (p.active && p.checkCollision(player)) {
-                if (p.type === PowerupType.SHIELD) {
-                    if (player.activateShield()) {
-                        p.active = false;
-                        // Pickup effect
-                        if (typeof EffectsManager !== 'undefined') {
-                            EffectsManager.addExplosion(p.x, p.y, 20, '#00aaff');
+        // Check collision with all active players
+        if (typeof playerManager !== 'undefined') {
+            for (const pl of playerManager.getActivePlayers()) {
+                this.powerups.forEach(p => {
+                    if (p.active && p.checkCollision(pl)) {
+                        if (p.type === PowerupType.SHIELD) {
+                            if (pl.activateShield()) {
+                                p.active = false;
+                                // Pickup effect
+                                if (typeof EffectsManager !== 'undefined') {
+                                    EffectsManager.addExplosion(p.x, p.y, 20, pl.colors.shield || '#00aaff');
+                                }
+                            }
                         }
                     }
-                }
+                });
             }
-        });
+        }
 
         // Remove inactive powerups
         this.powerups = this.powerups.filter(p => p.active);

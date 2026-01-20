@@ -30,83 +30,45 @@ function renderHUD(ctx, buildingManager, enemyManager, totalScore) {
     }
 
     // === CENTER HUD ===
-    // SCORE (combined or show both)
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 14px monospace';
 
     if (numPlayers === 1) {
+        // 1P: Score in center
         ctx.fillText('SCORE', CONFIG.CANVAS_WIDTH / 2 - 40, hudY + 16);
-        // Use game.score directly since addScore() updates game.score
+        // Use game.score (or p1.score since they are same for 1P)
         const scoreStr = String(typeof game !== 'undefined' ? game.score : 0).padStart(6, '0');
         ctx.fillText(scoreStr, CONFIG.CANVAS_WIDTH / 2 + 30, hudY + 16);
-    } else {
-        // 2P mode - show combined score in center
-        const combinedScore = typeof game !== 'undefined' ? game.score : 0;
-        ctx.fillText('TOTAL', CONFIG.CANVAS_WIDTH / 2, hudY + 10);
-        const scoreStr = String(combinedScore || 0).padStart(6, '0');
-        ctx.fillText(scoreStr, CONFIG.CANVAS_WIDTH / 2, hudY + 24);
-    }
 
-    // WAVE (moved right to avoid overlap with 8 lives)
-    if (numPlayers === 1) {
+        // Wave: Left side
         ctx.textAlign = 'left';
-        ctx.fillStyle = '#ffffff';
         ctx.fillText('WAVE', 280, hudY + 16);
         ctx.fillText(`${game.currentZone}-${enemyManager.waveNumber}`, 338, hudY + 16);
 
-        // DMG (for 1P mode, on right)
+        // DMG: Right side
         const destruction = Math.floor(buildingManager.getDestructionPercentage() * 100);
         const dmgColor = destruction > 60 ? '#ff3300' : destruction > 30 ? '#ffaa00' : '#ffffff';
         ctx.fillStyle = dmgColor;
         ctx.fillText('DMG', CONFIG.CANVAS_WIDTH - 220, hudY + 16);
         ctx.fillText(`${destruction}%`, CONFIG.CANVAS_WIDTH - 175, hudY + 16);
-    }
 
-    // === BOTTOM HUD ===
-    ctx.textAlign = 'center';
-    const destruction = Math.floor(buildingManager.getDestructionPercentage() * 100);
-    const cityStatusColor = destruction > 60 ? '#ef4444' : destruction > 30 ? '#fbbf24' : CONFIG.COLORS.HUD_TEXT;
-    ctx.fillStyle = cityStatusColor;
-
-    ctx.fillStyle = CONFIG.COLORS.HUD_TEXT;
-    if (enemyManager.boss && enemyManager.boss.active) {
-        ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 20px monospace';
-        ctx.fillText('!! BOSS BATTLE !!', CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
-    } else if (enemyManager.miniBoss && enemyManager.miniBoss.active) {
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 18px monospace';
-        const type = enemyManager.miniBoss.type.toUpperCase();
-        ctx.fillText(`!! MINI-BOSS: ${type} !!`, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
-    } else if (enemyManager.betweenWaves) {
-        ctx.fillText(`WAVE ${game.currentZone}-${enemyManager.waveNumber + 1} INCOMING...`, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
     } else {
-        const multiplier = DayCycle.getScoreMultiplier();
-        const timeDisplay = DayCycle.getDisplayName();
-        let waveText = `WAVE ${game.currentZone}-${enemyManager.waveNumber} - ${timeDisplay}`;
-        if (multiplier > 1) {
-            waveText += ` (x${multiplier})`;
-        }
-        ctx.fillText(waveText, CONFIG.CANVAS_WIDTH / 2, bottomHudY + 16);
-    }
+        // 2P: Wave and DMG in center (individual scores handled in renderPlayerHUD)
 
-    // Enemies remaining (right side)
-    ctx.textAlign = 'right';
-    ctx.font = '18px monospace';
-    ctx.fillStyle = CONFIG.COLORS.HUD_TEXT;
-    const enemiesLeft = enemyManager.enemiesRemainingInWave + enemyManager.enemies.length;
-    if (!enemyManager.boss) {
-        ctx.fillText(`ENEMIES: ${enemiesLeft}`, CONFIG.CANVAS_WIDTH - 20, bottomHudY + 16);
-    }
+        // Wave
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        const waveText = `WAVE ${game.currentZone}-${enemyManager.waveNumber}`;
+        ctx.fillText(waveText, CONFIG.CANVAS_WIDTH / 2, hudY + 10);
 
-    // DMG in 2P mode (bottom center)
-    if (numPlayers >= 2) {
-        ctx.textAlign = 'left';
+        // DMG
+        const destruction = Math.floor(buildingManager.getDestructionPercentage() * 100);
         const dmgColor = destruction > 60 ? '#ff3300' : destruction > 30 ? '#ffaa00' : '#ffffff';
         ctx.fillStyle = dmgColor;
-        ctx.fillText(`CITY DMG: ${destruction}%`, 20, bottomHudY + 16);
+        ctx.fillText(`DMG: ${destruction}%`, CONFIG.CANVAS_WIDTH / 2, hudY + 28);
     }
+
 
     // Refuel indicators (for any player refueling)
     for (const p of players) {
@@ -202,6 +164,14 @@ function renderPlayerHUD(ctx, p, x, y, label, color) {
         ctx.textAlign = 'center';
         ctx.fillText('S', shieldX, shipY + 3);
     }
+
+    // Display Score below Name
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px monospace';
+    const scoreStr = String(p.score || 0).padStart(6, '0');
+    // Align score under the label/fuel area
+    ctx.fillText(scoreStr, x, y + 28);
 }
 
 // Zone splash screen overlay
