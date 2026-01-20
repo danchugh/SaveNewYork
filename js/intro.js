@@ -10,7 +10,8 @@ const IntroManager = {
         phase: 'fading_in', // fading_in, main, starting
         logoScale: 5,
         bgScroll: 0,
-        alpha: 0
+        alpha: 0,
+        selectedPlayers: 1 // 1 or 2 player mode selection
     },
 
     init() {
@@ -29,6 +30,7 @@ const IntroManager = {
         this.state.logoScale = 5;
         this.state.bgScroll = 0;
         this.state.alpha = 0;
+        this.state.selectedPlayers = 1;
     },
 
     update(deltaTime) {
@@ -56,6 +58,16 @@ const IntroManager = {
             if (this.state.alpha >= 1 && this.state.logoScale <= 1) {
                 this.state.alpha = 1;
                 this.state.phase = 'main';
+            }
+        } else if (this.state.phase === 'main') {
+            // Handle player count selection with Up/Down
+            if (input.isKeyJustPressed('ArrowUp') || input.isKeyJustPressed('w') || input.isKeyJustPressed('W')) {
+                this.state.selectedPlayers = 1;
+                if (typeof SoundManager !== 'undefined') SoundManager.menuSelect();
+            }
+            if (input.isKeyJustPressed('ArrowDown') || input.isKeyJustPressed('s') || input.isKeyJustPressed('S')) {
+                this.state.selectedPlayers = 2;
+                if (typeof SoundManager !== 'undefined') SoundManager.menuSelect();
             }
         } else if (this.state.phase === 'starting') {
             // Flash effect or transition out
@@ -133,23 +145,54 @@ const IntroManager = {
         // 3. UI Elements (Fade in with alpha)
         ctx.globalAlpha = Math.min(1, this.state.time * 0.5); // Fade in slower
 
-        // "Press Enter" Pulse
+        // Player Selection Menu
         if (this.state.phase === 'main') {
+            const menuY = CONFIG.CANVAS_HEIGHT - 180;
             const pulse = 0.5 + 0.5 * Math.sin(this.state.time * 3);
-            ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + pulse * 0.5})`;
-            ctx.shadowColor = '#00ffff';
-            ctx.shadowBlur = 10 * pulse;
-            ctx.font = 'bold 24px monospace';
+
+            ctx.font = 'bold 20px monospace';
             ctx.textAlign = 'center';
+
+            // 1 PLAYER option
+            if (this.state.selectedPlayers === 1) {
+                ctx.fillStyle = '#00ffff';
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 10;
+                ctx.fillText('► 1 PLAYER ◄', CONFIG.CANVAS_WIDTH / 2, menuY);
+            } else {
+                ctx.fillStyle = '#666666';
+                ctx.shadowBlur = 0;
+                ctx.fillText('  1 PLAYER  ', CONFIG.CANVAS_WIDTH / 2, menuY);
+            }
+
+            // 2 PLAYERS option
+            if (this.state.selectedPlayers === 2) {
+                ctx.fillStyle = '#ff00aa';
+                ctx.shadowColor = '#ff00aa';
+                ctx.shadowBlur = 10;
+                ctx.fillText('► 2 PLAYERS ◄', CONFIG.CANVAS_WIDTH / 2, menuY + 35);
+            } else {
+                ctx.fillStyle = '#666666';
+                ctx.shadowBlur = 0;
+                ctx.fillText('  2 PLAYERS  ', CONFIG.CANVAS_WIDTH / 2, menuY + 35);
+            }
+
+            ctx.shadowBlur = 0;
+
+            // Press Enter prompt
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + pulse * 0.5})`;
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 5 * pulse;
+            ctx.font = 'bold 18px monospace';
             ctx.fillText('PRESS ENTER TO START', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT - 100);
             ctx.shadowBlur = 0;
         }
 
         // Controls (Small at bottom)
         ctx.fillStyle = '#aaaaaa';
-        ctx.font = '14px monospace';
+        ctx.font = '12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('← → TURN   ↑ ↓ SPEED   SPACE FIRE', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT - 40);
+        ctx.fillText('P1: WASD + SPACE    P2: ARROWS + SHIFT', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT - 40);
 
         // Credits / Ver
         ctx.fillStyle = '#666666';

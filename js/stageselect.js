@@ -8,17 +8,19 @@ const StageSelect = {
 
     update(deltaTime) {
         // Handle input
-        if (input.isKeyJustPressed('ArrowUp') || input.isKeyJustPressed('KeyW')) {
+        if (input.isKeyJustPressed('ArrowUp') || input.isKeyJustPressed('KeyW') || input.isKeyJustPressed('w') || input.isKeyJustPressed('W')) {
             this.selectedZone = Math.max(1, this.selectedZone - 1);
         }
-        if (input.isKeyJustPressed('ArrowDown') || input.isKeyJustPressed('KeyS')) {
+        if (input.isKeyJustPressed('ArrowDown') || input.isKeyJustPressed('KeyS') || input.isKeyJustPressed('s') || input.isKeyJustPressed('S')) {
             this.selectedZone = Math.min(CONFIG.TOTAL_ZONES, this.selectedZone + 1);
         }
 
         // Check if zone is unlocked before allowing selection
         if (input.isKeyJustPressed('Enter') || input.isKeyJustPressed('Space')) {
             if (game.zoneUnlocked[this.selectedZone - 1]) {
-                initGame(1, this.selectedZone);
+                // Get player count from intro screen selection
+                const playerCount = (typeof IntroManager !== 'undefined') ? IntroManager.state.selectedPlayers : 1;
+                initGame(playerCount, this.selectedZone);
             }
         }
 

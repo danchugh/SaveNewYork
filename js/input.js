@@ -35,19 +35,19 @@ const input = {
     // Per-player key bindings (remappable)
     playerBindings: {
         1: {
-            [Actions.UP]: [Keys.UP],
-            [Actions.DOWN]: [Keys.DOWN],
-            [Actions.LEFT]: [Keys.LEFT],
-            [Actions.RIGHT]: [Keys.RIGHT],
-            [Actions.FIRE]: [Keys.SPACE],
-            [Actions.START]: [Keys.ENTER]
-        },
-        2: {
             [Actions.UP]: [Keys.W, 'W'],
             [Actions.DOWN]: [Keys.S, 'S'],
             [Actions.LEFT]: [Keys.A, 'A'],
             [Actions.RIGHT]: [Keys.D, 'D'],
-            [Actions.FIRE]: [Keys.Q, 'Q'],
+            [Actions.FIRE]: [Keys.SPACE],
+            [Actions.START]: [Keys.ENTER]
+        },
+        2: {
+            [Actions.UP]: [Keys.UP],
+            [Actions.DOWN]: [Keys.DOWN],
+            [Actions.LEFT]: [Keys.LEFT],
+            [Actions.RIGHT]: [Keys.RIGHT],
+            [Actions.FIRE]: ['Shift', 'ShiftRight'],
             [Actions.START]: [Keys.ENTER]
         }
     },
