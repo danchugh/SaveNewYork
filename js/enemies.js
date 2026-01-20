@@ -2531,24 +2531,24 @@ class Enemy {
     }
 
     renderDustDevil(ctx) {
-        // Try sprite-based rendering first
+        // Sprite: 4-frame horizontal strip per 2D game skill (64x64 per frame)
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_dust_devil') : null;
 
         if (sprite && sprite.width > 0) {
-            // Sprite sheet: 2x2 grid of frames
-            const frameSize = sprite.width / 2; // 2 columns
-            const frameIndex = Math.floor(Date.now() / 100) % 4; // 4 frames, animate at 10fps
-            const row = Math.floor(frameIndex / 2);
-            const col = frameIndex % 2;
+            // 4 frames in horizontal row, 12 FPS animation
+            const frameCount = 4;
+            const frameWidth = sprite.width / frameCount;
+            const frameHeight = sprite.height;
+            const frameIndex = Math.floor(Date.now() / 83) % frameCount; // ~12 FPS
 
-            // Scale to match enemy actual size (this.width = 24)
-            const displaySize = this.width * 1.5; // Slightly larger than hitbox for visual
+            // Scale to enemy size (24px hitbox, display at 40px)
+            const displaySize = 40;
 
             ctx.save();
             ctx.rotate(Date.now() / 500); // Slow rotation for spinning effect
             ctx.drawImage(
                 sprite,
-                col * frameSize, row * frameSize, frameSize, frameSize,
+                frameIndex * frameWidth, 0, frameWidth, frameHeight,
                 -displaySize / 2, -displaySize / 2, displaySize, displaySize
             );
             ctx.restore();
@@ -2579,24 +2579,23 @@ class Enemy {
     }
 
     renderSandworm(ctx) {
-        // Try sprite-based rendering - regenerated as clean 4-frame horizontal strip
+        // Sprite: 4-frame horizontal strip per 2D game skill (64x64 per frame)
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_sandworm') : null;
 
         if (sprite && sprite.width > 0) {
-            // Sprite sheet: 4 frames in a single horizontal row
+            // 4 frames in horizontal row, 12 FPS animation
             const frameCount = 4;
             const frameWidth = sprite.width / frameCount;
             const frameHeight = sprite.height;
-            const frameIndex = Math.floor(Date.now() / 150) % frameCount;
+            const frameIndex = Math.floor(Date.now() / 83) % frameCount; // ~12 FPS
 
-            // Scale to match enemy size (this.width = 30, this.height = 20)
-            const displayWidth = this.width * 2;  // 60px
-            const displayHeight = this.height * 2; // 40px
+            // Scale to enemy size (display at 64px)
+            const displaySize = 64;
 
             ctx.drawImage(
                 sprite,
                 frameIndex * frameWidth, 0, frameWidth, frameHeight,
-                -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight
+                -displaySize / 2, -displaySize / 2, displaySize, displaySize
             );
             return;
         }
@@ -2719,24 +2718,23 @@ class Enemy {
     }
 
     renderScorpion(ctx) {
-        // Try sprite-based rendering - regenerated as clean 4-frame horizontal strip
+        // Sprite: 4-frame horizontal strip per 2D game skill (64x64 per frame)
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_scorpion') : null;
 
         if (sprite && sprite.width > 0) {
-            // Sprite sheet: 4 frames in a single horizontal row
+            // 4 frames in horizontal row, 12 FPS animation
             const frameCount = 4;
             const frameWidth = sprite.width / frameCount;
             const frameHeight = sprite.height;
-            const frameIndex = Math.floor(Date.now() / 120) % frameCount;
+            const frameIndex = Math.floor(Date.now() / 83) % frameCount; // ~12 FPS
 
-            // Scale to match enemy size (this.width = 40, this.height = 24)
-            const displayWidth = this.width * 1.5;  // 60px
-            const displayHeight = this.height * 1.5; // 36px
+            // Scale to enemy size (display at 64px)
+            const displaySize = 64;
 
             ctx.drawImage(
                 sprite,
                 frameIndex * frameWidth, 0, frameWidth, frameHeight,
-                -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight
+                -displaySize / 2, -displaySize / 2, displaySize, displaySize
             );
             this.renderHealthBar(ctx);
             return;
