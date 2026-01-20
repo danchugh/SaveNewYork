@@ -63,11 +63,9 @@ const IntroManager = {
             // Handle player count selection with Up/Down
             if (input.isKeyJustPressed('ArrowUp') || input.isKeyJustPressed('w') || input.isKeyJustPressed('W')) {
                 this.state.selectedPlayers = 1;
-                if (typeof SoundManager !== 'undefined') SoundManager.menuSelect();
             }
             if (input.isKeyJustPressed('ArrowDown') || input.isKeyJustPressed('s') || input.isKeyJustPressed('S')) {
                 this.state.selectedPlayers = 2;
-                if (typeof SoundManager !== 'undefined') SoundManager.menuSelect();
             }
         } else if (this.state.phase === 'starting') {
             // Flash effect or transition out
