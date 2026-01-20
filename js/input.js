@@ -33,12 +33,13 @@ const input = {
     actionsJustPressed: {},
 
     // Per-player key bindings (remappable)
+    // Note: Letter keys are normalized to lowercase in keydown/keyup handlers
     playerBindings: {
         1: {
-            [Actions.UP]: [Keys.W, 'W'],
-            [Actions.DOWN]: [Keys.S, 'S'],
-            [Actions.LEFT]: [Keys.A, 'A'],
-            [Actions.RIGHT]: [Keys.D, 'D'],
+            [Actions.UP]: ['w'],
+            [Actions.DOWN]: ['s'],
+            [Actions.LEFT]: ['a'],
+            [Actions.RIGHT]: ['d'],
             [Actions.FIRE]: [Keys.SPACE],
             [Actions.START]: [Keys.ENTER]
         },
@@ -79,10 +80,13 @@ const input = {
     init() {
         // Keyboard
         window.addEventListener('keydown', (e) => {
-            if (!this.keys[e.key]) {
-                this.justPressed[e.key] = true;
+            // Normalize letter keys to lowercase to prevent stuck keys when shift state changes
+            const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+            if (!this.keys[key]) {
+                this.justPressed[key] = true;
             }
-            this.keys[e.key] = true;
+            this.keys[key] = true;
 
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
                 e.preventDefault();
@@ -90,7 +94,9 @@ const input = {
         });
 
         window.addEventListener('keyup', (e) => {
-            this.keys[e.key] = false;
+            // Normalize letter keys to lowercase to match keydown
+            const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+            this.keys[key] = false;
         });
 
         // Touch
