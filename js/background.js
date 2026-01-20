@@ -6,6 +6,9 @@ const BackgroundManager = {
     time: 0,
     volcanoPulse: 0,
 
+    // Current zone (1 = city, 2 = desert)
+    currentZone: 1,
+
     // Layer offsets for parallax
     layer1Offset: 0,
     layer2Offset: 0,
@@ -26,6 +29,11 @@ const BackgroundManager = {
 
     // Atmospheric ash particles (falling across entire scene)
     ashParticles: [],
+
+    // Zone 2: Desert elements
+    desertDunes: [],
+    desertMountains: [],
+    dustParticles: [],
 
     init() {
         // Load volcano image
@@ -118,6 +126,57 @@ const BackgroundManager = {
             }
             x += 60 + Math.random() * 40;
         }
+
+        // Initialize desert elements for Zone 2
+        this.initDesert();
+    },
+
+    initDesert() {
+        // Desert mountains (far layer)
+        this.desertMountains = [];
+        let mx = 0;
+        while (mx < CONFIG.CANVAS_WIDTH * 1.5) {
+            const width = 150 + Math.random() * 200;
+            const height = 100 + Math.random() * 150;
+            this.desertMountains.push({
+                x: mx,
+                width: width,
+                height: height,
+                type: Math.random() > 0.7 ? 'mesa' : 'peak'
+            });
+            mx += width * 0.7;
+        }
+
+        // Desert dunes (mid layer)
+        this.desertDunes = [];
+        let dx = 0;
+        while (dx < CONFIG.CANVAS_WIDTH * 2) {
+            const width = 80 + Math.random() * 120;
+            const height = 20 + Math.random() * 40;
+            this.desertDunes.push({
+                x: dx,
+                width: width,
+                height: height
+            });
+            dx += width * 0.8;
+        }
+
+        // Dust particles
+        this.dustParticles = [];
+        for (let i = 0; i < 30; i++) {
+            this.dustParticles.push(this.createDustParticle());
+        }
+    },
+
+    createDustParticle() {
+        return {
+            x: Math.random() * CONFIG.CANVAS_WIDTH,
+            y: Math.random() * CONFIG.CANVAS_HEIGHT,
+            size: 1 + Math.random() * 2,
+            speedX: 20 + Math.random() * 30,
+            speedY: -5 + Math.random() * 10,
+            opacity: 0.2 + Math.random() * 0.3
+        };
     },
 
     createEmber() {
@@ -211,6 +270,19 @@ const BackgroundManager = {
         this.layer1Offset = (this.layer1Offset + drift * 0.3) % 1200;
         this.layer2Offset = (this.layer2Offset + drift * 0.6) % 1200;
         this.layer3Offset = (this.layer3Offset + drift * 1.2) % 1500;
+
+        // Update dust particles (Zone 2)
+        for (let i = 0; i < this.dustParticles.length; i++) {
+            const d = this.dustParticles[i];
+            d.x += d.speedX * deltaTime;
+            d.y += d.speedY * deltaTime;
+
+            // Reset particles that go off screen
+            if (d.x > CONFIG.CANVAS_WIDTH + 10) {
+                this.dustParticles[i] = this.createDustParticle();
+                this.dustParticles[i].x = -5;
+            }
+        }
     },
 
     render(ctx) {
@@ -221,59 +293,153 @@ const BackgroundManager = {
         const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
         const isDusk = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'dusk';
 
-        // === RENDER CUSTOM CITYSCAPE BACKGROUND ===
-        const cityscapeSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('bg_cityscape') : null;
+        // Check current zone from game state
+        const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : this.currentZone;
 
-        if (cityscapeSprite) {
-            const spriteWidth = cityscapeSprite.width;
-            const spriteHeight = cityscapeSprite.height;
+        if (zone === 2) {
+            // Zone 2: Desert background
+            this.renderDesertBackground(ctx, offsetX, isNight, isDusk);
+        } else {
+            // Zone 1: City background
+            const cityscapeSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('bg_cityscape') : null;
 
-            // Scale to eliminate seams (cover screen completely)
-            // Use maximum scale ratio to ensure no black bars
-            const scaleX = CONFIG.CANVAS_WIDTH / spriteWidth;
-            const scaleY = CONFIG.CANVAS_HEIGHT / spriteHeight;
-            const scale = Math.max(scaleX, scaleY);
+            if (cityscapeSprite) {
+                const spriteWidth = cityscapeSprite.width;
+                const spriteHeight = cityscapeSprite.height;
 
-            const scaledWidth = spriteWidth * scale;
-            const scaledHeight = spriteHeight * scale;
+                const scaleX = CONFIG.CANVAS_WIDTH / spriteWidth;
+                const scaleY = CONFIG.CANVAS_HEIGHT / spriteHeight;
+                const scale = Math.max(scaleX, scaleY);
 
-            // Center the image
-            const drawX = (CONFIG.CANVAS_WIDTH - scaledWidth) / 2;
-            const drawY = (CONFIG.CANVAS_HEIGHT - scaledHeight) / 2;
+                const scaledWidth = spriteWidth * scale;
+                const scaledHeight = spriteHeight * scale;
 
-            ctx.save();
+                const drawX = (CONFIG.CANVAS_WIDTH - scaledWidth) / 2;
+                const drawY = (CONFIG.CANVAS_HEIGHT - scaledHeight) / 2;
 
-            // Apply time-of-day tinting
-            if (isNight) {
-                ctx.globalAlpha = 0.7;
-            } else if (isDusk) {
-                ctx.globalAlpha = 0.9;
+                ctx.save();
+                if (isNight) {
+                    ctx.globalAlpha = 0.7;
+                } else if (isDusk) {
+                    ctx.globalAlpha = 0.9;
+                }
+                ctx.drawImage(cityscapeSprite, drawX, drawY, scaledWidth, scaledHeight);
+                ctx.restore();
+            } else {
+                this.renderSkyline(ctx, offsetX * 0.15);
+                this.renderRuins(ctx, offsetX * 0.3);
             }
 
-            // Draw single static background image (no tiling/parallax)
-            ctx.drawImage(cityscapeSprite, drawX, drawY, scaledWidth, scaledHeight);
+            // Render ash particles for Zone 1
+            this.ashParticles.forEach(a => {
+                ctx.fillStyle = `rgba(200, 180, 160, ${a.opacity})`;
+                ctx.fillRect(a.x, a.y, a.size, a.size);
+                if (a.size > 1.5) {
+                    ctx.fillStyle = `rgba(220, 200, 180, ${a.opacity * 0.3})`;
+                    ctx.fillRect(a.x - 1, a.y - 1, a.size + 2, a.size + 2);
+                }
+            });
+        }
+    },
 
-            ctx.restore();
+    renderDesertBackground(ctx, offsetX, isNight, isDusk) {
+        // Desert sky gradient
+        const skyGradient = ctx.createLinearGradient(0, 0, 0, CONFIG.STREET_Y);
+
+        if (isNight) {
+            skyGradient.addColorStop(0, '#0a1628');
+            skyGradient.addColorStop(0.4, '#1a2540');
+            skyGradient.addColorStop(1, '#2a3550');
+        } else if (isDusk) {
+            skyGradient.addColorStop(0, '#4a2850');
+            skyGradient.addColorStop(0.3, '#a04030');
+            skyGradient.addColorStop(0.6, '#d06020');
+            skyGradient.addColorStop(1, '#c09050');
         } else {
-            // Fallback: Render procedural layers
-            // this.renderVolcano(ctx, offsetX * 0.08);  // DISABLED
-            this.renderSkyline(ctx, offsetX * 0.15);
-            this.renderRuins(ctx, offsetX * 0.3);
+            // Day - bright desert sky
+            skyGradient.addColorStop(0, '#5090d0');
+            skyGradient.addColorStop(0.5, '#80b0e0');
+            skyGradient.addColorStop(0.8, '#d0c090');
+            skyGradient.addColorStop(1, '#e8d8a0');
         }
 
-        // Render debris layer on top (optional, can be disabled if cityscape has enough detail)
-        // this.renderDebris(ctx, offsetX * 0.5);
+        ctx.fillStyle = skyGradient;
+        ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.STREET_Y);
 
-        // Render atmospheric ash particles (on top of everything)
-        this.ashParticles.forEach(a => {
-            ctx.fillStyle = `rgba(200, 180, 160, ${a.opacity})`;
-            ctx.fillRect(a.x, a.y, a.size, a.size);
+        // Far mountains (silhouette)
+        const mountainColor = isNight ? '#1a2030' : (isDusk ? '#5a3040' : '#8a7060');
+        this.desertMountains.forEach(m => {
+            const mx = m.x - offsetX * 0.1;
+            ctx.fillStyle = mountainColor;
+            ctx.beginPath();
 
-            // Subtle glow for larger particles
-            if (a.size > 1.5) {
-                ctx.fillStyle = `rgba(220, 200, 180, ${a.opacity * 0.3})`;
-                ctx.fillRect(a.x - 1, a.y - 1, a.size + 2, a.size + 2);
+            if (m.type === 'mesa') {
+                // Flat-topped mesa
+                ctx.moveTo(mx, CONFIG.STREET_Y);
+                ctx.lineTo(mx + m.width * 0.1, CONFIG.STREET_Y - m.height * 0.8);
+                ctx.lineTo(mx + m.width * 0.3, CONFIG.STREET_Y - m.height);
+                ctx.lineTo(mx + m.width * 0.7, CONFIG.STREET_Y - m.height);
+                ctx.lineTo(mx + m.width * 0.9, CONFIG.STREET_Y - m.height * 0.8);
+                ctx.lineTo(mx + m.width, CONFIG.STREET_Y);
+            } else {
+                // Pointed peak
+                ctx.moveTo(mx, CONFIG.STREET_Y);
+                ctx.lineTo(mx + m.width * 0.4, CONFIG.STREET_Y - m.height * 0.6);
+                ctx.lineTo(mx + m.width * 0.5, CONFIG.STREET_Y - m.height);
+                ctx.lineTo(mx + m.width * 0.6, CONFIG.STREET_Y - m.height * 0.6);
+                ctx.lineTo(mx + m.width, CONFIG.STREET_Y);
             }
+            ctx.closePath();
+            ctx.fill();
+        });
+
+        // Sand dunes (mid layer)
+        const duneColor = isNight ? '#3a3020' : (isDusk ? '#b08050' : '#d0b080');
+        const duneShadow = isNight ? '#2a2010' : (isDusk ? '#905030' : '#b09060');
+
+        this.desertDunes.forEach(d => {
+            const dx = d.x - offsetX * 0.25;
+            const duneY = CONFIG.STREET_Y - d.height;
+
+            // Dune shadow
+            ctx.fillStyle = duneShadow;
+            ctx.beginPath();
+            ctx.moveTo(dx, CONFIG.STREET_Y);
+            ctx.quadraticCurveTo(dx + d.width * 0.3, duneY - 5, dx + d.width * 0.5, duneY);
+            ctx.quadraticCurveTo(dx + d.width * 0.7, duneY + d.height * 0.3, dx + d.width, CONFIG.STREET_Y);
+            ctx.closePath();
+            ctx.fill();
+
+            // Dune surface
+            ctx.fillStyle = duneColor;
+            ctx.beginPath();
+            ctx.moveTo(dx, CONFIG.STREET_Y);
+            ctx.quadraticCurveTo(dx + d.width * 0.25, duneY, dx + d.width * 0.5, duneY);
+            ctx.quadraticCurveTo(dx + d.width * 0.75, duneY + d.height * 0.2, dx + d.width, CONFIG.STREET_Y);
+            ctx.closePath();
+            ctx.fill();
+        });
+
+        // Desert ground
+        const groundGradient = ctx.createLinearGradient(0, CONFIG.STREET_Y - 20, 0, CONFIG.CANVAS_HEIGHT);
+        if (isNight) {
+            groundGradient.addColorStop(0, '#3a3020');
+            groundGradient.addColorStop(1, '#2a2010');
+        } else if (isDusk) {
+            groundGradient.addColorStop(0, '#a08050');
+            groundGradient.addColorStop(1, '#806030');
+        } else {
+            groundGradient.addColorStop(0, '#c4a574');
+            groundGradient.addColorStop(1, '#a08050');
+        }
+        ctx.fillStyle = groundGradient;
+        ctx.fillRect(0, CONFIG.STREET_Y, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT - CONFIG.STREET_Y);
+
+        // Dust particles
+        this.dustParticles.forEach(d => {
+            const sandColor = isNight ? '100, 80, 60' : (isDusk ? '180, 140, 100' : '200, 180, 150');
+            ctx.fillStyle = `rgba(${sandColor}, ${d.opacity})`;
+            ctx.fillRect(d.x, d.y, d.size, d.size);
         });
     },
 

@@ -3555,6 +3555,9 @@ class EnemyManager {
         this.boss = null;
         this.miniBoss = null;
         this.pendingMiniBoss = null;
+        this.pendingZone2MiniBoss = null; // Zone 2 mini-boss tracking
+        this.zone2MiniBoss = null;
+        this.zone2Boss = null;
         this.waveNumber = 0;
         this.enemiesRemainingInWave = 0;
         this.spawnTimer = 0;
@@ -3694,8 +3697,21 @@ class EnemyManager {
     }
 
     spawnBoss() {
-        this.boss = new Boss();
-        console.log('BOSS SPAWNED!');
+        const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
+
+        if (zone === 2) {
+            // Zone 2 final boss: Siege Crawler (spawns as special Enemy type)
+            const siegeCrawler = new Enemy(CONFIG.CANVAS_WIDTH + 100, CONFIG.STREET_Y - 60, EnemyType.SIEGE_CRAWLER);
+            siegeCrawler.isBoss = true;
+            this.enemies.push(siegeCrawler);
+            // Store reference for boss tracking
+            this.zone2Boss = siegeCrawler;
+            console.log('ZONE 2 BOSS SPAWNED: SIEGE CRAWLER!');
+        } else {
+            // Zone 1 final boss
+            this.boss = new Boss();
+            console.log('BOSS SPAWNED!');
+        }
     }
 
     update(deltaTime, playerX, playerY, projectileManager) {
@@ -3704,7 +3720,17 @@ class EnemyManager {
             this.waveBreakTimer += deltaTime;
             if (this.waveBreakTimer >= 2) {
                 this.betweenWaves = false;
-                if (this.pendingMiniBoss) {
+
+                // Zone 2 mini-bosses spawn as Enemy types
+                if (this.pendingZone2MiniBoss) {
+                    const miniBossEnemy = new Enemy(CONFIG.CANVAS_WIDTH / 2, CONFIG.SKY_TOP + 100, this.pendingZone2MiniBoss);
+                    miniBossEnemy.isBoss = true;
+                    this.enemies.push(miniBossEnemy);
+                    this.zone2MiniBoss = miniBossEnemy; // Track for defeat detection
+                    this.pendingZone2MiniBoss = null;
+                    if (typeof SoundManager !== 'undefined') SoundManager.miniBossAppear();
+                    console.log(`ZONE 2 MINI-BOSS SPAWNED: ${miniBossEnemy.type.toUpperCase()}`);
+                } else if (this.pendingMiniBoss) {
                     this.miniBoss = new MiniBoss(this.pendingMiniBoss);
                     this.pendingMiniBoss = null;
                     if (typeof SoundManager !== 'undefined') SoundManager.miniBossAppear();
@@ -3791,6 +3817,20 @@ class EnemyManager {
                 this.pendingMiniBoss = 'charger';
             } else if (this.waveNumber === 4) {
                 this.pendingMiniBoss = 'gunner';
+            }
+
+            // Zone 2 uses different mini-bosses (Enemy types with isBoss flag)
+            const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
+            if (zone === 2) {
+                if (this.waveNumber === 2) {
+                    // Vulture King mini-boss for Zone 2
+                    this.pendingMiniBoss = null;
+                    this.pendingZone2MiniBoss = EnemyType.VULTURE_KING;
+                } else if (this.waveNumber === 4) {
+                    // Sandstorm Colossus mini-boss for Zone 2
+                    this.pendingMiniBoss = null;
+                    this.pendingZone2MiniBoss = EnemyType.SANDSTORM_COLOSSUS;
+                }
             }
         }
     }
