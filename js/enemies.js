@@ -2579,26 +2579,27 @@ class Enemy {
     }
 
     renderSandworm(ctx) {
-        // Sprite disabled - generated sheet layout is not a uniform grid
-        // TODO: Regenerate sandworm as proper horizontal sprite strip
-        /*
+        // Try sprite-based rendering - regenerated as clean 4-frame horizontal strip
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_sandworm') : null;
 
         if (sprite && sprite.width > 0) {
-            const frameWidth = sprite.width / 4;
-            const frameHeight = sprite.height / 2;
-            const frameIndex = Math.floor(Date.now() / 150) % 4;
-            const row = this.isSurfacing ? 1 : 0;
-            const displayWidth = this.width * 2;
-            const displayHeight = this.height * 2;
+            // Sprite sheet: 4 frames in a single horizontal row
+            const frameCount = 4;
+            const frameWidth = sprite.width / frameCount;
+            const frameHeight = sprite.height;
+            const frameIndex = Math.floor(Date.now() / 150) % frameCount;
+
+            // Scale to match enemy size (this.width = 30, this.height = 20)
+            const displayWidth = this.width * 2;  // 60px
+            const displayHeight = this.height * 2; // 40px
+
             ctx.drawImage(
                 sprite,
-                frameIndex * frameWidth, row * frameHeight, frameWidth, frameHeight,
+                frameIndex * frameWidth, 0, frameWidth, frameHeight,
                 -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight
             );
             return;
         }
-        */
 
         // Procedural fallback
         // Note: ctx already translated to (this.x, this.y) by render()
@@ -2718,18 +2719,20 @@ class Enemy {
     }
 
     renderScorpion(ctx) {
-        // Sprite disabled - generated sheet has decorative text/border breaking frame parsing
-        // TODO: Regenerate scorpion as clean horizontal sprite strip without labels
-        /*
+        // Try sprite-based rendering - regenerated as clean 4-frame horizontal strip
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_scorpion') : null;
 
         if (sprite && sprite.width > 0) {
-            const frameCount = 6;
+            // Sprite sheet: 4 frames in a single horizontal row
+            const frameCount = 4;
             const frameWidth = sprite.width / frameCount;
             const frameHeight = sprite.height;
             const frameIndex = Math.floor(Date.now() / 120) % frameCount;
-            const displayWidth = this.width * 1.5;
-            const displayHeight = this.height * 1.5;
+
+            // Scale to match enemy size (this.width = 40, this.height = 24)
+            const displayWidth = this.width * 1.5;  // 60px
+            const displayHeight = this.height * 1.5; // 36px
+
             ctx.drawImage(
                 sprite,
                 frameIndex * frameWidth, 0, frameWidth, frameHeight,
@@ -2738,7 +2741,6 @@ class Enemy {
             this.renderHealthBar(ctx);
             return;
         }
-        */
 
         // Procedural fallback
         // Note: ctx already translated to (this.x, this.y) by render()
