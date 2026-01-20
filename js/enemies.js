@@ -257,8 +257,8 @@ class Enemy {
 
             case EnemyType.VULTURE_KING:
                 this.speed = 120;
-                this.health = 11;
-                this.maxHealth = 11;
+                this.health = 15;
+                this.maxHealth = 15;
                 this.width = 64;
                 this.height = 64;
                 this.isBoss = true;
@@ -3762,13 +3762,28 @@ class EnemyManager {
             }
         }
 
+        // Update Zone 2 mini-boss if present (spawned as Enemy type with isBoss flag)
+        if (this.zone2MiniBoss) {
+            // Check if zone2MiniBoss was defeated (active becomes false)
+            if (!this.zone2MiniBoss.active) {
+                console.log('Zone 2 Mini-boss defeated! Starting wave break...');
+                // Drop guaranteed shield powerup
+                if (typeof PowerupManager !== 'undefined') {
+                    PowerupManager.spawnBossDrop(this.zone2MiniBoss.x, this.zone2MiniBoss.y);
+                }
+                this.zone2MiniBoss = null;
+                this.betweenWaves = true;
+                this.waveBreakTimer = 0;
+            }
+        }
+
         // Update boss if present
         if (this.boss && this.boss.active) {
             this.boss.update(deltaTime, playerX, playerY, projectileManager);
         }
 
         // Spawn enemies
-        if (this.enemiesRemainingInWave > 0 && !this.boss && !this.miniBoss) {
+        if (this.enemiesRemainingInWave > 0 && !this.boss && !this.miniBoss && !this.zone2MiniBoss) {
             this.spawnTimer += deltaTime;
             const spawnRate = Math.max(0.8, 1.8 - this.waveNumber * 0.2);
             if (this.spawnTimer >= spawnRate) {
@@ -3805,7 +3820,7 @@ class EnemyManager {
         }
 
         // Check wave completion
-        if (!this.boss && !this.miniBoss && this.enemiesRemainingInWave <= 0 && this.enemies.length === 0 && !this.waveComplete) {
+        if (!this.boss && !this.miniBoss && !this.zone2MiniBoss && this.enemiesRemainingInWave <= 0 && this.enemies.length === 0 && !this.waveComplete) {
             this.waveComplete = true;
             this.betweenWaves = true;
             this.waveBreakTimer = 0;
