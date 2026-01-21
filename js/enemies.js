@@ -2633,26 +2633,64 @@ class Enemy {
     }
 
     renderSandCarrier(ctx) {
-        // Try sprite-based rendering first
-        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_sand_carrier') : null;
+        // State-based sprite rendering for Zone 2 Sand Carrier
+        // Sprites: 128x128 frames, 8 FPS (125ms per frame)
+        const FPS_INTERVAL = 125; // 8 FPS
+
+        // Determine current state and select appropriate sprite
+        let spriteKey = 'z2_carrier_fly';  // Default state
+        let isAttacking = false;
+        let isDying = this.health <= 0;
+
+        // Attack state: when pod is about to drop (within 0.5s of drop timer)
+        if (this.podDropTimer <= 0.5 && this.podDropTimer > 0) {
+            spriteKey = 'z2_carrier_attack';
+            isAttacking = true;
+        }
+
+        // Death state overrides all others
+        if (isDying) {
+            spriteKey = 'z2_carrier_death';
+        }
+
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage(spriteKey) : null;
 
         if (sprite && sprite.width > 0) {
-            // Sprite sheet: vertical strip of 4 frames
-            const frameCount = 4;
-            const frameWidth = sprite.width;
-            const frameHeight = sprite.height / frameCount;
-            const frameIndex = Math.floor(Date.now() / 200) % frameCount;
+            // Dynamic frame size from filename convention (128x128)
+            const frameSize = 128;
 
-            // Scale to match enemy actual size (this.width = 96, this.height = 96)
-            const displayWidth = this.width;
-            const displayHeight = this.height;
+            // Calculate grid dimensions from sprite dimensions
+            const cols = Math.round(sprite.width / frameSize);
+            const rows = Math.round(sprite.height / frameSize);
+            const totalFrames = cols * rows;
+
+            // Calculate frame index based on animation state
+            let frameIndex;
+            if (isDying) {
+                // Death: play once, hold last frame
+                if (!this.deathAnimStartTime) {
+                    this.deathAnimStartTime = Date.now();
+                }
+                const elapsed = Date.now() - this.deathAnimStartTime;
+                frameIndex = Math.min(Math.floor(elapsed / FPS_INTERVAL), totalFrames - 1);
+            } else {
+                // Fly/Attack: loop animation
+                frameIndex = Math.floor(Date.now() / FPS_INTERVAL) % totalFrames;
+            }
+
+            // Convert to row/col position in sprite sheet
+            const col = frameIndex % cols;
+            const row = Math.floor(frameIndex / cols);
+
+            // Display size (match hitbox size 96x96)
+            const displaySize = 128;
 
             ctx.save();
             if (!this.carrierMovingRight) ctx.scale(-1, 1);
             ctx.drawImage(
                 sprite,
-                0, frameIndex * frameHeight, frameWidth, frameHeight,
-                -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight
+                col * frameSize, row * frameSize, frameSize, frameSize,
+                -displaySize / 2, -displaySize / 2, displaySize, displaySize
             );
 
             // Health bar (unflip if needed)
@@ -2660,7 +2698,7 @@ class Enemy {
                 if (!this.carrierMovingRight) ctx.scale(-1, 1);
                 for (let i = 0; i < this.health; i++) {
                     ctx.fillStyle = '#4ade80';
-                    ctx.fillRect(-20 + i * 14, -35, 10, 5);
+                    ctx.fillRect(-20 + i * 14, -55, 10, 5);
                 }
             }
             ctx.restore();

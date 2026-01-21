@@ -23,7 +23,9 @@ const AssetManager = {
         'gunship_fly', 'gunship_attack', 'gunship_death',
         // Zone 2 enemies
         'zone2_dust_devil', 'zone2_sandworm', 'zone2_scorpion',
-        'zone2_sand_carrier', 'zone2_vulture_king', 'zone2_sandstorm_colossus'
+        'zone2_sand_carrier', 'zone2_vulture_king', 'zone2_sandstorm_colossus',
+        // Zone 2 Sand Carrier animation states (128x128 frames)
+        'z2_carrier_fly', 'z2_carrier_attack', 'z2_carrier_death'
     ],
 
     // Asset manifest - add entries here as sprites are created
@@ -106,7 +108,12 @@ const AssetManager = {
             'zone2_scorpion': 'assets/sprites/enemies/zone2/scorpion.png',
             'zone2_sand_carrier': 'assets/sprites/enemies/zone2/sand_carrier.png',
             'zone2_vulture_king': 'assets/sprites/enemies/zone2/vulture_king.png',
-            'zone2_sandstorm_colossus': 'assets/sprites/enemies/zone2/sandstorm_colossus.png'
+            'zone2_sandstorm_colossus': 'assets/sprites/enemies/zone2/sandstorm_colossus.png',
+
+            // Zone 2 Sand Carrier animation states (128x128 frames)
+            'z2_carrier_fly': 'assets/128x128_z2Carrier_Fly.png',
+            'z2_carrier_attack': 'assets/128x128_z2Carrier_Attack.png',
+            'z2_carrier_death': 'assets/128x128_z2Carrier_Death.png'
         },
         sounds: {
             // Phase 3 - Audio Overhaul (royalty-free samples)
