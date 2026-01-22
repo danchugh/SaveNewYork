@@ -111,9 +111,9 @@ const AssetManager = {
             'zone2_sandstorm_colossus': 'assets/sprites/enemies/zone2/sandstorm_colossus.png',
 
             // Zone 2 Sand Carrier animation states (128x128 frames)
-            'z2_carrier_fly': 'assets/128x128_z2Carrier_Fly.png',
-            'z2_carrier_attack': 'assets/128x128_z2Carrier_Attack.png',
-            'z2_carrier_death': 'assets/128x128_z2Carrier_Death.png'
+            'z2_carrier_fly': 'assets/128x128_z2SandCarrier_Fly.png',
+            'z2_carrier_attack': 'assets/128x128_z2SandCarrier_Attack.png',
+            'z2_carrier_death': 'assets/128x128_z2SandCarrier_Death.png'
         },
         sounds: {
             // Phase 3 - Audio Overhaul (royalty-free samples)
