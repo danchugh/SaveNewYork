@@ -945,15 +945,18 @@ function renderGameOver() {
 }
 
 function renderVictory() {
-    // Draw the game state in background
-    renderGame();
+    // Draw victory background image if available, else fallback to game state
+    const victoryBg = typeof AssetManager !== 'undefined' ? AssetManager.getImage('victory_bg') : null;
+    if (victoryBg && victoryBg.width > 0) {
+        // Draw the victory background scaled to canvas
+        ctx.drawImage(victoryBg, 0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+    } else {
+        // Fallback: draw game state in background
+        renderGame();
+    }
 
-    // Dramatic victory overlay with gradient
-    const gradient = ctx.createLinearGradient(0, 0, 0, CONFIG.CANVAS_HEIGHT);
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
-    gradient.addColorStop(0.5, 'rgba(20, 40, 80, 0.8)');
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
-    ctx.fillStyle = gradient;
+    // Semi-transparent overlay for text readability
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
 
     // Add animated stars effect

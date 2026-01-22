@@ -88,6 +88,9 @@ const AssetManager = {
             'splash_bg': 'assets/splash_bg.png',
             'splash_logo': 'assets/splash_logo.png',
 
+            // Victory screen background
+            'victory_bg': 'assets/victory_bg.png',
+
             // Debris sprite sheets (for animated particles)
             'debris_concrete': 'assets/debris_concrete.png',
             'debris_metal': 'assets/debris_metal.png',
