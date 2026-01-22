@@ -62,9 +62,10 @@ class Civilian {
      * @param {string} assetKey - Key for AssetManager
      * @param {number} fps - Frames per second
      * @param {number} scale - Render scale
+     * @param {number} frameCountOverride - Optional: actual frame count if sheet has empty trailing frames
      * @returns {AnimatedSprite|null}
      */
-    createAnimationFromSheet(assetKey, fps = 8, scale = 1.25) {
+    createAnimationFromSheet(assetKey, fps = 8, scale = 1.25, frameCountOverride = null) {
         const sheet = AssetManager.getImage(assetKey);
         if (!sheet || sheet.width <= 0 || sheet.height <= 0) {
             console.warn(`Civilian: ${assetKey} sprite not loaded or invalid`);
@@ -78,7 +79,8 @@ class Civilian {
         // Calculate frame layout from sheet dimensions
         const framesPerRow = Math.floor(sheet.width / frameWidth);
         const rowCount = Math.floor(sheet.height / frameHeight);
-        const frameCount = framesPerRow * rowCount;
+        // Use override if provided (for sheets with empty trailing frames)
+        const frameCount = frameCountOverride !== null ? frameCountOverride : (framesPerRow * rowCount);
 
         if (frameCount <= 0) {
             console.warn(`Civilian: ${assetKey} has no valid frames`);
@@ -113,7 +115,8 @@ class Civilian {
         this.animations = {};
 
         // Load all civilian sprite sheets (32x32 frames)
-        this.animations.idle = this.createAnimationFromSheet('civilian_idle', 8, 1.25);
+        // Idle: 7x7 grid but last cell is empty, so use 48 frames
+        this.animations.idle = this.createAnimationFromSheet('civilian_idle', 8, 1.25, 48);
         this.animations.help = this.createAnimationFromSheet('civilian_help', 8, 1.25);
         this.animations.fall = this.createAnimationFromSheet('civilian_fall', 12, 1.25);
 
