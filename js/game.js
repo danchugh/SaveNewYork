@@ -25,7 +25,14 @@ const game = {
     finalWave: 0,
     highScoreRank: 0,
     currentZone: 1,           // Current zone (1 or 2)
-    zoneUnlocked: [true, true] // Zone unlock status [zone1, zone2] - Zone 2 enabled for testing
+    zoneUnlocked: [true, true], // Zone unlock status [zone1, zone2] - Zone 2 enabled for testing
+    // Victory screen state
+    victoryStartTime: 0,       // When victory state started
+    brickCount: 0,             // Number of remaining blocks
+    brickBonus: 0,             // Total brick bonus (25 pts × remaining blocks)
+    brickTallyDisplayed: 0,    // Current tally being animated
+    zoneJustUnlocked: false,   // Flag for showing unlock message
+    victoryPhase: 'tally'      // 'tally' | 'complete'
 };
 
 // ============================================
@@ -303,17 +310,28 @@ function checkCollisions() {
 
                 if (defeated) {
                     game.finalWave = enemyManager.waveNumber;
-                    game.highScoreRank = HighScoreManager.addScore(game.score, game.finalWave);
-                    game.state = GameState.VICTORY;
-                    SoundManager.victory();
-                    console.log('BOSS DEFEATED! VICTORY!');
 
-                    // Unlock next zone
-                    if (game.currentZone < CONFIG.TOTAL_ZONES) {
+                    // Calculate brick bonus (25 pts per remaining block)
+                    game.brickCount = buildingManager.getTotalBlockCount();
+                    game.brickBonus = game.brickCount * 25;
+                    game.brickTallyDisplayed = 0;
+                    game.victoryStartTime = Date.now();
+                    game.victoryPhase = 'tally';
+
+                    // Check if zone unlock is new
+                    game.zoneJustUnlocked = false;
+                    if (game.currentZone < CONFIG.TOTAL_ZONES && !game.zoneUnlocked[game.currentZone]) {
                         game.zoneUnlocked[game.currentZone] = true;
+                        game.zoneJustUnlocked = true;
                         saveZoneProgress();
                         console.log(`Zone ${game.currentZone + 1} unlocked!`);
                     }
+
+                    // Save high score (before adding brick bonus - that comes via tally)
+                    game.highScoreRank = HighScoreManager.addScore(game.score + game.brickBonus, game.finalWave);
+                    game.state = GameState.VICTORY;
+                    SoundManager.victory();
+                    console.log(`BOSS DEFEATED! Brick Bonus: ${game.brickCount} × 25 = ${game.brickBonus}`);
                 }
                 break;
             }
@@ -661,8 +679,26 @@ function update(deltaTime) {
             }
             break;
         case GameState.VICTORY:
-            if (input.isKeyJustPressed(Keys.ENTER)) {
-                game.state = GameState.TITLE;
+            // Update tally animation
+            if (game.victoryPhase === 'tally') {
+                const elapsed = Date.now() - game.victoryStartTime;
+                // Tally speed: count up over 3 seconds
+                const tallyProgress = Math.min(elapsed / 3000, 1);
+                game.brickTallyDisplayed = Math.floor(game.brickBonus * tallyProgress);
+
+                if (tallyProgress >= 1) {
+                    game.victoryPhase = 'complete';
+                    game.score += game.brickBonus;
+                }
+
+                // SPACE to skip tally
+                if (input.isKeyJustPressed(Keys.SPACE) || input.isKeyJustPressed(Keys.ENTER)) {
+                    game.brickTallyDisplayed = game.brickBonus;
+                    game.score += game.brickBonus;
+                    game.victoryPhase = 'complete';
+                }
+            } else if (input.isKeyJustPressed(Keys.SPACE) || input.isKeyJustPressed(Keys.ENTER)) {
+                game.state = GameState.STAGE_SELECT;
             }
             break;
     }
@@ -912,42 +948,87 @@ function renderVictory() {
     // Draw the game state in background
     renderGame();
 
-    // Overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    // Dramatic victory overlay with gradient
+    const gradient = ctx.createLinearGradient(0, 0, 0, CONFIG.CANVAS_HEIGHT);
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+    gradient.addColorStop(0.5, 'rgba(20, 40, 80, 0.8)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
 
-    ctx.textAlign = 'center';
-
-    // Victory text
+    // Add animated stars effect
+    const time = Date.now() / 1000;
     ctx.fillStyle = '#fbbf24';
-    ctx.font = '64px monospace';
-    ctx.fillText('VICTORY!', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 100);
+    for (let i = 0; i < 20; i++) {
+        const x = (Math.sin(time + i * 0.7) * 0.5 + 0.5) * CONFIG.CANVAS_WIDTH;
+        const y = (Math.cos(time * 0.8 + i * 1.1) * 0.5 + 0.5) * CONFIG.CANVAS_HEIGHT;
+        const size = 2 + Math.sin(time * 3 + i) * 1.5;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
 
+    ctx.textAlign = 'center';
+    const centerX = CONFIG.CANVAS_WIDTH / 2;
+    const centerY = CONFIG.CANVAS_HEIGHT / 2;
+
+    // Zone complete banner
+    const zoneName = game.currentZone === 1 ? 'ZONE 1' : 'ZONE 2';
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = 'bold 48px monospace';
+    ctx.fillText(`★ ${zoneName} COMPLETE ★`, centerX, centerY - 140);
+
+    // City saved message
+    const citySaved = 100 - Math.floor(buildingManager.getDestructionPercentage() * 100);
     ctx.fillStyle = '#4ade80';
-    ctx.font = '32px monospace';
-    ctx.fillText('NEW YORK IS SAVED!', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 50);
+    ctx.font = '28px monospace';
+    ctx.fillText(`City Saved: ${citySaved}%`, centerX, centerY - 80);
+
+    // Brick bonus with tally animation
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px monospace';
+    const displayedTally = game.brickTallyDisplayed.toLocaleString();
+    const brickCountDisplay = game.brickCount.toLocaleString();
+    ctx.fillText(`Brick Bonus: ${brickCountDisplay} × 25 = ${displayedTally}`, centerX, centerY - 30);
+
+    // Total score (animated during tally)
+    const displayScore = game.victoryPhase === 'tally'
+        ? (game.score + game.brickTallyDisplayed).toLocaleString()
+        : game.score.toLocaleString();
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = 'bold 36px monospace';
+    ctx.fillText(`TOTAL SCORE: ${displayScore}`, centerX, centerY + 30);
 
     // High score notification
     if (game.highScoreRank > 0) {
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 24px monospace';
-        ctx.fillText(`NEW HIGH SCORE! Rank #${game.highScoreRank}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 10);
+        ctx.fillStyle = '#f472b6';
+        ctx.font = 'bold 22px monospace';
+        ctx.fillText(`★ NEW HIGH SCORE! Rank #${game.highScoreRank} ★`, centerX, centerY + 75);
     }
 
-    // Final score
-    ctx.fillStyle = '#fff';
-    ctx.font = '28px monospace';
-    ctx.fillText(`Final Score: ${game.score}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 30);
+    // Zone unlock notification (only if just unlocked)
+    if (game.zoneJustUnlocked) {
+        // Animated glow effect
+        const glowAlpha = 0.5 + Math.sin(time * 4) * 0.3;
+        ctx.fillStyle = `rgba(74, 222, 128, ${glowAlpha})`;
+        ctx.fillRect(centerX - 180, centerY + 100, 360, 50);
+        ctx.strokeStyle = '#4ade80';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(centerX - 180, centerY + 100, 360, 50);
 
-    // Stats
-    const destruction = Math.floor(buildingManager.getDestructionPercentage() * 100);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 24px monospace';
+        ctx.fillText(`🔓 ZONE ${game.currentZone + 1} UNLOCKED! 🔓`, centerX, centerY + 132);
+    }
+
+    // Continue prompt
+    const promptY = game.zoneJustUnlocked ? centerY + 190 : centerY + 140;
+    ctx.fillStyle = game.victoryPhase === 'tally' ? '#888' : '#4ade80';
     ctx.font = '20px monospace';
-    ctx.fillText(`City Damage: ${destruction}%`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 70);
-    ctx.fillText(`Lives Remaining: ${player.lives}`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 100);
-
-    // Restart prompt
-    ctx.fillStyle = '#4ade80';
-    ctx.fillText('Press ENTER to play again', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 150);
+    const promptText = game.victoryPhase === 'tally'
+        ? 'Press SPACE to skip...'
+        : 'Press SPACE to continue';
+    ctx.fillText(promptText, centerX, promptY);
 }
 
 function gameLoop(currentTime) {
