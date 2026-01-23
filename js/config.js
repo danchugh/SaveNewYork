@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.56',
+    VERSION: 'v1.0.57',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -86,9 +86,9 @@ const CONFIG = {
     // - Drones (STANDARD/AGGRESSIVE): chance to DROP physical pickups
     // - Stronger enemies: 75% chance to AUTO-COLLECT directly to player
     MATERIAL_DROP_RATES: {
-        // Drones - physical drop pickups (lower chance, need to collect manually)
-        DRONE: { chance: 0.15, amount: 1, autoCollect: false },
-        INTERCEPTOR: { chance: 0.20, amount: 2, autoCollect: false },
+        // Drones - auto-collect with small chance
+        DRONE: { chance: 0.15, amount: 1, autoCollect: true },
+        INTERCEPTOR: { chance: 0.20, amount: 2, autoCollect: true },
         // Stronger enemies - auto-collect (75% chance, goes directly to player)
         GUNSHIP: { chance: 0.75, amount: 3, autoCollect: true },
         BOMBER: { chance: 0.75, amount: 2, autoCollect: true },
