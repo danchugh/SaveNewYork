@@ -91,7 +91,7 @@ const CONFIG = {
         INTERCEPTOR: { chance: 0.40, amount: 3, autoCollect: true }, // Was 20%, 2
 
         // Heavy/Boss enemies - nearly guaranteed high value drops
-        GUNSHIP: { chance: 0.90, amount: 8, autoCollect: true },     // Was 75%, 3
+        GUNSHIP: { chance: 1.0, amount: 8, autoCollect: true },     // Was 75%, 3
         BOMBER: { chance: 0.50, amount: 4, autoCollect: true },      // Was 75%, 2
         CARRIER: { chance: 0.90, amount: 10, autoCollect: true },    // Was 75%, 5
         TANK: { chance: 0.90, amount: 12, autoCollect: true },       // Tank shares Gunship logic usually, but here distinct
