@@ -459,7 +459,7 @@ const PowerupManager = {
                                 EffectsManager.addExplosion(m.x, m.y, 15, '#fbbf24');
                             }
                             if (typeof SoundManager !== 'undefined') {
-                                SoundManager.powerupCollect();
+                                SoundManager.shieldCollect();
                             }
                         }
                     }
