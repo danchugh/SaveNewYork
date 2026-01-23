@@ -91,6 +91,10 @@ const AssetManager = {
             // Victory screen background
             'victory_bg': 'assets/victory_bg.png',
 
+            // Zone selection screen backgrounds
+            'zone1_bg': 'assets/zone1_bg.png',
+            'zone2_bg': 'assets/zone2_bg.png',
+
             // Debris sprite sheets (for animated particles)
             'debris_concrete': 'assets/debris_concrete.png',
             'debris_metal': 'assets/debris_metal.png',
