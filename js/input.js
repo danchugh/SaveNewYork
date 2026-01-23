@@ -223,6 +223,7 @@ const input = {
         // Update per-player actions from keyboard
         for (const playerId of [1, 2]) {
             const bindings = this.playerBindings[playerId];
+            if (!bindings) continue; // Skip players without bindings (e.g., P2 in 1-player mode)
 
             for (const action of Object.values(Actions)) {
                 const keys = bindings[action] || [];
