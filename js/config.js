@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.55',
+    VERSION: 'v1.0.56',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -82,12 +82,23 @@ const CONFIG = {
     // Material/Repair System
     MAX_MATERIALS: 50,              // Cap per player
     WAVE_COUNTDOWN_DURATION: 5,     // Seconds between waves
-    MATERIAL_DROP_RATES: {          // Chance (0-1) and amount per enemy type
-        DRONE: { chance: 0.15, amount: 1 },
-        INTERCEPTOR: { chance: 0.25, amount: 2 },
-        GUNSHIP: { chance: 0.35, amount: 3 },
-        CARRIER: { chance: 0.50, amount: 5 },
-        MINI_BOSS: { chance: 1.0, amount: 10 }
+    // Material collection: 
+    // - Drones (STANDARD/AGGRESSIVE): chance to DROP physical pickups
+    // - Stronger enemies: 75% chance to AUTO-COLLECT directly to player
+    MATERIAL_DROP_RATES: {
+        // Drones - physical drop pickups (lower chance, need to collect manually)
+        DRONE: { chance: 0.15, amount: 1, autoCollect: false },
+        INTERCEPTOR: { chance: 0.20, amount: 2, autoCollect: false },
+        // Stronger enemies - auto-collect (75% chance, goes directly to player)
+        GUNSHIP: { chance: 0.75, amount: 3, autoCollect: true },
+        BOMBER: { chance: 0.75, amount: 2, autoCollect: true },
+        CARRIER: { chance: 0.75, amount: 5, autoCollect: true },
+        // Zone 2 enemies - auto-collect
+        SAND_CARRIER: { chance: 0.75, amount: 5, autoCollect: true },
+        SCORPION: { chance: 0.75, amount: 3, autoCollect: true },
+        SANDWORM: { chance: 0.75, amount: 4, autoCollect: true },
+        // Mini-boss - guaranteed auto-collect
+        MINI_BOSS: { chance: 1.0, amount: 10, autoCollect: true }
     },
     FUEL_MAX: 100,
     FUEL_DRAIN_RATE: 1,

@@ -246,13 +246,15 @@ function checkCollisions() {
 
                 addScore(Math.floor(baseScore * DayCycle.getScoreMultiplier()), proj.ownerId);
 
-                // Spawn material drop (if enemy was killed - check for any death-related state)
+                // Spawn material drop or auto-collect (if enemy was killed)
                 // die() transitions enemies to FALLING or DYING first, not DEAD immediately
                 const isDying = enemy.state === EnemyState.DEAD ||
                     enemy.state === EnemyState.DYING ||
                     enemy.state === EnemyState.FALLING;
                 if (wasAlive && isDying) {
-                    PowerupManager.spawnMaterialDrop(enemy.x, enemy.y, materialType);
+                    // Pass player ID for auto-collect (proj.ownerId is 1 or 2)
+                    const playerIndex = proj.ownerId ? proj.ownerId - 1 : 0;
+                    PowerupManager.handleMaterialReward(enemy.x, enemy.y, materialType, playerIndex);
                 }
                 break;
             }

@@ -349,18 +349,49 @@ const PowerupManager = {
         console.log('Shield dropped from boss!');
     },
 
-    // NEW: Spawn material drop based on enemy type
-    spawnMaterialDrop(x, y, enemyType) {
+    // Handle material reward - either auto-collect or spawn physical drop
+    // based on enemy type configuration
+    handleMaterialReward(x, y, enemyType, playerIndex = 0) {
         const rates = CONFIG.MATERIAL_DROP_RATES || {};
         const dropInfo = rates[enemyType];
 
         if (!dropInfo) return;
 
-        // Check drop chance
-        if (Math.random() < dropInfo.chance) {
+        // Check drop/collect chance
+        if (Math.random() >= dropInfo.chance) return;
+
+        if (dropInfo.autoCollect) {
+            // Auto-collect: Add materials directly to player
+            const current = game.materials[playerIndex] || 0;
+            const max = CONFIG.MAX_MATERIALS || 50;
+            const added = Math.min(dropInfo.amount, max - current);
+
+            if (added > 0) {
+                game.materials[playerIndex] = current + added;
+
+                // Visual feedback - text popup at enemy position
+                if (typeof EffectsManager !== 'undefined') {
+                    EffectsManager.addTextPopup(x, y - 20, `+${added}`, '#fbbf24');
+                    EffectsManager.addExplosion(x, y, 15, '#fbbf24');
+                }
+
+                // Sound feedback
+                if (typeof SoundManager !== 'undefined') {
+                    SoundManager.materialCollect();
+                }
+
+                console.log(`P${playerIndex + 1} auto-collected +${added} materials from ${enemyType}`);
+            }
+        } else {
+            // Physical drop: Spawn collectible pickup
             this.materialDrops.push(new MaterialDrop(x, y, dropInfo.amount));
             console.log(`Material dropped: +${dropInfo.amount} from ${enemyType}`);
         }
+    },
+
+    // Legacy: Spawn material drop (for backwards compatibility)
+    spawnMaterialDrop(x, y, enemyType) {
+        this.handleMaterialReward(x, y, enemyType, 0);
     },
 
     // NEW: Spawn guaranteed material drop (for mini-bosses)
