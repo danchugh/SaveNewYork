@@ -32,7 +32,12 @@ const game = {
     brickBonus: 0,             // Total brick bonus (25 pts × remaining blocks)
     brickTallyDisplayed: 0,    // Current tally being animated
     zoneJustUnlocked: false,   // Flag for showing unlock message
-    victoryPhase: 'tally'      // 'tally' | 'complete'
+    victoryPhase: 'tally',     // 'tally' | 'complete'
+    // Material/Repair system
+    materials: [0, 0],         // Per-player material pools [P1, P2]
+    // Wave countdown system
+    waveCountdown: 0,          // Countdown timer (5 seconds)
+    betweenWaves: false        // True when counting down between waves
 };
 
 // ============================================
@@ -111,6 +116,7 @@ function initGame(playerCount = 1, zoneNumber = 1) {
     game.currentZone = zoneNumber;
 
     numPlayers = playerCount;
+    input.setPlayerCount(playerCount);  // Update key bindings for 1P vs 2P mode
     buildingManager.init(zoneNumber);
     playerManager.init(numPlayers);
     // Legacy compat - point player to P1
@@ -157,14 +163,35 @@ function checkCollisions() {
         for (const building of buildingManager.buildings) {
             for (let row = 0; row < building.heightBlocks; row++) {
                 for (let col = 0; col < building.widthBlocks; col++) {
-                    if (!building.blocks[row][col]) continue;
+                    // For repair beams, hit any existing block to trigger repair
+                    // For combat projectiles, only hit existing blocks to destroy
+                    const blockExists = building.blocks[row][col];
+                    if (!blockExists && proj.projType !== 'repair') continue;
+                    if (!blockExists) continue; // Repair beams need to hit existing blocks too
 
                     const blockPos = building.getBlockWorldPosition(row, col);
                     if (circleRectIntersects(
                         { x: proj.x, y: proj.y, radius: proj.radius },
                         blockPos
                     )) {
-                        building.destroyBlock(row, col);
+                        if (proj.projType === 'repair') {
+                            // Repair beam - repair a block on this building
+                            const repaired = building.repairBlock(row, col);
+                            if (repaired) {
+                                // Welding spark effect at repaired block
+                                const repairedPos = building.getBlockWorldPosition(repaired.row, repaired.col);
+                                if (typeof EffectsManager !== 'undefined') {
+                                    EffectsManager.addExplosion(
+                                        repairedPos.x + repairedPos.width / 2,
+                                        repairedPos.y + repairedPos.height / 2,
+                                        20, '#4ade80'
+                                    );
+                                }
+                            }
+                        } else {
+                            // Combat projectile - destroy block
+                            building.destroyBlock(row, col);
+                        }
                         proj.active = false;
                         break;
                     }
@@ -196,6 +223,8 @@ function checkCollisions() {
 
                 // Calculate score based on enemy type
                 let baseScore = 100; // Default score
+                let materialType = 'DRONE'; // Default material type for drop rates
+
                 if (enemy.type === EnemyType.TANK) {
                     if (wasTankAlive && enemy.health > 0) {
                         // Tank took a hit but still alive
@@ -203,14 +232,24 @@ function checkCollisions() {
                     } else if (wasTankAlive && enemy.health <= 0) {
                         // Tank was killed (final hit bonus)
                         baseScore = 300;
+                        materialType = 'GUNSHIP'; // Tank drops like gunship
                     }
                 } else if (enemy.type === EnemyType.BOMBER) {
                     baseScore = 150;
+                    materialType = 'GUNSHIP';
                 } else if (enemy.type === EnemyType.SPLITTER) {
                     baseScore = 75;
+                    materialType = 'INTERCEPTOR';
+                } else if (enemy.type === EnemyType.CARRIER || enemy.type === EnemyType.SAND_CARRIER) {
+                    materialType = 'CARRIER';
                 }
 
                 addScore(Math.floor(baseScore * DayCycle.getScoreMultiplier()), proj.ownerId);
+
+                // Spawn material drop (if enemy was fully killed)
+                if (wasAlive && enemy.state === EnemyState.DEAD) {
+                    PowerupManager.spawnMaterialDrop(enemy.x, enemy.y, materialType);
+                }
                 break;
             }
         }
@@ -905,6 +944,56 @@ function renderGame() {
 
     // Draw zone splash overlay (on top of everything)
     renderZoneSplash(ctx);
+
+    // Draw wave countdown overlay (between waves)
+    renderWaveCountdown(ctx);
+}
+
+// Dramatic wave countdown display
+function renderWaveCountdown(ctx) {
+    // Only show during betweenWaves state
+    if (!enemyManager.betweenWaves) return;
+
+    const duration = CONFIG.WAVE_COUNTDOWN_DURATION || 5;
+    const timeElapsed = enemyManager.waveBreakTimer || 0;
+    const timeRemaining = Math.max(0, duration - timeElapsed);
+    const countdown = Math.ceil(timeRemaining);
+
+    ctx.save();
+
+    // Semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, CONFIG.CANVAS_HEIGHT / 2 - 80, CONFIG.CANVAS_WIDTH, 160);
+
+    // "WAVE X CLEAR" text
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillStyle = '#4ade80';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#4ade80';
+    ctx.fillText(`WAVE ${game.currentZone}-${enemyManager.waveNumber} CLEAR`, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 - 40);
+
+    // Countdown number (large, pulsing)
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = countdown <= 2 ? '#ef4444' : '#fbbf24';
+
+    const pulse = 1 + Math.sin(Date.now() / 100) * 0.1;
+    const fontSize = Math.floor(72 * pulse);
+    ctx.font = `bold ${fontSize}px monospace`;
+    ctx.fillStyle = countdown <= 2 ? '#ef4444' : '#fbbf24';
+
+    const displayText = countdown <= 0 ? 'GO!' : countdown.toString();
+    ctx.fillText(displayText, CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 20);
+
+    // "GET READY" text
+    ctx.shadowBlur = 5;
+    ctx.shadowColor = '#ffffff';
+    ctx.font = 'bold 16px monospace';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('GET READY...', CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2 + 60);
+
+    ctx.restore();
 }
 
 function renderGameOver() {

@@ -172,6 +172,46 @@ function renderPlayerHUD(ctx, p, x, y, label, color) {
     const scoreStr = String(p.score || 0).padStart(6, '0');
     // Align score under the label/fuel area
     ctx.fillText(scoreStr, x, y + 28);
+
+    // Material counter (displayed below score)
+    if (typeof game !== 'undefined' && game.materials) {
+        const playerIndex = p.id - 1; // P1 = index 0, P2 = index 1
+        const materials = game.materials[playerIndex] || 0;
+        const maxMaterials = CONFIG.MAX_MATERIALS || 50;
+
+        // Material icon (hexagon shape)
+        const matX = x + 70;
+        const matY = y + 25;
+
+        // Draw hexagon icon
+        ctx.fillStyle = materials > 0 ? '#fbbf24' : '#555555';
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i - Math.PI / 2;
+            const px = matX + 5 * Math.cos(angle);
+            const py = matY + 5 * Math.sin(angle);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Material count text
+        ctx.fillStyle = materials >= maxMaterials ? '#4ade80' : '#ffffff';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${materials}/${maxMaterials}`, matX + 10, matY + 3);
+
+        // Weapon mode indicator
+        const modeX = matX + 55;
+        const weaponMode = p.weaponMode || 'combat';
+        const modeColor = weaponMode === 'repair' ? '#4ade80' : '#22d3ee';
+        const modeText = weaponMode === 'repair' ? 'RPR' : 'ATK';
+
+        ctx.fillStyle = modeColor;
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(`[${modeText}]`, modeX, matY + 3);
+    }
 }
 
 // Zone splash screen overlay

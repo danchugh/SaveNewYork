@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.49',
+    VERSION: 'v1.0.51',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -78,6 +78,17 @@ const CONFIG = {
     PLAYER_LIVES: 5,
     MAX_LIVES: 8,
     BONUS_LIFE_THRESHOLD: 6000,
+
+    // Material/Repair System
+    MAX_MATERIALS: 50,              // Cap per player
+    WAVE_COUNTDOWN_DURATION: 5,     // Seconds between waves
+    MATERIAL_DROP_RATES: {          // Chance (0-1) and amount per enemy type
+        DRONE: { chance: 0.15, amount: 1 },
+        INTERCEPTOR: { chance: 0.25, amount: 2 },
+        GUNSHIP: { chance: 0.35, amount: 3 },
+        CARRIER: { chance: 0.50, amount: 5 },
+        MINI_BOSS: { chance: 1.0, amount: 10 }
+    },
     FUEL_MAX: 100,
     FUEL_DRAIN_RATE: 1,
     REFUEL_TIME: 5,

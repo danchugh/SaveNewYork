@@ -1,11 +1,12 @@
 class Projectile {
-    constructor(x, y, angle, speed, isPlayerProjectile = true, ownerId = 0) {
+    constructor(x, y, angle, speed, isPlayerProjectile = true, ownerId = 0, projType = 'normal') {
         this.x = x;
         this.y = y;
         this.angle = angle;
         this.speed = speed;
         this.isPlayerProjectile = isPlayerProjectile;
         this.ownerId = ownerId; // 0 = enemy, 1 = P1, 2 = P2
+        this.projType = projType; // 'normal' or 'repair'
         this.radius = isPlayerProjectile ? 4 : 5;
         this.active = true;
         this.frame = 0;
@@ -29,6 +30,43 @@ class Projectile {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle * Math.PI / 180);
+
+        // REPAIR BEAM - Green welding spark visual
+        if (this.projType === 'repair') {
+            // Welding spark trail
+            ctx.globalCompositeOperation = 'lighter';
+
+            // Core beam (bright green/white)
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = '#4ade80';
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 8, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Green glow
+            ctx.fillStyle = '#4ade80';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 12, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Sparks
+            ctx.strokeStyle = '#4ade80';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 4; i++) {
+                const sparkAngle = this.frame + i * 1.5;
+                const sparkLen = 6 + Math.random() * 8;
+                ctx.beginPath();
+                ctx.moveTo(-4, 0);
+                ctx.lineTo(-4 - sparkLen * Math.cos(sparkAngle), sparkLen * Math.sin(sparkAngle));
+                ctx.stroke();
+            }
+
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.shadowBlur = 0;
+            ctx.restore();
+            return;
+        }
 
         // Try to use sprite with additive blending
         const spriteKey = this.isPlayerProjectile ? 'projectile_player' : 'projectile_enemy';
@@ -246,8 +284,8 @@ class ProjectileManager {
         this.bombs = [];  // Separate array for bombs
     }
 
-    add(x, y, angle, speed, isPlayerProjectile = true, ownerId = 0) {
-        this.projectiles.push(new Projectile(x, y, angle, speed, isPlayerProjectile, ownerId));
+    add(x, y, angle, speed, isPlayerProjectile = true, ownerId = 0, projType = 'normal') {
+        this.projectiles.push(new Projectile(x, y, angle, speed, isPlayerProjectile, ownerId, projType));
     }
 
     addBomb(x, y, angle, speed) {

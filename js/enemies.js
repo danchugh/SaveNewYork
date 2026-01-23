@@ -3895,7 +3895,8 @@ class EnemyManager {
         // Handle wave breaks
         if (this.betweenWaves) {
             this.waveBreakTimer += deltaTime;
-            if (this.waveBreakTimer >= 2) {
+            const waveBreakDuration = (typeof CONFIG !== 'undefined' && CONFIG.WAVE_COUNTDOWN_DURATION) || 5;
+            if (this.waveBreakTimer >= waveBreakDuration) {
                 this.betweenWaves = false;
 
                 // Zone 2 mini-bosses spawn as Enemy types
@@ -3932,6 +3933,10 @@ class EnemyManager {
                 // Drop guaranteed shield powerup
                 if (typeof PowerupManager !== 'undefined') {
                     PowerupManager.spawnBossDrop(this.miniBoss.x, this.miniBoss.y);
+                    // 2nd mini-boss (wave 4) also drops Full Repair powerup
+                    if (this.waveNumber === 4) {
+                        PowerupManager.spawnFullRepairDrop(this.miniBoss.x, this.miniBoss.y + 30);
+                    }
                 }
                 this.miniBoss = null;
                 this.betweenWaves = true;
@@ -3947,6 +3952,10 @@ class EnemyManager {
                 // Drop guaranteed shield powerup
                 if (typeof PowerupManager !== 'undefined') {
                     PowerupManager.spawnBossDrop(this.zone2MiniBoss.x, this.zone2MiniBoss.y);
+                    // 2nd mini-boss (wave 4) also drops Full Repair powerup
+                    if (this.waveNumber === 4) {
+                        PowerupManager.spawnFullRepairDrop(this.zone2MiniBoss.x, this.zone2MiniBoss.y + 30);
+                    }
                 }
                 this.zone2MiniBoss = null;
                 this.betweenWaves = true;

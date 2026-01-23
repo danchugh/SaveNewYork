@@ -79,6 +79,9 @@ class Player {
 
         this.targetingBoost = false;
         this.fireRateBoost = false;
+
+        // Weapon mode: 'combat' (normal shots) or 'repair' (repair beam)
+        this.weaponMode = 'combat';
     }
 
     // Get input state for this player from InputManager
@@ -110,6 +113,16 @@ class Player {
             this.bounceVy *= 0.9;
             if (Math.abs(this.bounceVx) < 1) this.bounceVx = 0;
             if (Math.abs(this.bounceVy) < 1) this.bounceVy = 0;
+        }
+
+        // Check for weapon mode toggle (A key for P1, Q key for P2)
+        if (this.getInputJustPressed(Actions.MODE_SWITCH) && this.state === PlayerState.FLYING) {
+            this.weaponMode = this.weaponMode === 'combat' ? 'repair' : 'combat';
+            console.log(`P${this.id} weapon mode: ${this.weaponMode}`);
+            // Play mode switch sound
+            if (typeof SoundManager !== 'undefined' && SoundManager.modeSwitch) {
+                SoundManager.modeSwitch();
+            }
         }
 
         switch (this.state) {
@@ -305,12 +318,38 @@ class Player {
         const radians = this.angle * (Math.PI / 180);
         const bulletX = this.x + Math.cos(radians) * (this.width / 2 + 5);
         const bulletY = this.y + Math.sin(radians) * (this.width / 2 + 5);
-        projectileManager.add(bulletX, bulletY, this.angle, 500, true, this.id);
 
-        if (typeof EffectsManager !== 'undefined') {
-            EffectsManager.addMuzzleFlash(bulletX, bulletY, this.angle);
+        if (this.weaponMode === 'repair') {
+            // Repair beam mode - requires materials
+            const playerIndex = this.id - 1;
+            const materials = game.materials[playerIndex] || 0;
+
+            if (materials > 0) {
+                // Consume 1 material
+                game.materials[playerIndex] = materials - 1;
+
+                // Fire repair beam projectile (true = player owned, 'repair' type)
+                projectileManager.add(bulletX, bulletY, this.angle, 400, true, this.id, 'repair');
+
+                if (typeof EffectsManager !== 'undefined') {
+                    // Green/blue welding spark muzzle flash
+                    EffectsManager.addMuzzleFlash(bulletX, bulletY, this.angle, '#4ade80');
+                }
+                SoundManager.shoot(); // TODO: Add distinct repair beam sound
+            } else {
+                // No materials - play empty click sound
+                // TODO: Add empty click sound
+                console.log(`P${this.id} out of materials!`);
+            }
+        } else {
+            // Combat mode - normal shot
+            projectileManager.add(bulletX, bulletY, this.angle, 500, true, this.id);
+
+            if (typeof EffectsManager !== 'undefined') {
+                EffectsManager.addMuzzleFlash(bulletX, bulletY, this.angle);
+            }
+            SoundManager.shoot();
         }
-        SoundManager.shoot();
     }
 
     die() {

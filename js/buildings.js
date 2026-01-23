@@ -167,6 +167,47 @@ class Building {
         return false;
     }
 
+    // Find the nearest missing block to the given hit position
+    findNearestMissingBlock(hitRow, hitCol) {
+        let nearestRow = -1;
+        let nearestCol = -1;
+        let minDist = Infinity;
+
+        for (let row = 0; row < this.heightBlocks; row++) {
+            for (let col = 0; col < this.widthBlocks; col++) {
+                if (!this.blocks[row][col]) {
+                    // Calculate distance from hit position
+                    const dist = Math.abs(row - hitRow) + Math.abs(col - hitCol);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestRow = row;
+                        nearestCol = col;
+                    }
+                }
+            }
+        }
+
+        return { row: nearestRow, col: nearestCol };
+    }
+
+    // Repair a block (called by repair beam)
+    repairBlock(hitRow, hitCol) {
+        // Find nearest missing block to repair
+        const nearest = this.findNearestMissingBlock(hitRow, hitCol);
+
+        if (nearest.row >= 0 && nearest.col >= 0) {
+            this.blocks[nearest.row][nearest.col] = true;
+            // Visual/sound feedback
+            if (typeof SoundManager !== 'undefined' && SoundManager.blockRepaired) {
+                SoundManager.blockRepaired();
+            }
+            // Return the repaired position for effects
+            return { row: nearest.row, col: nearest.col };
+        }
+
+        return null; // No block to repair (building is fully intact)
+    }
+
     // Spawn debris particles for a collapsing block
     spawnDebris(row, col) {
         const pos = this.getBlockWorldPosition(row, col);

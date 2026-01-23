@@ -9,6 +9,11 @@ const Keys = {
     RIGHT: 'ArrowRight',
     SPACE: ' ',
     ENTER: 'Enter',
+    SHIFT: 'Shift',
+    RSHIFT: 'ShiftRight',
+    TAB: 'Tab',
+    BACKTICK: '`',
+    SLASH: '/',
     W: 'w',
     A: 'a',
     S: 's',
@@ -23,7 +28,8 @@ const Actions = {
     LEFT: 'left',
     RIGHT: 'right',
     FIRE: 'fire',
-    START: 'start'
+    START: 'start',
+    MODE_SWITCH: 'mode_switch'
 };
 
 const input = {
@@ -32,26 +38,46 @@ const input = {
     actions: {},
     actionsJustPressed: {},
 
-    // Per-player key bindings (remappable)
-    // Note: Letter keys are normalized to lowercase in keydown/keyup handlers
-    playerBindings: {
+    // Bindings for 1-player mode (P1 only)
+    // P1: Arrow keys + Shift (fire) + A (mode switch)
+    singlePlayerBindings: {
         1: {
-            [Actions.UP]: ['w'],
-            [Actions.DOWN]: ['s'],
-            [Actions.LEFT]: ['a'],
-            [Actions.RIGHT]: ['d'],
-            [Actions.FIRE]: [Keys.SPACE],
-            [Actions.START]: [Keys.ENTER]
-        },
-        2: {
             [Actions.UP]: [Keys.UP],
             [Actions.DOWN]: [Keys.DOWN],
             [Actions.LEFT]: [Keys.LEFT],
             [Actions.RIGHT]: [Keys.RIGHT],
-            [Actions.FIRE]: ['Shift', 'ShiftRight'],
-            [Actions.START]: [Keys.ENTER]
+            [Actions.FIRE]: [Keys.SHIFT, Keys.RSHIFT],
+            [Actions.START]: [Keys.ENTER],
+            [Actions.MODE_SWITCH]: ['a']
         }
     },
+
+    // Bindings for 2-player mode
+    // P1: Arrow keys + Right Shift (fire) + / (mode switch)
+    // P2: WASD + ` (fire) + TAB (mode switch)
+    twoPlayerBindings: {
+        1: {
+            [Actions.UP]: [Keys.UP],
+            [Actions.DOWN]: [Keys.DOWN],
+            [Actions.LEFT]: [Keys.LEFT],
+            [Actions.RIGHT]: [Keys.RIGHT],
+            [Actions.FIRE]: [Keys.RSHIFT],
+            [Actions.START]: [Keys.ENTER],
+            [Actions.MODE_SWITCH]: [Keys.SLASH]
+        },
+        2: {
+            [Actions.UP]: ['w'],
+            [Actions.DOWN]: ['s'],
+            [Actions.LEFT]: ['a'],
+            [Actions.RIGHT]: ['d'],
+            [Actions.FIRE]: [Keys.BACKTICK],
+            [Actions.START]: [Keys.ENTER],
+            [Actions.MODE_SWITCH]: [Keys.TAB]
+        }
+    },
+
+    // Active bindings (set based on player count)
+    playerBindings: {},
 
     // Per-player action states
     playerActions: {
@@ -78,6 +104,9 @@ const input = {
     gamepadDeadzone: 0.3,
 
     init() {
+        // Set default bindings to 1-player mode
+        this.setPlayerCount(1);
+
         // Keyboard
         window.addEventListener('keydown', (e) => {
             // Normalize letter keys to lowercase to prevent stuck keys when shift state changes
@@ -88,7 +117,8 @@ const input = {
             }
             this.keys[key] = true;
 
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+            // Prevent default behavior for game keys
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(e.key)) {
                 e.preventDefault();
             }
         });
@@ -124,6 +154,17 @@ const input = {
                 }
             }
         });
+    },
+
+    // Set key bindings based on number of players
+    setPlayerCount(playerCount) {
+        if (playerCount === 1) {
+            this.playerBindings = JSON.parse(JSON.stringify(this.singlePlayerBindings));
+            console.log('Input bindings set to 1-player mode: Arrow+Shift+A');
+        } else {
+            this.playerBindings = JSON.parse(JSON.stringify(this.twoPlayerBindings));
+            console.log('Input bindings set to 2-player mode: P1=Arrow+RShift+/, P2=WASD+`+TAB');
+        }
     },
 
     // Touch handlers (Player 1 only)
