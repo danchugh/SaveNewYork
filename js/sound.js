@@ -617,6 +617,46 @@ const SoundManager = {
         setTimeout(() => this.playNoise(0.1, 0.3), 80);
     },
 
+    // ========== MATERIAL SOUNDS ==========
+
+    materialCollect() {
+        // Metallic clink sound for collecting materials - like picking up coins/scrap
+        if (!this.enabled || !this.ctx) return;
+        this.resume();
+
+        const now = this.ctx.currentTime;
+
+        // High metallic ping
+        const osc1 = this.ctx.createOscillator();
+        const gain1 = this.ctx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(this.ctx.destination);
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(2400, now);
+        osc1.frequency.exponentialRampToValueAtTime(1800, now + 0.08);
+        gain1.gain.setValueAtTime(0.35 * this.masterVolume, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc1.start(now);
+        osc1.stop(now + 0.1);
+
+        // Second harmonic clink (slightly delayed)
+        const osc2 = this.ctx.createOscillator();
+        const gain2 = this.ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(this.ctx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(3200, now + 0.02);
+        osc2.frequency.exponentialRampToValueAtTime(2000, now + 0.08);
+        gain2.gain.setValueAtTime(0, now);
+        gain2.gain.linearRampToValueAtTime(0.25 * this.masterVolume, now + 0.02);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc2.start(now + 0.02);
+        osc2.stop(now + 0.12);
+
+        // Tiny noise for texture
+        this.playNoise(0.03, 0.15);
+    },
+
     // ========== BONUS LIFE SOUND ==========
 
     oneUp() {
