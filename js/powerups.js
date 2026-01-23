@@ -11,136 +11,171 @@ const PowerupType = {
 // MATERIAL DROP CLASS
 // Collectible materials for Repair Beam ammo
 // ============================================
+// ============================================
+// MATERIAL DROP CLASS (SHINY DEBRIS)
+// Visual projectile that flies to player
+// ============================================
 class MaterialDrop {
-    constructor(x, y, amount = 1) {
+    constructor(x, y, amount = 1, targetPlayerIndex = 0) {
         this.x = x;
         this.y = y;
         this.amount = amount;
+        this.targetPlayerIndex = targetPlayerIndex;
         this.active = true;
-        this.animTimer = 0;
+        this.timer = 0;
 
-        // Physics
-        this.vy = 60 + Math.random() * 40;  // Variable fall speed
-        this.vx = (Math.random() - 0.5) * 30; // Slight horizontal drift
-        this.gravity = 120;
+        // State: 'spawn' (pause), 'fly' (homing)
+        this.state = 'spawn';
+        this.spawnDuration = 0.5; // Seconds to hover before flying
 
-        // Dimensions
-        this.width = 16;
-        this.height = 16;
+        // Visuals
+        this.particles = [];
+        this.trailTimer = 0;
+
+        // Initial movement (burst out)
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 50 + Math.random() * 50;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+
+        // Flight physics
+        this.speed = 0;
+        this.maxSpeed = 800; // Very fast homing
+        this.acceleration = 1500;
     }
 
     update(deltaTime) {
         if (!this.active) return;
+        this.timer += deltaTime;
 
-        this.animTimer += deltaTime;
-
-        // Apply gravity
-        this.vy += this.gravity * deltaTime;
-        this.y += this.vy * deltaTime;
-        this.x += this.vx * deltaTime;
-
-        // Friction on horizontal
-        this.vx *= 0.98;
-
-        // Check ground collision - despawn
-        if (this.y >= CONFIG.STREET_Y) {
-            this.active = false;
-            return;
+        // Visual particles (orbiting/trailing)
+        this.trailTimer += deltaTime;
+        if (this.trailTimer > 0.05) {
+            this.trailTimer = 0;
+            // Add trail particle
+            if (typeof EffectsManager !== 'undefined') {
+                // Determine color based on amount (Gold for high, Amber for low)
+                const color = this.amount >= 5 ? '#ffd700' : '#fbbf24';
+                EffectsManager.addSparks(this.x, this.y, color, 1);
+            }
         }
 
-        // Check building collision - despawn
-        if (typeof buildingManager !== 'undefined') {
-            for (const building of buildingManager.buildings) {
-                // Simple box check against building bounds
-                const bRight = building.x + building.width;
-                const bTop = building.y;
-                const bBottom = building.y + building.height;
+        if (this.state === 'spawn') {
+            // Decelerate initial burst
+            this.x += this.vx * deltaTime;
+            this.y += this.vy * deltaTime;
+            this.vx *= 0.9;
+            this.vy *= 0.9;
 
-                if (this.x >= building.x && this.x <= bRight &&
-                    this.y >= bTop && this.y <= bBottom) {
-                    this.active = false;
-                    return;
+            // Hover bob
+            this.y += Math.sin(this.timer * 10) * 0.5;
+
+            if (this.timer >= this.spawnDuration) {
+                this.state = 'fly';
+                // Play "whoosh" sound?
+            }
+        } else if (this.state === 'fly') {
+            // Find target player
+            const target = (typeof playerManager !== 'undefined') ?
+                playerManager.getPlayer(this.targetPlayerIndex + 1) : null;
+
+            if (target && target.active && target.state !== 'dead') {
+                // Home in on player
+                const dx = target.x - this.x;
+                const dy = target.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Accelerate
+                this.speed = Math.min(this.maxSpeed, this.speed + this.acceleration * deltaTime);
+
+                // Move
+                this.x += (dx / dist) * this.speed * deltaTime;
+                this.y += (dy / dist) * this.speed * deltaTime;
+
+                // Check collision (absorption)
+                if (dist < 40) { // Large catch radius
+                    this.collect(this.targetPlayerIndex);
                 }
+            } else {
+                // Target dead/gone? Just fade out
+                this.active = false;
             }
         }
     }
 
     checkCollision(player) {
-        if (!this.active) return false;
-        if (player.state === 'exploding') return false;
-
-        const dx = player.x - this.x;
-        const dy = player.y - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        return dist < 35; // Pickup radius
+        // Handled internally in update() for homing behavior
+        return false;
     }
 
     collect(playerIndex) {
         if (!this.active) return false;
 
-        // Add materials to player's pool (capped at MAX)
+        // Add materials
         const current = game.materials[playerIndex] || 0;
         const max = CONFIG.MAX_MATERIALS || 50;
+        const added = Math.min(this.amount, max - current);
 
-        if (current < max) {
+        // Always add (even if at max, for score/visuals)
+        if (max > 0) { // Safety check
             game.materials[playerIndex] = Math.min(current + this.amount, max);
-            this.active = false;
-            return true;
         }
 
-        // Still consume the drop even if at max (per requirements)
+        // Visual feedback at player position
+        if (typeof EffectsManager !== 'undefined') {
+            const p = playerManager.getPlayer(playerIndex + 1);
+            if (p) {
+                // Flash player
+                p.flash(0.2, '#ffd700');
+                // Popup text
+                EffectsManager.addTextPopup(p.x, p.y - 30, `+${this.amount}`, '#ffd700');
+                // Explosion
+                EffectsManager.addExplosion(p.x, p.y, 20, '#ffd700');
+            }
+        }
+
+        // Sound
+        if (typeof SoundManager !== 'undefined') {
+            SoundManager.materialCollect();
+        }
+
         this.active = false;
-        return false;
+        console.log(`Material absorbed: +${this.amount} (P${playerIndex + 1})`);
+        return true;
     }
 
     render(ctx) {
         if (!this.active) return;
 
         ctx.save();
+        ctx.translate(this.x, this.y);
 
-        // Pulse effect
-        const pulse = Math.sin(this.animTimer * 6) * 0.2 + 1;
-        const size = 8 * pulse;
+        // Rotating orb effect
+        const rotation = this.timer * 10;
+        const scale = this.state === 'spawn' ? Math.min(1, this.timer * 4) : 1;
+        ctx.scale(scale, scale);
 
         // Glow
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 15;
         ctx.shadowColor = '#fbbf24';
 
-        // Draw hexagon (material icon)
-        ctx.fillStyle = '#fbbf24';
+        // Main Orb
+        ctx.fillStyle = '#ffcc00';
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i - Math.PI / 2;
-            const px = this.x + size * Math.cos(angle);
-            const py = this.y + size * Math.sin(angle);
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
         ctx.fill();
 
-        // Inner highlight
-        ctx.fillStyle = '#fef3c7';
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i - Math.PI / 2;
-            const px = this.x + (size * 0.5) * Math.cos(angle);
-            const py = this.y + (size * 0.5) * Math.sin(angle);
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fill();
+        // Orbiting particles (drawn procedurally)
+        const particleCount = 3;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = rotation + (i * (Math.PI * 2 / particleCount));
+            const px = Math.cos(angle) * 10;
+            const py = Math.sin(angle) * 10;
 
-        // Amount indicator (if > 1)
-        if (this.amount > 1) {
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#000000';
-            ctx.font = 'bold 8px monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(`+${this.amount}`, this.x, this.y + 14);
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         ctx.restore();
@@ -349,55 +384,31 @@ const PowerupManager = {
         console.log('Shield dropped from boss!');
     },
 
-    // Handle material reward - either auto-collect or spawn physical drop
-    // based on enemy type configuration
+    // Handle material reward - always spawn shiny visual drop
     handleMaterialReward(x, y, enemyType, playerIndex = 0) {
         const rates = CONFIG.MATERIAL_DROP_RATES || {};
         const dropInfo = rates[enemyType];
 
         if (!dropInfo) return;
 
-        // Check drop/collect chance
+        // Check drop chance
         if (Math.random() >= dropInfo.chance) return;
 
-        if (dropInfo.autoCollect) {
-            // Auto-collect: Add materials directly to player
-            const current = game.materials[playerIndex] || 0;
-            const max = CONFIG.MAX_MATERIALS || 50;
-            const added = Math.min(dropInfo.amount, max - current);
-
-            if (added > 0) {
-                game.materials[playerIndex] = current + added;
-
-                // Visual feedback - text popup at enemy position
-                if (typeof EffectsManager !== 'undefined') {
-                    EffectsManager.addTextPopup(x, y - 20, `+${added}`, '#fbbf24');
-                    EffectsManager.addExplosion(x, y, 15, '#fbbf24');
-                }
-
-                // Sound feedback
-                if (typeof SoundManager !== 'undefined') {
-                    SoundManager.materialCollect();
-                }
-
-                console.log(`P${playerIndex + 1} auto-collected +${added} materials from ${enemyType}`);
-            }
-        } else {
-            // Physical drop: Spawn collectible pickup
-            this.materialDrops.push(new MaterialDrop(x, y, dropInfo.amount));
-            console.log(`Material dropped: +${dropInfo.amount} from ${enemyType}`);
-        }
+        // Spawn visual shiny debris that flies to player
+        // Note: We ignore dropInfo.autoCollect flag now, as everything is "visual auto-collect"
+        this.materialDrops.push(new MaterialDrop(x, y, dropInfo.amount, playerIndex));
+        console.log(`Shiny material debris spawned: +${dropInfo.amount} from ${enemyType} for P${playerIndex + 1}`);
     },
 
-    // Legacy: Spawn material drop (for backwards compatibility)
+    // Legacy: Spawn material drop
     spawnMaterialDrop(x, y, enemyType) {
         this.handleMaterialReward(x, y, enemyType, 0);
     },
 
-    // NEW: Spawn guaranteed material drop (for mini-bosses)
-    spawnGuaranteedMaterial(x, y, amount) {
-        this.materialDrops.push(new MaterialDrop(x, y, amount));
-        console.log(`Guaranteed material drop: +${amount}`);
+    // NEW: Spawn guaranteed material drop (for mini-bosses etc)
+    spawnGuaranteedMaterial(x, y, amount, playerIndex = 0) {
+        this.materialDrops.push(new MaterialDrop(x, y, amount, playerIndex));
+        console.log(`Guaranteed shiny debris: +${amount} for P${playerIndex + 1}`);
     },
 
     // NEW: Spawn Full Building Repair powerup (from 2nd mini-boss only)

@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.58',
+    VERSION: 'v1.0.59',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -86,19 +86,23 @@ const CONFIG = {
     // - Drones (STANDARD/AGGRESSIVE): chance to DROP physical pickups
     // - Stronger enemies: 75% chance to AUTO-COLLECT directly to player
     MATERIAL_DROP_RATES: {
-        // Drones - auto-collect with small chance
-        DRONE: { chance: 0.15, amount: 1, autoCollect: true },
-        INTERCEPTOR: { chance: 0.20, amount: 2, autoCollect: true },
-        // Stronger enemies - auto-collect (75% chance, goes directly to player)
-        GUNSHIP: { chance: 0.75, amount: 3, autoCollect: true },
-        BOMBER: { chance: 0.75, amount: 2, autoCollect: true },
-        CARRIER: { chance: 0.75, amount: 5, autoCollect: true },
-        // Zone 2 enemies - auto-collect
-        SAND_CARRIER: { chance: 0.75, amount: 5, autoCollect: true },
-        SCORPION: { chance: 0.75, amount: 3, autoCollect: true },
-        SANDWORM: { chance: 0.75, amount: 4, autoCollect: true },
-        // Mini-boss - guaranteed auto-collect
-        MINI_BOSS: { chance: 1.0, amount: 10, autoCollect: true }
+        // Drones - significantly increased rates and amounts
+        DRONE: { chance: 0.25, amount: 2, autoCollect: true },       // Was 15%, 1
+        INTERCEPTOR: { chance: 0.40, amount: 3, autoCollect: true }, // Was 20%, 2
+
+        // Heavy/Boss enemies - nearly guaranteed high value drops
+        GUNSHIP: { chance: 0.90, amount: 8, autoCollect: true },     // Was 75%, 3
+        BOMBER: { chance: 0.50, amount: 4, autoCollect: true },      // Was 75%, 2
+        CARRIER: { chance: 0.90, amount: 10, autoCollect: true },    // Was 75%, 5
+        TANK: { chance: 0.90, amount: 12, autoCollect: true },       // Tank shares Gunship logic usually, but here distinct
+
+        // Zone 2 enemies
+        SAND_CARRIER: { chance: 0.90, amount: 10, autoCollect: true },
+        SCORPION: { chance: 0.75, amount: 5, autoCollect: true },
+        SANDWORM: { chance: 0.80, amount: 8, autoCollect: true },
+
+        // Mini-boss - guaranteed massive drop
+        MINI_BOSS: { chance: 1.0, amount: 15, autoCollect: true }
     },
     FUEL_MAX: 100,
     FUEL_DRAIN_RATE: 1,

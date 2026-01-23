@@ -3759,9 +3759,12 @@ class EnemyManager {
         // Progressive type unlocking
         this.availableTypes = [EnemyType.STANDARD];
         if (waveNum >= 2) this.availableTypes.push(EnemyType.AGGRESSIVE);
-        if (waveNum >= 3) this.availableTypes.push(EnemyType.SPLITTER);
+        if (waveNum >= 3) {
+            this.availableTypes.push(EnemyType.SPLITTER);
+            // Unlock TANK (Gunship) earlier - now at Wave 3! (Was Wave 5)
+            this.availableTypes.push(EnemyType.TANK);
+        }
         if (waveNum >= 4) this.availableTypes.push(EnemyType.BOMBER);
-        if (waveNum >= 5) this.availableTypes.push(EnemyType.TANK);
 
         // Shorter waves - faster paced gameplay
         switch (waveNum) {
@@ -4077,9 +4080,19 @@ class EnemyManager {
         const weights = {};
         weights[EnemyType.STANDARD] = 50;
         if (waveNumber >= 2) weights[EnemyType.AGGRESSIVE] = 20;
-        if (waveNumber >= 3) weights[EnemyType.SPLITTER] = 15;
-        if (waveNumber >= 4) weights[EnemyType.BOMBER] = 10;
-        if (waveNumber >= 5) weights[EnemyType.TANK] = 5;
+        if (waveNumber >= 3) {
+            weights[EnemyType.SPLITTER] = 15;
+            // Introduce Gunships earlier with decent frequency
+            weights[EnemyType.TANK] = 10;
+        }
+        if (waveNumber >= 4) {
+            weights[EnemyType.BOMBER] = 10;
+            // Increase Gunship frequency
+            weights[EnemyType.TANK] = 15;
+        }
+        if (waveNumber >= 5) {
+            weights[EnemyType.TANK] = 20; // Very frequent in final waves
+        }
         return weights;
     }
 
