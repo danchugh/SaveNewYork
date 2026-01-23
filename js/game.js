@@ -246,8 +246,12 @@ function checkCollisions() {
 
                 addScore(Math.floor(baseScore * DayCycle.getScoreMultiplier()), proj.ownerId);
 
-                // Spawn material drop (if enemy was fully killed)
-                if (wasAlive && enemy.state === EnemyState.DEAD) {
+                // Spawn material drop (if enemy was killed - check for any death-related state)
+                // die() transitions enemies to FALLING or DYING first, not DEAD immediately
+                const isDying = enemy.state === EnemyState.DEAD ||
+                    enemy.state === EnemyState.DYING ||
+                    enemy.state === EnemyState.FALLING;
+                if (wasAlive && isDying) {
                     PowerupManager.spawnMaterialDrop(enemy.x, enemy.y, materialType);
                 }
                 break;
