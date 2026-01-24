@@ -79,7 +79,7 @@ class MaterialDrop {
             const target = (typeof playerManager !== 'undefined') ?
                 playerManager.getPlayer(this.targetPlayerIndex + 1) : null;
 
-            if (target && target.active && target.state !== 'dead') {
+            if (target && target.state !== 'dead' && target.state !== 'exploding') {
                 // Home in on player
                 const dx = target.x - this.x;
                 const dy = target.y - this.y;
