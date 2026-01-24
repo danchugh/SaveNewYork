@@ -13,7 +13,7 @@ const Keys = {
     RSHIFT: 'ShiftRight',
     TAB: 'Tab',
     BACKTICK: '`',
-    SLASH: '/',
+    SLASH: 'Slash',
     W: 'w',
     A: 'a',
     S: 's',
@@ -117,7 +117,17 @@ const input = {
             }
             this.keys[key] = true;
 
+            // Also track e.code (for location-specific keys like ShiftRight, Slash)
+            if (e.code) {
+                if (!this.keys[e.code]) {
+                    this.justPressed[e.code] = true;
+                }
+                this.keys[e.code] = true;
+            }
+
             // Prevent default behavior for game keys
+            // Prevent scrolling for Arrow keys and Space, but allow Slash/Tab if needed?
+            // Space is ' ', ArrowUp is 'ArrowUp'
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(e.key)) {
                 e.preventDefault();
             }
@@ -127,6 +137,10 @@ const input = {
             // Normalize letter keys to lowercase to match keydown
             const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
             this.keys[key] = false;
+
+            if (e.code) {
+                this.keys[e.code] = false;
+            }
         });
 
         // Touch
