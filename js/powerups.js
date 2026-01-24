@@ -125,8 +125,6 @@ class MaterialDrop {
         if (typeof EffectsManager !== 'undefined') {
             const p = playerManager.getPlayer(playerIndex + 1);
             if (p) {
-                // Flash player
-                p.flash(0.2, '#ffd700');
                 // Popup text
                 EffectsManager.addTextPopup(p.x, p.y - 30, `+${this.amount}`, '#ffd700');
                 // Explosion
