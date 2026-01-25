@@ -140,6 +140,7 @@ function initGame(playerCount = 1, zoneNumber = 1) {
     ConstructionManager.reset();
     PowerupManager.reset();
     if (typeof AbilityManager !== 'undefined') AbilityManager.reset();
+    if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.reset();
     if (typeof HeatShimmer !== 'undefined') HeatShimmer.reset();
     game.score = 0;
     game.nextBonusLifeAt = CONFIG.BONUS_LIFE_THRESHOLD;
@@ -634,6 +635,7 @@ function update(deltaTime) {
             EffectsManager.update(game.deltaTime);
             PowerupManager.update(game.deltaTime);
             if (typeof AbilityManager !== 'undefined') AbilityManager.update(game.deltaTime);
+            if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.update(game.deltaTime);
             if (typeof HeatShimmer !== 'undefined') HeatShimmer.update(game.deltaTime);
             updateZoneSplash(game.deltaTime);
 
@@ -838,6 +840,9 @@ function renderGame() {
 
     // Draw background (behind buildings)
     BackgroundManager.render(ctx);
+
+    // Draw distant artillery (background layer, behind buildings)
+    if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.render(ctx);
 
     // Draw buildings
     buildingManager.render(ctx);

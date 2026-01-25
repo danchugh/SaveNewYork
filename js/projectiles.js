@@ -278,10 +278,191 @@ class BombProjectile {
     }
 }
 
+/**
+ * Missile projectile class - for gunship missile barrage
+ * Travels in a spread pattern, destroys 3-5 blocks on impact
+ * Sleek missile with smoke trail visual
+ */
+class MissileProjectile {
+    constructor(x, y, angle, speed) {
+        this.x = x;
+        this.y = y;
+        this.angle = angle;
+        this.speed = speed;
+        this.radius = 6;
+        this.active = true;
+        this.velX = Math.cos(angle * Math.PI / 180) * speed;
+        this.velY = Math.sin(angle * Math.PI / 180) * speed;
+        this.damage = CONFIG.MISSILE_DAMAGE_MIN +
+            Math.floor(Math.random() * (CONFIG.MISSILE_DAMAGE_MAX - CONFIG.MISSILE_DAMAGE_MIN + 1));
+        this.trail = [];
+        this.trailTimer = 0;
+        this.frame = 0;
+    }
+
+    update(deltaTime) {
+        this.frame += deltaTime * 10;
+
+        // Update trail
+        this.trailTimer += deltaTime;
+        if (this.trailTimer > 0.02) {
+            this.trailTimer = 0;
+            this.trail.push({
+                x: this.x,
+                y: this.y,
+                alpha: 1.0,
+                size: 3 + Math.random() * 2
+            });
+            // Limit trail length
+            if (this.trail.length > 15) {
+                this.trail.shift();
+            }
+        }
+
+        // Fade trail particles
+        for (const particle of this.trail) {
+            particle.alpha -= deltaTime * 3;
+        }
+        this.trail = this.trail.filter(p => p.alpha > 0);
+
+        // Move
+        this.x += this.velX * deltaTime;
+        this.y += this.velY * deltaTime;
+
+        // Check building collision
+        if (typeof buildingManager !== 'undefined') {
+            for (const building of buildingManager.buildings) {
+                // Quick AABB bounds check
+                if (this.x < building.x || this.x > building.x + building.widthBlocks * CONFIG.BLOCK_SIZE ||
+                    this.y < building.y || this.y > building.y + building.heightBlocks * CONFIG.BLOCK_SIZE) {
+                    continue;
+                }
+
+                // Check individual blocks
+                for (let row = 0; row < building.heightBlocks; row++) {
+                    for (let col = 0; col < building.widthBlocks; col++) {
+                        if (!building.blocks[row][col]) continue;
+
+                        const pos = building.getBlockWorldPosition(row, col);
+
+                        // Point collision
+                        if (this.x > pos.x && this.x < pos.x + pos.width &&
+                            this.y > pos.y && this.y < pos.y + pos.height) {
+
+                            // Hit! Destroy blocks based on damage (3-5)
+                            let destroyed = 0;
+                            for (let dr = -1; dr <= 1 && destroyed < this.damage; dr++) {
+                                for (let dc = -1; dc <= 1 && destroyed < this.damage; dc++) {
+                                    const nr = row + dr;
+                                    const nc = col + dc;
+                                    if (nr >= 0 && nr < building.heightBlocks &&
+                                        nc >= 0 && nc < building.widthBlocks &&
+                                        building.blocks[nr]?.[nc]) {
+                                        building.destroyBlock(nr, nc);
+                                        destroyed++;
+                                    }
+                                }
+                            }
+
+                            // Explosion effect
+                            if (typeof EffectsManager !== 'undefined') {
+                                EffectsManager.addExplosion(this.x, this.y, 30, '#ff4400');
+                                EffectsManager.addAnimatedExplosion(this.x, this.y, 'enemy', 25);
+                                EffectsManager.shake(4);
+                            }
+                            if (typeof SoundManager !== 'undefined') {
+                                SoundManager.blockDestroyed();
+                            }
+
+                            this.active = false;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ground collision
+        if (this.y > CONFIG.STREET_Y) {
+            // Ground explosion
+            if (typeof EffectsManager !== 'undefined') {
+                EffectsManager.addExplosion(this.x, CONFIG.STREET_Y - 10, 25, '#ff4400');
+                EffectsManager.addSparks(this.x, CONFIG.STREET_Y - 5, '#ff8800');
+            }
+            if (typeof SoundManager !== 'undefined') {
+                SoundManager.blockDestroyed();
+            }
+            this.active = false;
+            return;
+        }
+
+        // Off screen (sides only)
+        if (this.x < -20 || this.x > CONFIG.CANVAS_WIDTH + 20) {
+            this.active = false;
+        }
+    }
+
+    render(ctx) {
+        // Render smoke trail first (behind missile)
+        for (const particle of this.trail) {
+            ctx.fillStyle = `rgba(128, 128, 128, ${particle.alpha * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Rotation based on velocity
+        const angle = Math.atan2(this.velY, this.velX);
+        ctx.rotate(angle);
+
+        // Sleek missile body - white/grey with red tip
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff4400';
+
+        // Main body (elongated)
+        ctx.fillStyle = '#cccccc';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Red warhead tip
+        ctx.fillStyle = '#ff3333';
+        ctx.beginPath();
+        ctx.ellipse(8, 0, 5, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fins
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#888888';
+        ctx.beginPath();
+        ctx.moveTo(-10, 0);
+        ctx.lineTo(-14, -5);
+        ctx.lineTo(-14, 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Exhaust flame
+        const flameFlicker = Math.random() * 0.3;
+        ctx.fillStyle = `rgba(255, 200, 50, ${0.8 + flameFlicker})`;
+        ctx.beginPath();
+        ctx.moveTo(-10, 0);
+        ctx.lineTo(-18 - Math.random() * 6, -2);
+        ctx.lineTo(-18 - Math.random() * 6, 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
 class ProjectileManager {
     constructor() {
         this.projectiles = [];
         this.bombs = [];  // Separate array for bombs
+        this.missiles = [];  // Separate array for missiles
     }
 
     add(x, y, angle, speed, isPlayerProjectile = true, ownerId = 0, projType = 'normal') {
@@ -292,6 +473,10 @@ class ProjectileManager {
         this.bombs.push(new BombProjectile(x, y, angle, speed));
     }
 
+    addMissile(x, y, angle, speed) {
+        this.missiles.push(new MissileProjectile(x, y, angle, speed));
+    }
+
     update(deltaTime) {
         this.projectiles.forEach(p => p.update(deltaTime));
         // Remove inactive projectiles
@@ -300,6 +485,10 @@ class ProjectileManager {
         // Update bombs
         this.bombs.forEach(b => b.update(deltaTime));
         this.bombs = this.bombs.filter(b => b.active);
+
+        // Update missiles
+        this.missiles.forEach(m => m.update(deltaTime));
+        this.missiles = this.missiles.filter(m => m.active);
     }
 
     getPlayerProjectiles() {
@@ -317,11 +506,15 @@ class ProjectileManager {
 
         // Render bombs
         this.bombs.forEach(b => b.render(ctx));
+
+        // Render missiles
+        this.missiles.forEach(m => m.render(ctx));
     }
 
     clear() {
         this.projectiles = [];
         this.bombs = [];
+        this.missiles = [];
     }
 }
 

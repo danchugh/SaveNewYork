@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.61',
+    VERSION: 'v1.0.62',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -147,6 +147,21 @@ const CONFIG = {
     GUNSHIP_PATROL_ALTITUDE_OFFSET: 80, // Pixels above tallest building
     GUNSHIP_ATTACK_RANGE: 150,        // Proximity to building to trigger attack
     GUNSHIP_BOMB_DAMAGE: 4,           // 2x2 blocks
+
+    // Missile Configuration (Gunship missile barrage)
+    MISSILE_SPEED: 250,
+    MISSILE_DAMAGE_MIN: 3,
+    MISSILE_DAMAGE_MAX: 5,
+    GUNSHIP_MISSILES_PER_BARRAGE: 7,  // 6-8 range, use 7
+    GUNSHIP_POST_ATTACK_FLY_TIME: 3,  // Seconds to fly after attack before next attack
+
+    // Artillery Configuration (Background artillery event)
+    ARTILLERY_MIN_WAVE: 4,
+    ARTILLERY_SHELL_COUNT_MIN: 5,
+    ARTILLERY_SHELL_COUNT_MAX: 8,
+    ARTILLERY_SHELL_INTERVAL: 0.8,
+    ARTILLERY_DELAY_MIN: 5,   // Seconds into wave before possible trigger
+    ARTILLERY_DELAY_MAX: 15,
 
     // Win/Lose
     CITY_DESTRUCTION_THRESHOLD: 0.8,

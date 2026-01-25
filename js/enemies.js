@@ -178,7 +178,8 @@ class Enemy {
                 this.gunshipPatrolRight = Math.random() < 0.5;  // Direction of patrol
                 this.gunshipAttackCooldown = CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN +
                     Math.random() * (CONFIG.GUNSHIP_ATTACK_COOLDOWN_MAX - CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN);
-                this.gunshipAttackFrameTriggered = false;  // Track if bombs fired this attack
+                this.gunshipAttackFrameTriggered = false;  // Track if missiles fired this attack
+                this.gunshipPostAttackTimer = 0;  // Timer for post-attack fly time before next attack
                 this.currentAnimName = 'fly';
                 this.facingRight = this.gunshipPatrolRight;
                 break;
@@ -1170,7 +1171,7 @@ class Enemy {
             return;
         }
 
-        // Gunship (TANK) Logic - horizontal patrol with building bombardment
+        // Gunship (TANK) Logic - continuous fly-by with missile barrage
         if (this.type === EnemyType.TANK) {
             // Track facing direction for gunship
             this.facingRight = this.gunshipPatrolRight;
@@ -1193,12 +1194,12 @@ class Enemy {
                 this.y = patrolAltitude;
             }
 
-            // Move horizontally
+            // Move horizontally (continuous flight)
             const direction = this.gunshipPatrolRight ? 1 : -1;
             const gunshipSpeedMod = this.bellSlowed ? 0.3 : 1.0;
             this.x += direction * this.speed * gunshipSpeedMod * deltaTime;
 
-            // Bounce off screen edges
+            // Bounce off screen edges (turn around)
             if (this.x < 50) {
                 this.x = 50;
                 this.gunshipPatrolRight = true;
@@ -1210,46 +1211,28 @@ class Enemy {
                 this.facingRight = false;
             }
 
+            // Update post-attack fly timer if active
+            if (this.gunshipPostAttackTimer > 0) {
+                this.gunshipPostAttackTimer -= deltaTime;
+            }
+
             // Update attack cooldown
             this.gunshipAttackCooldown -= deltaTime;
 
-            // Check for attack (cooldown + building proximity)
-            if (this.gunshipAttackCooldown <= 0 && this.state === EnemyState.FLYING) {
-                // Check if there's a building below within attack range
-                let nearBuilding = false;
-                if (typeof buildingManager !== 'undefined') {
-                    for (const building of buildingManager.buildings) {
-                        // Check if gunship is horizontally over this building
-                        if (this.x >= building.x - CONFIG.GUNSHIP_ATTACK_RANGE &&
-                            this.x <= building.x + building.widthBlocks * CONFIG.BLOCK_SIZE + CONFIG.GUNSHIP_ATTACK_RANGE) {
-                            // Check if building has blocks
-                            let hasBlocks = false;
-                            for (let row = 0; row < building.heightBlocks && !hasBlocks; row++) {
-                                for (let col = 0; col < building.widthBlocks && !hasBlocks; col++) {
-                                    if (building.blocks[row]?.[col]) {
-                                        hasBlocks = true;
-                                    }
-                                }
-                            }
-                            if (hasBlocks) {
-                                nearBuilding = true;
-                                break;
-                            }
-                        }
-                    }
+            // Check for attack (cooldown only, no building proximity needed)
+            // Also ensure post-attack fly time has elapsed
+            if (this.gunshipAttackCooldown <= 0 &&
+                this.gunshipPostAttackTimer <= 0 &&
+                this.state === EnemyState.FLYING) {
+                this.state = EnemyState.ATTACKING;
+                this.currentAnimName = 'attack';
+                this.gunshipAttackFrameTriggered = false;
+                if (this.animations && this.animations.attack) {
+                    this.animations.attack.reset();
                 }
-
-                if (nearBuilding) {
-                    this.state = EnemyState.ATTACKING;
-                    this.currentAnimName = 'attack';
-                    this.gunshipAttackFrameTriggered = false;
-                    if (this.animations && this.animations.attack) {
-                        this.animations.attack.reset();
-                    }
-                    // Reset cooldown
-                    this.gunshipAttackCooldown = CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN +
-                        Math.random() * (CONFIG.GUNSHIP_ATTACK_COOLDOWN_MAX - CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN);
-                }
+                // Reset cooldown
+                this.gunshipAttackCooldown = CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN +
+                    Math.random() * (CONFIG.GUNSHIP_ATTACK_COOLDOWN_MAX - CONFIG.GUNSHIP_ATTACK_COOLDOWN_MIN);
             }
             return;
         }
@@ -1630,38 +1613,79 @@ class Enemy {
             return;
         }
 
-        // GUNSHIP (TANK): hovers in place, fires bombs at frame 4
+        // GUNSHIP (TANK): continues flying during attack, fires missiles at end of animation
         if (this.type === EnemyType.TANK) {
-            // Hover with slight shake during attack
-            this.x += (Math.random() - 0.5) * 1.5;
-            this.y += (Math.random() - 0.5) * 1.5;
+            // Keep flying during attack (no hover)
+            this.facingRight = this.gunshipPatrolRight;
+
+            // Calculate patrol altitude (same as FLYING state)
+            let maxBuildingTop = CONFIG.SKY_TOP + 100;
+            if (typeof buildingManager !== 'undefined') {
+                for (const building of buildingManager.buildings) {
+                    if (building.y < maxBuildingTop) {
+                        maxBuildingTop = building.y;
+                    }
+                }
+            }
+            const patrolAltitude = maxBuildingTop - CONFIG.GUNSHIP_PATROL_ALTITUDE_OFFSET;
+
+            // Smooth altitude adjustment
+            if (Math.abs(this.y - patrolAltitude) > 5) {
+                this.y += (patrolAltitude - this.y) * deltaTime * 2;
+            } else {
+                this.y = patrolAltitude;
+            }
+
+            // Keep moving horizontally during attack
+            const direction = this.gunshipPatrolRight ? 1 : -1;
+            const gunshipSpeedMod = this.bellSlowed ? 0.3 : 1.0;
+            this.x += direction * this.speed * gunshipSpeedMod * deltaTime;
+
+            // Turn around at edges
+            if (this.x < 50) {
+                this.x = 50;
+                this.gunshipPatrolRight = true;
+                this.facingRight = true;
+            }
+            if (this.x > CONFIG.CANVAS_WIDTH - 50) {
+                this.x = CONFIG.CANVAS_WIDTH - 50;
+                this.gunshipPatrolRight = false;
+                this.facingRight = false;
+            }
 
             if (this.animations && this.animations.attack) {
                 const anim = this.animations.attack;
 
-                // Check for attack frame to fire bombs (only once per attack)
-                if (!this.gunshipAttackFrameTriggered && anim.currentFrame >= CONFIG.GUNSHIP_ATTACK_FRAME) {
+                // Fire missiles at END of animation (not frame 4)
+                if (!this.gunshipAttackFrameTriggered && (anim.isComplete || anim.currentFrame === anim.frameCount - 1)) {
                     this.gunshipAttackFrameTriggered = true;
 
-                    // Fire 3 bomb projectiles in downward spread (-120, -90, -60 degrees)
-                    // Angles: -120° = down-left, -90° = straight down, -60° = down-right
-                    const bombAngles = [240, 270, 300];  // In degrees (pointing down)
+                    // Fire 6-8 missiles in a downward spread (220-320 degrees)
+                    const missileCount = CONFIG.GUNSHIP_MISSILES_PER_BARRAGE ||
+                        (6 + Math.floor(Math.random() * 3));
+                    const angleStart = 220;  // Down-left
+                    const angleEnd = 320;    // Down-right
+                    const angleStep = (angleEnd - angleStart) / (missileCount - 1);
+
                     if (typeof projectileManager !== 'undefined') {
-                        for (let i = 0; i < CONFIG.GUNSHIP_PROJECTILE_COUNT; i++) {
-                            const angle = bombAngles[i] || 270;
-                            projectileManager.addBomb(
-                                this.x,
+                        for (let i = 0; i < missileCount; i++) {
+                            // Add slight randomness to angle
+                            const angle = angleStart + (angleStep * i) + (Math.random() - 0.5) * 10;
+                            projectileManager.addMissile(
+                                this.x + (Math.random() - 0.5) * 20,  // Slight spread on origin
                                 this.y + 30,  // Fire from below gunship
                                 angle,
-                                CONFIG.GUNSHIP_BOMB_SPEED
+                                CONFIG.MISSILE_SPEED
                             );
                         }
                     }
 
-                    // Muzzle flash effect
+                    // Bigger muzzle flash effect for missile barrage
                     if (typeof EffectsManager !== 'undefined') {
-                        EffectsManager.addExplosion(this.x, this.y + 35, 20, '#ff8800');
-                        EffectsManager.addSparks(this.x, this.y + 30, '#ffaa00');
+                        EffectsManager.addExplosion(this.x, this.y + 35, 35, '#ff4400');
+                        EffectsManager.addSparks(this.x - 15, this.y + 30, '#ffaa00');
+                        EffectsManager.addSparks(this.x + 15, this.y + 30, '#ffaa00');
+                        EffectsManager.shake(3);
                     }
 
                     // Sound effect
@@ -1669,21 +1693,21 @@ class Enemy {
                         SoundManager.shoot();
                     }
 
-                    console.log('Gunship fired bombs');
-                }
+                    console.log(`Gunship fired ${missileCount} missiles`);
 
-                // Check if animation complete - return to flying
-                if (anim.isComplete || anim.currentFrame === anim.frameCount - 1) {
+                    // Return to flying and set post-attack timer
                     this.state = EnemyState.FLYING;
                     this.currentAnimName = 'fly';
+                    this.gunshipPostAttackTimer = CONFIG.GUNSHIP_POST_ATTACK_FLY_TIME || 3;
                     if (this.animations.fly) {
                         this.animations.fly.reset();
                     }
                 }
             } else {
-                // No animation, just return to flying
+                // No animation, just return to flying with post-attack timer
                 this.state = EnemyState.FLYING;
                 this.currentAnimName = 'fly';
+                this.gunshipPostAttackTimer = CONFIG.GUNSHIP_POST_ATTACK_FLY_TIME || 3;
             }
             return;
         }
@@ -3801,6 +3825,9 @@ class EnemyManager {
 
         // Initialize powerup spawning for this wave
         if (typeof PowerupManager !== 'undefined') PowerupManager.startWave(this.enemiesRemainingInWave);
+
+        // Initialize artillery event for wave 4+
+        if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.startWave(waveNum);
     }
 
     pickEnemyType() {
