@@ -295,6 +295,51 @@ const EffectsManager = {
         });
     },
 
+    // Add repair effect (constructive visual with upward-floating green particles and glow)
+    addRepairEffect(x, y) {
+        const particles = [];
+
+        // Upward-floating green/cyan particles (construction sparks)
+        for (let i = 0; i < 10; i++) {
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2; // Mostly upward
+            const speed = 40 + Math.random() * 60;
+            particles.push({
+                x: x + (Math.random() - 0.5) * 10,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: 2 + Math.random() * 3,
+                life: 0.8,
+                hue: 140 + Math.random() * 40 // Green to cyan
+            });
+        }
+
+        // Small welding sparks
+        for (let i = 0; i < 6; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 30 + Math.random() * 50;
+            particles.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 20,
+                size: 1 + Math.random() * 1.5,
+                life: 0.4,
+                hue: 50 + Math.random() * 20 // Yellow/gold sparks
+            });
+        }
+
+        this.effects.push({
+            type: 'repair',
+            x: x,
+            y: y,
+            particles: particles,
+            glow: 1.0, // Glow intensity
+            life: 0.8,
+            maxLife: 0.8
+        });
+    },
+
     // Add sparkle celebration effect
     addSparkles(x, y) {
         for (let i = 0; i < 12; i++) {
@@ -369,6 +414,16 @@ const EffectsManager = {
                 effect.y += effect.vy * deltaTime;
                 effect.vx *= 0.95; // Slow down
                 effect.vy *= 0.95;
+            }
+
+            if (effect.type === 'repair') {
+                effect.glow -= deltaTime * 1.5;
+                effect.particles.forEach(p => {
+                    p.x += p.vx * deltaTime;
+                    p.y += p.vy * deltaTime;
+                    p.vy -= 30 * deltaTime; // Float upward (negative gravity)
+                    p.life -= deltaTime;
+                });
             }
         });
 
@@ -510,6 +565,37 @@ const EffectsManager = {
                 ctx.closePath();
                 ctx.fill();
                 ctx.restore();
+            }
+
+            if (effect.type === 'repair') {
+                // Central glow pulse
+                if (effect.glow > 0) {
+                    const gradient = ctx.createRadialGradient(
+                        effect.x, effect.y, 0,
+                        effect.x, effect.y, 25
+                    );
+                    gradient.addColorStop(0, `rgba(74, 222, 128, ${effect.glow * 0.8})`);
+                    gradient.addColorStop(0.5, `rgba(34, 197, 94, ${effect.glow * 0.4})`);
+                    gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(effect.x, effect.y, 25, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Particles
+                effect.particles.forEach(p => {
+                    if (p.life <= 0) return;
+                    ctx.save();
+                    ctx.globalAlpha = Math.min(1, p.life * 2);
+                    ctx.fillStyle = `hsl(${p.hue}, 80%, 60%)`;
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = `hsl(${p.hue}, 100%, 50%)`;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
             }
         });
     }

@@ -157,12 +157,14 @@ class Civilian {
                 // Check if animation cycled back to start (for pending idle switch)
                 if (this.pendingIdleSwitch && currentAnim.currentFrame < prevFrame) {
                     // Animation completed a cycle, switch back to idle
-                    this.pendingIdleSwitch = false;
                     if (this.animations.idle) {
+                        this.pendingIdleSwitch = false;
                         this.currentAnimName = 'idle';
-                        this.animations.idle.reset();
-                        // Update idle animation immediately so it's ready for render
-                        this.animations.idle.update(0);
+                        // Don't reset - just resume idle from wherever it was
+                        // This prevents the flash from reset() clearing state
+                    } else {
+                        // No idle animation, just clear the flag and stay on help
+                        this.pendingIdleSwitch = false;
                     }
                 }
             }

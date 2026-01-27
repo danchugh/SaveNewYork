@@ -129,7 +129,7 @@ function initGame(playerCount = 1, zoneNumber = 1) {
         enemyManager.setZone(zoneNumber);
     }
 
-    enemyManager.startWave(1);
+    // Reset all managers BEFORE starting the wave
     civilianManager.reset();
     DayCycle.init();
     DayCycle.reset();
@@ -143,6 +143,10 @@ function initGame(playerCount = 1, zoneNumber = 1) {
     if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.reset();
     if (typeof HeatShimmer !== 'undefined') HeatShimmer.reset();
     game.score = 0;
+    game.materials = [0, 0];  // Reset materials for new game
+
+    // Start wave AFTER all managers are reset
+    enemyManager.startWave(1);
     game.nextBonusLifeAt = CONFIG.BONUS_LIFE_THRESHOLD;
     game.state = GameState.PLAYING;
 
@@ -179,13 +183,12 @@ function checkCollisions() {
                             // Repair beam - repair a block on this building
                             const repaired = building.repairBlock(row, col);
                             if (repaired) {
-                                // Welding spark effect at repaired block
+                                // Constructive repair effect at repaired block
                                 const repairedPos = building.getBlockWorldPosition(repaired.row, repaired.col);
                                 if (typeof EffectsManager !== 'undefined') {
-                                    EffectsManager.addExplosion(
+                                    EffectsManager.addRepairEffect(
                                         repairedPos.x + repairedPos.width / 2,
-                                        repairedPos.y + repairedPos.height / 2,
-                                        20, '#4ade80'
+                                        repairedPos.y + repairedPos.height / 2
                                     );
                                 }
                             }

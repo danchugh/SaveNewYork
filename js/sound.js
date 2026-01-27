@@ -3,10 +3,62 @@
 // Punchy, impactful arcade audio effects
 // ============================================
 
+// Sound priority and throttle configuration
+const SoundConfig = {
+    PRIORITY: { CRITICAL: 100, HIGH: 75, MEDIUM: 50, LOW: 25 },
+
+    SOUNDS: {
+        // Critical - always play
+        playerDeath:     { priority: 100, throttle: 0,   maxVoices: 2 },
+        victory:         { priority: 100, throttle: 0,   maxVoices: 1 },
+        gameOver:        { priority: 100, throttle: 0,   maxVoices: 1 },
+        oneUp:           { priority: 100, throttle: 0,   maxVoices: 1 },
+
+        // High - important feedback
+        shoot:           { priority: 75, throttle: 50,  maxVoices: 3 },
+        enemyDeath:      { priority: 75, throttle: 60,  maxVoices: 4, intensityScale: true },
+        bossHit:         { priority: 75, throttle: 100, maxVoices: 2 },
+        shieldCollect:   { priority: 75, throttle: 0,   maxVoices: 1 },
+        shieldBreak:     { priority: 75, throttle: 0,   maxVoices: 1 },
+        miniBossAppear:  { priority: 75, throttle: 0,   maxVoices: 1 },
+
+        // Medium - environmental
+        blockDestroyed:  { priority: 50, throttle: 25,  maxVoices: 3, intensityScale: true },
+        fallingCrash:    { priority: 50, throttle: 120, maxVoices: 2 },
+        tankHit:         { priority: 50, throttle: 80,  maxVoices: 2 },
+        thunder:         { priority: 50, throttle: 2000, maxVoices: 1 },
+
+        // Low - can be skipped when busy
+        materialCollect: { priority: 25, throttle: 40,  maxVoices: 2, intensityScale: true },
+        blockRepaired:   { priority: 25, throttle: 80,  maxVoices: 2 },
+    },
+
+    GLOBAL_MAX_VOICES: 16,
+    DUCKING_THRESHOLD: 10,      // Start ducking low-priority at this count
+    SKIP_THRESHOLD: 14,         // Skip LOW priority entirely above this
+    LOW_PRIORITY_DUCK: 0.4      // Volume multiplier when ducking
+};
+
+// Voice and throttle state tracking
+const SoundState = {
+    activeVoices: new Map(),    // soundId -> count of active voices
+    totalVoices: 0,
+    lastPlayTime: new Map(),    // soundId -> timestamp (ms)
+    intensityCounts: new Map(), // soundId -> { count, windowStart }
+
+    reset() {
+        this.activeVoices.clear();
+        this.totalVoices = 0;
+        this.lastPlayTime.clear();
+        this.intensityCounts.clear();
+    }
+};
+
 const SoundManager = {
     ctx: null,
     enabled: true,
     masterVolume: 0.3, // Keep original volume as requested
+    _debugSound: false, // Set to true to log blocked sounds
 
     init() {
         if (!this.ctx) {
@@ -23,6 +75,98 @@ const SoundManager = {
         if (this.ctx && this.ctx.state === 'suspended') {
             this.ctx.resume();
         }
+    },
+
+    // Core sound dispatcher with throttling, voice limiting, and priority
+    _requestSound(soundId, playFn, duration = 0.2) {
+        if (!this.enabled || !this.ctx) return false;
+
+        const config = SoundConfig.SOUNDS[soundId];
+        if (!config) {
+            // Unconfigured sound - play directly (backward compat)
+            playFn(1.0);
+            return true;
+        }
+
+        const now = Date.now();
+        let blockReason = null;
+
+        // 1. Throttle check
+        const lastPlay = SoundState.lastPlayTime.get(soundId) || 0;
+        if (config.throttle > 0 && now - lastPlay < config.throttle) {
+            blockReason = 'throttled';
+        }
+
+        // 2. Voice limit check (per-sound)
+        if (!blockReason) {
+            const activeCount = SoundState.activeVoices.get(soundId) || 0;
+            if (activeCount >= config.maxVoices) {
+                blockReason = 'maxVoices';
+            }
+        }
+
+        // 3. Global voice limit with priority check
+        if (!blockReason && SoundState.totalVoices >= SoundConfig.GLOBAL_MAX_VOICES) {
+            if (config.priority < SoundConfig.PRIORITY.CRITICAL) {
+                blockReason = 'globalLimit';
+            }
+            // Critical sounds always play
+        }
+
+        // 4. Skip low priority when very busy
+        if (!blockReason && config.priority <= SoundConfig.PRIORITY.LOW) {
+            if (SoundState.totalVoices >= SoundConfig.SKIP_THRESHOLD) {
+                blockReason = 'skipThreshold';
+            }
+        }
+
+        // If blocked, log and return
+        if (blockReason) {
+            if (this._debugSound) {
+                console.log(`[Sound] ${soundId} blocked: ${blockReason}, active: ${SoundState.totalVoices}`);
+            }
+            return false;
+        }
+
+        // 5. Ducking for low priority when busy
+        let volumeMod = 1.0;
+        if (config.priority <= SoundConfig.PRIORITY.LOW) {
+            if (SoundState.totalVoices >= SoundConfig.DUCKING_THRESHOLD) {
+                volumeMod = SoundConfig.LOW_PRIORITY_DUCK;
+            }
+        }
+
+        // 6. Intensity scaling for rapid calls
+        if (config.intensityScale) {
+            let intensity = SoundState.intensityCounts.get(soundId);
+            const window = 400; // 400ms window
+            if (!intensity || now - intensity.windowStart > window) {
+                intensity = { count: 0, windowStart: now };
+            }
+            intensity.count++;
+            SoundState.intensityCounts.set(soundId, intensity);
+            // Scale volume up slightly for rapid calls (max 1.4x)
+            volumeMod *= Math.min(1.4, 1.0 + (intensity.count - 1) * 0.08);
+        }
+
+        // Update state
+        SoundState.lastPlayTime.set(soundId, now);
+        const activeCount = SoundState.activeVoices.get(soundId) || 0;
+        SoundState.activeVoices.set(soundId, activeCount + 1);
+        SoundState.totalVoices++;
+
+        // Play the sound
+        this.resume();
+        playFn(volumeMod);
+
+        // Schedule voice release
+        setTimeout(() => {
+            const count = SoundState.activeVoices.get(soundId) || 1;
+            SoundState.activeVoices.set(soundId, Math.max(0, count - 1));
+            SoundState.totalVoices = Math.max(0, SoundState.totalVoices - 1);
+        }, duration * 1000 + 50);
+
+        return true;
     },
 
     /**
@@ -236,67 +380,65 @@ const SoundManager = {
         osc.stop(this.ctx.currentTime + duration);
     },
 
-    // Rate limiting for rapid-fire sounds
-    lastShootTime: 0,
-    shootCooldown: 50, // milliseconds between shots
-
     shoot() {
-        // Rate limit to prevent echo from overlapping samples
-        const now = Date.now();
-        if (now - this.lastShootTime < this.shootCooldown) return;
-        this.lastShootTime = now;
-
-        // Try loaded sample first, fallback to oscillator
-        if (this.playBuffer('shoot', 0.5)) return;
-        // Punchy rapid-fire like Contra machine gun
-        this.playLaser(1200, 400, 0.06, 0.6);
-        this.playPunchyTone(200, 0.03, 'square', 0.3, true);
+        this._requestSound('shoot', (volMod) => {
+            // Try loaded sample first, fallback to oscillator
+            if (this.playBuffer('shoot', 0.5 * volMod)) return;
+            // Punchy rapid-fire like Contra machine gun
+            this.playLaser(1200, 400, 0.06, 0.6 * volMod);
+            this.playPunchyTone(200, 0.03, 'square', 0.3 * volMod, true);
+        }, 0.08);
     },
 
     enemyDeath() {
-        // Try loaded sample first
-        if (this.playBuffer('enemy_death', 0.7)) return;
-        // Fallback: Sharp explosion with satisfying crunch
-        if (!this.enabled || !this.ctx) return;
-        this.resume();
+        this._requestSound('enemyDeath', (volMod) => {
+            // Try loaded sample first
+            if (this.playBuffer('enemy_death', 0.7 * volMod)) return;
+            // Fallback: Sharp explosion with satisfying crunch
+            if (!this.ctx) return;
 
-        const now = this.ctx.currentTime;
+            const now = this.ctx.currentTime;
 
-        // Fast descending sweep
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        const distortion = this.ctx.createWaveShaper();
-        distortion.curve = this.createDistortionCurve(30);
-        osc.connect(distortion);
-        distortion.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(600, now);
-        osc.frequency.exponentialRampToValueAtTime(80, now + 0.12);
-        gain.gain.setValueAtTime(0.5 * this.masterVolume, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-        osc.start(now);
-        osc.stop(now + 0.15);
+            // Fast descending sweep
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            const distortion = this.ctx.createWaveShaper();
+            distortion.curve = this.createDistortionCurve(30);
+            osc.connect(distortion);
+            distortion.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(600, now);
+            osc.frequency.exponentialRampToValueAtTime(80, now + 0.12);
+            gain.gain.setValueAtTime(0.5 * volMod * this.masterVolume, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            osc.start(now);
+            osc.stop(now + 0.15);
 
-        // Noise burst overlay
-        this.playNoise(0.1, 0.5);
+            // Noise burst overlay
+            this.playNoise(0.1, 0.5 * volMod);
+        }, 0.15);
     },
 
     playerDeath() {
-        // Use explosion sample for deeper impact, or try player_death
-        if (this.playBuffer('explosion', 1.0)) return;
-        // Fallback: Deep cinematic explosion
-        this.playLayeredExplosion(0.8, 1.2, 30); // Lower freq for deeper rumble
-        setTimeout(() => this.playLayeredExplosion(0.5, 0.8, 25), 100);
-        setTimeout(() => this.playPunchyTone(50, 0.4, 'sawtooth', 0.9), 50);
+        this._requestSound('playerDeath', (volMod) => {
+            // Use explosion sample for deeper impact, or try player_death
+            if (this.playBuffer('explosion', 1.0 * volMod)) return;
+            // Fallback: Deep cinematic explosion
+            this.playLayeredExplosion(0.8, 1.2 * volMod, 30); // Lower freq for deeper rumble
+            setTimeout(() => this.playLayeredExplosion(0.5, 0.8 * volMod, 25), 100);
+            setTimeout(() => this.playPunchyTone(50, 0.4, 'sawtooth', 0.9 * volMod), 50);
+        }, 0.8);
     },
 
     blockDestroyed() {
-        // Try loaded sample first
-        if (this.playBuffer('block_destroy', 0.6)) return;
-        // Fallback: Quick debris crunch
-        this.playPunchyTone(300, 0.04, 'square', 0.4, true);
-        this.playNoise(0.06, 0.5);
+        this._requestSound('blockDestroyed', (volMod) => {
+            // Try loaded sample first
+            if (this.playBuffer('block_destroy', 0.6 * volMod)) return;
+            // Fallback: Quick debris crunch
+            this.playPunchyTone(300, 0.04, 'square', 0.4 * volMod, true);
+            this.playNoise(0.06, 0.5 * volMod);
+        }, 0.08);
     },
 
     buildingCollapse() {
@@ -322,33 +464,39 @@ const SoundManager = {
     },
 
     bossHit() {
-        // Try loaded sample first
-        if (this.playBuffer('boss_hit', 0.8)) return;
-        // Fallback: Heavy metallic impact
-        this.playPunchyTone(150, 0.12, 'sawtooth', 0.7, true);
-        this.playNoise(0.08, 0.6);
-        this.playPunchyTone(80, 0.1, 'square', 0.5);
+        this._requestSound('bossHit', (volMod) => {
+            // Try loaded sample first
+            if (this.playBuffer('boss_hit', 0.8 * volMod)) return;
+            // Fallback: Heavy metallic impact
+            this.playPunchyTone(150, 0.12, 'sawtooth', 0.7 * volMod, true);
+            this.playNoise(0.08, 0.6 * volMod);
+            this.playPunchyTone(80, 0.1, 'square', 0.5 * volMod);
+        }, 0.15);
     },
 
     victory() {
-        // Try loaded sample first
-        if (this.playBuffer('victory', 0.8)) return;
-        // Fallback: Epic victory fanfare
-        const notes = [523, 659, 784, 1047];
-        notes.forEach((freq, i) => {
-            setTimeout(() => this.playPunchyTone(freq, 0.25, 'square', 0.6), i * 150);
-        });
-        setTimeout(() => this.playNoise(0.3, 0.3), 600);
+        this._requestSound('victory', (volMod) => {
+            // Try loaded sample first
+            if (this.playBuffer('victory', 0.8 * volMod)) return;
+            // Fallback: Epic victory fanfare
+            const notes = [523, 659, 784, 1047];
+            notes.forEach((freq, i) => {
+                setTimeout(() => this.playPunchyTone(freq, 0.25, 'square', 0.6 * volMod), i * 150);
+            });
+            setTimeout(() => this.playNoise(0.3, 0.3 * volMod), 600);
+        }, 1.0);
     },
 
     gameOver() {
-        // Try loaded sample first
-        if (this.playBuffer('game_over', 0.8)) return;
-        // Fallback: Dramatic descending doom
-        const notes = [400, 300, 200, 100];
-        notes.forEach((freq, i) => {
-            setTimeout(() => this.playPunchyTone(freq, 0.3, 'sawtooth', 0.5), i * 250);
-        });
+        this._requestSound('gameOver', (volMod) => {
+            // Try loaded sample first
+            if (this.playBuffer('game_over', 0.8 * volMod)) return;
+            // Fallback: Dramatic descending doom
+            const notes = [400, 300, 200, 100];
+            notes.forEach((freq, i) => {
+                setTimeout(() => this.playPunchyTone(freq, 0.3, 'sawtooth', 0.5 * volMod), i * 250);
+            });
+        }, 1.0);
     },
 
     gameStart() {
@@ -435,8 +583,10 @@ const SoundManager = {
     },
 
     fallingCrash() {
-        // Ground-shaking impact
-        this.playLayeredExplosion(0.35, 0.9, 45);
+        this._requestSound('fallingCrash', (volMod) => {
+            // Ground-shaking impact
+            this.playLayeredExplosion(0.35, 0.9 * volMod, 45);
+        }, 0.35);
     },
 
     enemySplit() {
@@ -446,13 +596,15 @@ const SoundManager = {
     },
 
     tankHit() {
-        // Metallic armor clang
-        this.playPunchyTone(250, 0.08, 'square', 0.6, true);
-        this.playNoise(0.05, 0.4);
+        this._requestSound('tankHit', (volMod) => {
+            // Metallic armor clang
+            this.playPunchyTone(250, 0.08, 'square', 0.6 * volMod, true);
+            this.playNoise(0.05, 0.4 * volMod);
+        }, 0.1);
     },
 
     tankDeath() {
-        // Massive vehicle explosion
+        // Massive vehicle explosion (not throttled - important event)
         this.playLayeredExplosion(0.5, 1.0, 50);
         setTimeout(() => this.playLayeredExplosion(0.35, 0.7, 70), 150);
     },
@@ -486,17 +638,19 @@ const SoundManager = {
     },
 
     thunder() {
-        // Rolling thunder with multiple cracks
-        this.playLayeredExplosion(1.0, 0.7, 30);
-        setTimeout(() => {
-            this.playNoise(0.6, 0.5);
-            this.playPunchyTone(50, 0.5, 'sawtooth', 0.5);
-        }, 150);
-        setTimeout(() => this.playNoise(0.4, 0.3), 400);
+        this._requestSound('thunder', (volMod) => {
+            // Rolling thunder with multiple cracks
+            this.playLayeredExplosion(1.0, 0.7 * volMod, 30);
+            setTimeout(() => {
+                this.playNoise(0.6, 0.5 * volMod);
+                this.playPunchyTone(50, 0.5, 'sawtooth', 0.5 * volMod);
+            }, 150);
+            setTimeout(() => this.playNoise(0.4, 0.3 * volMod), 400);
+        }, 1.0);
     },
 
     volcanoEruption() {
-        // Deep earth-shaking rumble
+        // Deep earth-shaking rumble (not throttled - rare event)
         this.playLayeredExplosion(1.8, 0.9, 25);
         setTimeout(() => this.playLayeredExplosion(1.2, 0.7, 35), 400);
         setTimeout(() => {
@@ -506,30 +660,34 @@ const SoundManager = {
     },
 
     rockDestroyed() {
-        // Boulder shatter
+        // Boulder shatter (not throttled - uses same pattern as blockDestroyed but less frequent)
         this.playPunchyTone(250, 0.1, 'square', 0.5, true);
         this.playNoise(0.12, 0.6);
     },
 
     rockImpact() {
-        // Heavy rock collision
+        // Heavy rock collision (not throttled - rare event)
         this.playLayeredExplosion(0.25, 0.7, 60);
     },
 
     miniBossAppear() {
-        // Try loaded sample first
-        if (this.playBuffer('boss_warning', 0.8)) return;
-        // Fallback: Dramatic warning klaxon
-        this.playPunchyTone(150, 0.4, 'sawtooth', 0.6);
-        setTimeout(() => this.playPunchyTone(200, 0.4, 'sawtooth', 0.6), 250);
-        setTimeout(() => this.playPunchyTone(300, 0.5, 'square', 0.7), 500);
-        setTimeout(() => this.playNoise(0.2, 0.4), 750);
+        this._requestSound('miniBossAppear', (volMod) => {
+            // Try loaded sample first
+            if (this.playBuffer('boss_warning', 0.8 * volMod)) return;
+            // Fallback: Dramatic warning klaxon
+            this.playPunchyTone(150, 0.4, 'sawtooth', 0.6 * volMod);
+            setTimeout(() => this.playPunchyTone(200, 0.4, 'sawtooth', 0.6 * volMod), 250);
+            setTimeout(() => this.playPunchyTone(300, 0.5, 'square', 0.7 * volMod), 500);
+            setTimeout(() => this.playNoise(0.2, 0.4 * volMod), 750);
+        }, 1.0);
     },
 
     miniBossHit() {
-        // Armored impact
-        this.playPunchyTone(180, 0.08, 'square', 0.6, true);
-        this.playNoise(0.06, 0.5);
+        // Armored impact (uses bossHit throttle pattern)
+        this._requestSound('bossHit', (volMod) => {
+            this.playPunchyTone(180, 0.08, 'square', 0.6 * volMod, true);
+            this.playNoise(0.06, 0.5 * volMod);
+        }, 0.1);
     },
 
     miniBossDefeat() {
@@ -593,81 +751,90 @@ const SoundManager = {
     },
 
     blockRepaired() {
-        // Hammering/building sound
-        this.playPunchyTone(200 + Math.random() * 100, 0.05, 'square', 0.3);
-        this.playNoise(0.03, 0.2);
+        this._requestSound('blockRepaired', (volMod) => {
+            // Hammering/building sound
+            this.playPunchyTone(200 + Math.random() * 100, 0.05, 'square', 0.3 * volMod);
+            this.playNoise(0.03, 0.2 * volMod);
+        }, 0.08);
     },
 
     // ========== SHIELD SOUNDS ==========
 
     shieldCollect() {
-        // Magical chime sound for shield pickup
-        this.playPunchyTone(880, 0.1, 'sine', 0.4);
-        setTimeout(() => this.playPunchyTone(1100, 0.1, 'sine', 0.5), 50);
-        setTimeout(() => this.playPunchyTone(1320, 0.15, 'sine', 0.6), 100);
-        setTimeout(() => this.playPunchyTone(1760, 0.2, 'sine', 0.5), 150);
+        this._requestSound('shieldCollect', (volMod) => {
+            // Magical chime sound for shield pickup
+            this.playPunchyTone(880, 0.1, 'sine', 0.4 * volMod);
+            setTimeout(() => this.playPunchyTone(1100, 0.1, 'sine', 0.5 * volMod), 50);
+            setTimeout(() => this.playPunchyTone(1320, 0.15, 'sine', 0.6 * volMod), 100);
+            setTimeout(() => this.playPunchyTone(1760, 0.2, 'sine', 0.5 * volMod), 150);
+        }, 0.35);
     },
 
     shieldBreak() {
-        // Glass shattering / energy dissipation
-        this.playNoise(0.15, 0.5);
-        this.playPunchyTone(400, 0.1, 'sawtooth', 0.4);
-        setTimeout(() => this.playPunchyTone(300, 0.1, 'sawtooth', 0.3), 50);
-        setTimeout(() => this.playPunchyTone(200, 0.15, 'square', 0.3), 100);
-        setTimeout(() => this.playNoise(0.1, 0.3), 80);
+        this._requestSound('shieldBreak', (volMod) => {
+            // Glass shattering / energy dissipation
+            this.playNoise(0.15, 0.5 * volMod);
+            this.playPunchyTone(400, 0.1, 'sawtooth', 0.4 * volMod);
+            setTimeout(() => this.playPunchyTone(300, 0.1, 'sawtooth', 0.3 * volMod), 50);
+            setTimeout(() => this.playPunchyTone(200, 0.15, 'square', 0.3 * volMod), 100);
+            setTimeout(() => this.playNoise(0.1, 0.3 * volMod), 80);
+        }, 0.25);
     },
 
     // ========== MATERIAL SOUNDS ==========
 
     materialCollect() {
-        // Metallic clink sound for collecting materials - like picking up coins/scrap
-        if (!this.enabled || !this.ctx) return;
-        this.resume();
+        this._requestSound('materialCollect', (volMod) => {
+            // Metallic clink sound for collecting materials - like picking up coins/scrap
+            if (!this.ctx) return;
 
-        const now = this.ctx.currentTime;
+            const now = this.ctx.currentTime;
 
-        // High metallic ping
-        const osc1 = this.ctx.createOscillator();
-        const gain1 = this.ctx.createGain();
-        osc1.connect(gain1);
-        gain1.connect(this.ctx.destination);
-        osc1.type = 'triangle';
-        osc1.frequency.setValueAtTime(2400, now);
-        osc1.frequency.exponentialRampToValueAtTime(1800, now + 0.08);
-        gain1.gain.setValueAtTime(0.35 * this.masterVolume, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-        osc1.start(now);
-        osc1.stop(now + 0.1);
+            // High metallic ping
+            const osc1 = this.ctx.createOscillator();
+            const gain1 = this.ctx.createGain();
+            osc1.connect(gain1);
+            gain1.connect(this.ctx.destination);
+            osc1.type = 'triangle';
+            osc1.frequency.setValueAtTime(2400, now);
+            osc1.frequency.exponentialRampToValueAtTime(1800, now + 0.08);
+            gain1.gain.setValueAtTime(0.35 * volMod * this.masterVolume, now);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+            osc1.start(now);
+            osc1.stop(now + 0.1);
 
-        // Second harmonic clink (slightly delayed)
-        const osc2 = this.ctx.createOscillator();
-        const gain2 = this.ctx.createGain();
-        osc2.connect(gain2);
-        gain2.connect(this.ctx.destination);
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(3200, now + 0.02);
-        osc2.frequency.exponentialRampToValueAtTime(2000, now + 0.08);
-        gain2.gain.setValueAtTime(0, now);
-        gain2.gain.linearRampToValueAtTime(0.25 * this.masterVolume, now + 0.02);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-        osc2.start(now + 0.02);
-        osc2.stop(now + 0.12);
+            // Second harmonic clink (slightly delayed)
+            const osc2 = this.ctx.createOscillator();
+            const gain2 = this.ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(this.ctx.destination);
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(3200, now + 0.02);
+            osc2.frequency.exponentialRampToValueAtTime(2000, now + 0.08);
+            gain2.gain.setValueAtTime(0, now);
+            gain2.gain.linearRampToValueAtTime(0.25 * volMod * this.masterVolume, now + 0.02);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+            osc2.start(now + 0.02);
+            osc2.stop(now + 0.12);
 
-        // Tiny noise for texture
-        this.playNoise(0.03, 0.15);
+            // Tiny noise for texture
+            this.playNoise(0.03, 0.15 * volMod);
+        }, 0.12);
     },
 
     // ========== BONUS LIFE SOUND ==========
 
     oneUp() {
-        // Try loaded sample first
-        if (this.playBuffer('one_up', 0.8)) return;
-        // Fallback: Classic 1UP sound - triumphant ascending cascade
-        this.playPunchyTone(523, 0.12, 'square', 0.5);  // C5
-        setTimeout(() => this.playPunchyTone(659, 0.12, 'square', 0.5), 80);  // E5
-        setTimeout(() => this.playPunchyTone(784, 0.12, 'square', 0.5), 160); // G5
-        setTimeout(() => this.playPunchyTone(1047, 0.2, 'square', 0.6), 240); // C6
-        setTimeout(() => this.playPunchyTone(1319, 0.25, 'sine', 0.5), 340);  // E6 (held)
+        this._requestSound('oneUp', (volMod) => {
+            // Try loaded sample first
+            if (this.playBuffer('one_up', 0.8 * volMod)) return;
+            // Fallback: Classic 1UP sound - triumphant ascending cascade
+            this.playPunchyTone(523, 0.12, 'square', 0.5 * volMod);  // C5
+            setTimeout(() => this.playPunchyTone(659, 0.12, 'square', 0.5 * volMod), 80);  // E5
+            setTimeout(() => this.playPunchyTone(784, 0.12, 'square', 0.5 * volMod), 160); // G5
+            setTimeout(() => this.playPunchyTone(1047, 0.2, 'square', 0.6 * volMod), 240); // C6
+            setTimeout(() => this.playPunchyTone(1319, 0.25, 'sine', 0.5 * volMod), 340);  // E6 (held)
+        }, 0.5);
     },
 
     // ========== AMBIENT SOUNDS ==========
