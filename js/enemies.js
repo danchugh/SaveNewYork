@@ -257,6 +257,8 @@ class DustDevil {
         if (typeof playerManager !== 'undefined') {
             for (const p of playerManager.getActivePlayers()) {
                 if (p.state !== 'flying' || p.dustDevilCaptured) continue;
+                // Skip if player has throw immunity
+                if (p.dustDevilThrowImmunity > 0) continue;
 
                 const dist = Math.sqrt((p.x - this.x) ** 2 + (p.y - this.y) ** 2);
                 if (dist < suctionRadius) {
@@ -270,6 +272,8 @@ class DustDevil {
             for (const e of enemyManager.enemies) {
                 if (!e.active || e.type === EnemyType.DUST_DEVIL || e.dustDevilCaptured) continue;
                 if (e.state === EnemyState.DYING || e.state === EnemyState.DEAD) continue;
+                // Skip if enemy has throw immunity
+                if (e.dustDevilThrowImmunity > 0) continue;
 
                 const dist = Math.sqrt((e.x - this.x) ** 2 + (e.y - this.y) ** 2);
                 if (dist < suctionRadius) {
@@ -366,10 +370,11 @@ class DustDevil {
         entity.bounceVx = Math.cos(angle) * velocity;
         entity.bounceVy = Math.sin(angle) * velocity;
 
-        // Mark as thrown
+        // Mark as thrown and set immunity
         entity.dustDevilThrown = true;
         entity.dustDevilCaptured = false;
         entity.dustDevilCapturedBy = null;
+        entity.dustDevilThrowImmunity = CONFIG.DUST_DEVIL_THROW_IMMUNITY;
 
         // Clear enemy frozen state
         if (captured.type === 'enemy') {
@@ -443,15 +448,31 @@ class DustDevil {
             ctx.rotate(captured.spinAngle * 2);
             ctx.scale(0.5, 0.5);
 
-            // Simple representation
             if (captured.type === 'player') {
-                ctx.fillStyle = entity.colors ? entity.colors.cockpit : '#00aaff';
-                ctx.beginPath();
-                ctx.arc(0, 0, 15, 0, Math.PI * 2);
-                ctx.fill();
+                // Draw actual player sprite
+                const spriteKey = entity.id === 1 ? 'player_p1' : 'player_p2';
+                const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage(spriteKey) : null;
+
+                if (sprite) {
+                    const spriteWidth = 45;
+                    const spriteHeight = 45;
+                    ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight / 2, spriteWidth, spriteHeight);
+                } else {
+                    // Fallback to colored circle
+                    ctx.fillStyle = entity.colors ? entity.colors.cockpit : '#00aaff';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 20, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             } else {
-                ctx.fillStyle = '#ff6600';
-                ctx.fillRect(-10, -10, 20, 20);
+                // Draw enemy - try to use their sprite or animation
+                if (entity.animations && entity.animations.fly) {
+                    entity.animations.fly.draw(ctx, 0, 0, !entity.facingRight);
+                } else {
+                    // Fallback to colored rectangle
+                    ctx.fillStyle = '#ff6600';
+                    ctx.fillRect(-entity.width / 2, -entity.height / 2, entity.width, entity.height);
+                }
             }
 
             ctx.restore();
@@ -531,6 +552,7 @@ class Enemy {
         this.dustDevilCaptured = false;
         this.dustDevilCapturedBy = null;
         this.dustDevilThrown = false;
+        this.dustDevilThrowImmunity = 0;  // Immunity timer after being thrown
         this.bounceVx = 0;
         this.bounceVy = 0;
 
@@ -976,6 +998,11 @@ class Enemy {
         // If captured by dust devil, position is controlled by the dust devil
         if (this.dustDevilCaptured) {
             return;
+        }
+
+        // Count down dust devil throw immunity
+        if (this.dustDevilThrowImmunity > 0) {
+            this.dustDevilThrowImmunity -= deltaTime;
         }
 
         // Handle throw physics from dust devil

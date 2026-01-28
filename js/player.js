@@ -87,6 +87,7 @@ class Player {
         this.dustDevilCaptured = false;
         this.dustDevilCapturedBy = null;
         this.dustDevilThrown = false;
+        this.dustDevilThrowImmunity = 0;  // Immunity timer after being thrown
     }
 
     // Get input state for this player from InputManager
@@ -114,6 +115,11 @@ class Player {
         // If captured by dust devil, position is controlled by the dust devil
         if (this.dustDevilCaptured) {
             return;
+        }
+
+        // Count down dust devil throw immunity
+        if (this.dustDevilThrowImmunity > 0) {
+            this.dustDevilThrowImmunity -= deltaTime;
         }
 
         if (this.bounceVx !== 0 || this.bounceVy !== 0) {
