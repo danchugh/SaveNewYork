@@ -89,7 +89,7 @@ const ArtilleryManager = {
 
         // Distant rumble sound
         if (typeof SoundManager !== 'undefined') {
-            SoundManager.explosion();  // Distant boom
+            SoundManager.buildingCollapse();  // Distant boom
         }
     },
 
@@ -263,9 +263,9 @@ const ArtilleryManager = {
             this.createFallingShells();
             console.log('Artillery: Shells incoming!');
 
-            // Warning sound
+            // Warning sound (descending tone)
             if (typeof SoundManager !== 'undefined') {
-                SoundManager.playerHit();  // Alert sound
+                SoundManager.bomberDive();  // Incoming shell whistle
             }
         }
     },
@@ -360,7 +360,7 @@ const ArtilleryManager = {
 
         // Sound
         if (typeof SoundManager !== 'undefined') {
-            SoundManager.explosion();
+            SoundManager.fallingCrash();
         }
 
         // Damage buildings
