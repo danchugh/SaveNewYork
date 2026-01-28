@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.67',
+    VERSION: 'v1.0.70',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -178,6 +178,19 @@ const CONFIG = {
     DUST_DEVIL_SPEED: 40,
     DUST_DEVIL_PLAYER_BIAS: 0.3,
     DUST_DEVIL_ENEMY_BIAS: 0.2,
+
+    // Sand Carrier Configuration (Zone 2 Sand Barge)
+    SAND_CARRIER_HP: 7,
+    SAND_CARRIER_SPEED: 25,
+    SAND_CARRIER_BLOCKS_TO_MOVE: 15,
+    SAND_CARRIER_ATTACK_INTERVAL: 3.5,
+    SAND_CARRIER_ARRIVAL_DELAY: 1.0,
+    SAND_CARRIER_POD_SPAWN_FRAME: 8,
+    SAND_CARRIER_POD_SPREAD: 20,
+    SAND_CARRIER_POD_FALL_SPEED: 120,
+    SAND_CARRIER_POD_DAMAGE: 3,
+    SAND_CARRIER_ELEVATION_OFFSET: 60,
+    SAND_CARRIER_HOVER_HEIGHT: 80,
 
     // Win/Lose
     CITY_DESTRUCTION_THRESHOLD: 0.8,

@@ -70,6 +70,155 @@ class BurrowingPod {
     }
 }
 
+// Global array for falling pods (Sand Carrier drops)
+let fallingPods = [];
+
+class FallingPod {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.active = true;
+        this.fallSpeed = CONFIG.SAND_CARRIER_POD_FALL_SPEED || 120;
+        this.width = 16;
+        this.height = 16;
+        this.rotation = 0;
+    }
+
+    update(deltaTime) {
+        if (!this.active) return;
+
+        // Fall with gravity
+        this.y += this.fallSpeed * deltaTime;
+
+        // Spin while falling
+        this.rotation += deltaTime * 10;
+
+        // Check if hit ground
+        if (this.y >= CONFIG.STREET_Y - 5) {
+            this.explode();
+        }
+    }
+
+    explode() {
+        if (!this.active) return;
+        this.active = false;
+
+        // Explosion effect
+        if (typeof EffectsManager !== 'undefined') {
+            EffectsManager.addExplosion(this.x, this.y, 25, '#cc8844');
+        }
+
+        // Play sound
+        if (typeof SoundManager !== 'undefined') {
+            SoundManager.fallingCrash();
+        }
+
+        // Spawn Zone 2 aggressive drone
+        if (typeof enemyManager !== 'undefined') {
+            const drone = new Enemy(this.x, this.y - 20, EnemyType.AGGRESSIVE);
+            drone.isCarrierSpawned = true;
+            enemyManager.enemies.push(drone);
+        }
+    }
+
+    // Called when colliding with building - damages blocks then spawns drone
+    explodeOnBuilding(building, row, col) {
+        if (!this.active) return;
+        this.active = false;
+
+        // Explosion effect
+        if (typeof EffectsManager !== 'undefined') {
+            EffectsManager.addExplosion(this.x, this.y, 25, '#cc8844');
+        }
+
+        // Play sound
+        if (typeof SoundManager !== 'undefined') {
+            SoundManager.fallingCrash();
+        }
+
+        // Destroy blocks (3 damage)
+        let destroyed = 0;
+        const damage = CONFIG.SAND_CARRIER_POD_DAMAGE || 3;
+        for (let dr = -1; dr <= 1 && destroyed < damage; dr++) {
+            for (let dc = -1; dc <= 1 && destroyed < damage; dc++) {
+                const tr = row + dr;
+                const tc = col + dc;
+                if (tr >= 0 && tr < building.heightBlocks &&
+                    tc >= 0 && tc < building.widthBlocks &&
+                    building.blocks[tr][tc]) {
+                    building.destroyBlock(tr, tc);
+                    destroyed++;
+                }
+            }
+        }
+
+        // Track blocks destroyed for Sand Carrier
+        if (this.ownerCarrier) {
+            this.ownerCarrier.blocksDestroyedAtTarget += destroyed;
+        }
+
+        // Spawn Zone 2 aggressive drone
+        if (typeof enemyManager !== 'undefined') {
+            const drone = new Enemy(this.x, this.y - 20, EnemyType.AGGRESSIVE);
+            drone.isCarrierSpawned = true;
+            enemyManager.enemies.push(drone);
+        }
+    }
+
+    // Called when hitting player
+    explodeOnPlayer() {
+        if (!this.active) return;
+        this.active = false;
+
+        // Explosion effect
+        if (typeof EffectsManager !== 'undefined') {
+            EffectsManager.addExplosion(this.x, this.y, 25, '#cc8844');
+        }
+
+        // Play sound
+        if (typeof SoundManager !== 'undefined') {
+            SoundManager.fallingCrash();
+        }
+
+        // Spawn Zone 2 aggressive drone
+        if (typeof enemyManager !== 'undefined') {
+            const drone = new Enemy(this.x, this.y - 20, EnemyType.AGGRESSIVE);
+            drone.isCarrierSpawned = true;
+            enemyManager.enemies.push(drone);
+        }
+    }
+
+    render(ctx) {
+        if (!this.active) return;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        // Draw pod as a glowing orb
+        ctx.fillStyle = '#aa6633';
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner glow
+        ctx.fillStyle = '#ffaa66';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pulsing outline
+        const pulse = 0.5 + Math.sin(Date.now() / 100) * 0.5;
+        ctx.strokeStyle = `rgba(255, 100, 50, ${pulse})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+}
+
 // Global array for dust devils (Zone 2 environmental hazards)
 let dustDevils = [];
 
@@ -685,14 +834,21 @@ class Enemy {
                 break;
 
             case EnemyType.SAND_CARRIER:
-                this.speed = CONFIG.CARRIER_SPEED || 30;
-                this.health = 5;  // Increased from 3
-                this.maxHealth = 5;
+                this.speed = CONFIG.SAND_CARRIER_SPEED || 25;
+                this.health = CONFIG.SAND_CARRIER_HP || 7;
+                this.maxHealth = this.health;
                 this.width = 96;
                 this.height = 96;
-                this.podDropTimer = 2;
-                this.podDropInterval = 3;
-                this.carrierMovingRight = Math.random() < 0.5;
+                // Sand Barge behavior
+                this.targetBuilding = null;
+                this.blocksDestroyedAtTarget = 0;
+                this.attackCooldown = CONFIG.SAND_CARRIER_ARRIVAL_DELAY || 1.0;
+                this.isAttacking = false;
+                this.attackAnimFrame = 0;
+                this.attackAnimTimer = 0;
+                this.podsSpawnedThisAttack = false;
+                this.hoveringAboveTarget = false;
+                this.carrierMovingRight = true;  // For sprite facing
                 break;
 
             case EnemyType.SCORPION:
@@ -1048,6 +1204,16 @@ class Enemy {
             this.bounceVx *= 0.95;
             this.bounceVy *= 0.95;
 
+            // Check if thrown off-screen (left, right, or top) - dies with no points
+            if (this.dustDevilThrown) {
+                if (this.x < 0 || this.x > CONFIG.CANVAS_WIDTH || this.y < 0) {
+                    this.active = false;
+                    this.state = EnemyState.DEAD;
+                    console.log('Enemy thrown off-screen by dust devil - no points');
+                    return;
+                }
+            }
+
             const velocity = Math.sqrt(this.bounceVx ** 2 + this.bounceVy ** 2);
             if (velocity < 50) {
                 this.bounceVx = 0;
@@ -1255,26 +1421,101 @@ class Enemy {
         if (this.type === EnemyType.SAND_CARRIER) {
             const speedMod = this.bellSlowed ? 0.3 : 1.0;
 
-            // Horizontal movement
-            if (this.carrierMovingRight) {
-                this.x += this.speed * speedMod * deltaTime;
-                if (this.x > CONFIG.CANVAS_WIDTH + 50) this.carrierMovingRight = false;
-            } else {
-                this.x -= this.speed * speedMod * deltaTime;
-                if (this.x < -50) this.carrierMovingRight = true;
+            // Find target building if none
+            if (!this.targetBuilding || !this.targetBuilding.getBlockCount || this.targetBuilding.getBlockCount() === 0) {
+                this.targetBuilding = this.findBestTargetBuilding();
+                this.blocksDestroyedAtTarget = 0;
+                this.hoveringAboveTarget = false;
+                this.attackCooldown = CONFIG.SAND_CARRIER_ARRIVAL_DELAY || 1.0;
             }
 
-            // Maintain altitude above buildings
-            const targetAltitude = 150;
-            if (this.y > targetAltitude) this.y -= 20 * deltaTime;
-            if (this.y < targetAltitude) this.y += 20 * deltaTime;
+            // Check if should move to next target (destroyed enough blocks)
+            if (this.blocksDestroyedAtTarget >= (CONFIG.SAND_CARRIER_BLOCKS_TO_MOVE || 15)) {
+                this.targetBuilding = this.findClosestBuilding();
+                this.blocksDestroyedAtTarget = 0;
+                this.hoveringAboveTarget = false;
+                this.attackCooldown = CONFIG.SAND_CARRIER_ARRIVAL_DELAY || 1.0;
+            }
 
-            // Drop pods periodically
-            this.podDropTimer -= deltaTime;
-            if (this.podDropTimer <= 0) {
-                this.podDropTimer = this.podDropInterval;
-                const pod = new BurrowingPod(this.x, CONFIG.STREET_Y - 5);
-                burrowingPods.push(pod);
+            if (this.targetBuilding) {
+                // Calculate target position (centered above building)
+                const buildingCenterX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                const hoverHeight = CONFIG.SAND_CARRIER_HOVER_HEIGHT || 80;
+                let targetY = this.targetBuilding.y - hoverHeight;
+
+                // Check for other sand carriers at this building
+                if (typeof enemyManager !== 'undefined') {
+                    for (const other of enemyManager.enemies) {
+                        if (other !== this && other.type === EnemyType.SAND_CARRIER && other.active) {
+                            if (other.targetBuilding === this.targetBuilding) {
+                                // Another carrier at same building - go higher
+                                targetY -= (CONFIG.SAND_CARRIER_ELEVATION_OFFSET || 60);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Move toward target position
+                const dx = buildingCenterX - this.x;
+                const dy = targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 10) {
+                    // Still moving to target
+                    this.hoveringAboveTarget = false;
+                    this.x += (dx / dist) * this.speed * speedMod * deltaTime;
+                    this.y += (dy / dist) * this.speed * speedMod * deltaTime;
+                    // Update facing direction
+                    this.carrierMovingRight = dx > 0;
+                } else {
+                    // Hovering above target
+                    this.hoveringAboveTarget = true;
+                    this.x = buildingCenterX;
+                    this.y = targetY;
+                }
+
+                // Attack logic (only when hovering)
+                if (this.hoveringAboveTarget) {
+                    if (this.isAttacking) {
+                        // Update attack animation
+                        this.attackAnimTimer += deltaTime;
+                        const frameTime = 0.125;  // 8 FPS
+                        if (this.attackAnimTimer >= frameTime) {
+                            this.attackAnimTimer -= frameTime;
+                            this.attackAnimFrame++;
+
+                            // Spawn pods at frame 8
+                            if (this.attackAnimFrame === (CONFIG.SAND_CARRIER_POD_SPAWN_FRAME || 8) && !this.podsSpawnedThisAttack) {
+                                this.podsSpawnedThisAttack = true;
+                                const spread = CONFIG.SAND_CARRIER_POD_SPREAD || 20;
+                                // Spawn pair of pods
+                                const podLeft = new FallingPod(this.x - spread, this.y + 30);
+                                podLeft.ownerCarrier = this;
+                                const podRight = new FallingPod(this.x + spread, this.y + 30);
+                                podRight.ownerCarrier = this;
+                                fallingPods.push(podLeft);
+                                fallingPods.push(podRight);
+                            }
+
+                            // Check if attack animation complete (assume ~16 frames)
+                            if (this.attackAnimFrame >= 16) {
+                                this.isAttacking = false;
+                                this.attackAnimFrame = 0;
+                                this.attackCooldown = CONFIG.SAND_CARRIER_ATTACK_INTERVAL || 3.5;
+                            }
+                        }
+                    } else {
+                        // Cooldown between attacks
+                        this.attackCooldown -= deltaTime;
+                        if (this.attackCooldown <= 0) {
+                            this.isAttacking = true;
+                            this.attackAnimFrame = 0;
+                            this.attackAnimTimer = 0;
+                            this.podsSpawnedThisAttack = false;
+                        }
+                    }
+                }
             }
             return;
         }
@@ -2541,6 +2782,63 @@ class Enemy {
         return { hit: false, didDamage: false };
     }
 
+    // Find building with most blocks remaining (for Sand Carrier targeting)
+    findBestTargetBuilding() {
+        if (typeof buildingManager === 'undefined') return null;
+
+        const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+        if (buildings.length === 0) return null;
+
+        // Check which buildings are already targeted by other sand carriers
+        const targetedBuildings = new Set();
+        if (typeof enemyManager !== 'undefined') {
+            for (const other of enemyManager.enemies) {
+                if (other !== this && other.type === EnemyType.SAND_CARRIER && other.active && other.targetBuilding) {
+                    targetedBuildings.add(other.targetBuilding);
+                }
+            }
+        }
+
+        // Sort by block count (most first)
+        buildings.sort((a, b) => b.getBlockCount() - a.getBlockCount());
+
+        // Pick first non-targeted building, or first building with elevation offset
+        for (const building of buildings) {
+            if (!targetedBuildings.has(building)) {
+                return building;
+            }
+        }
+
+        // All buildings targeted - return most intact (will use elevation offset)
+        return buildings[0];
+    }
+
+    // Find closest building to current position (for Sand Carrier retargeting)
+    findClosestBuilding() {
+        if (typeof buildingManager === 'undefined') return null;
+
+        const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0 && b !== this.targetBuilding);
+        if (buildings.length === 0) {
+            // No other buildings - stay at current or find any
+            const any = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
+            return any.length > 0 ? any[0] : null;
+        }
+
+        let closest = null;
+        let closestDist = Infinity;
+
+        for (const building of buildings) {
+            const bx = building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+            const dist = Math.abs(bx - this.x);
+            if (dist < closestDist) {
+                closestDist = dist;
+                closest = building;
+            }
+        }
+
+        return closest;
+    }
+
     die(forceImmediate = false) {
         // Decrement carrier-spawned drone count if this was spawned by a carrier
         if (this.isCarrierSpawned) {
@@ -3145,13 +3443,11 @@ class Enemy {
 
         // Determine current state and select appropriate sprite
         let spriteKey = 'z2_carrier_fly';  // Default state
-        let isAttacking = false;
         let isDying = this.health <= 0;
 
-        // Attack state: when pod is about to drop (within 0.5s of drop timer)
-        if (this.podDropTimer <= 0.5 && this.podDropTimer > 0) {
+        // Attack state: when actively attacking
+        if (this.isAttacking && !isDying) {
             spriteKey = 'z2_carrier_attack';
-            isAttacking = true;
         }
 
         // Death state overrides all others
@@ -3166,9 +3462,9 @@ class Enemy {
             const frameSize = 128;
 
             // Calculate grid dimensions from sprite dimensions
-            const cols = Math.round(sprite.width / frameSize);
-            const rows = Math.round(sprite.height / frameSize);
-            const totalFrames = cols * rows;
+            const cols = Math.floor(sprite.width / frameSize);
+            const rows = Math.floor(sprite.height / frameSize);
+            const totalFrames = Math.max(1, cols * rows);
 
             // Calculate frame index based on animation state
             let frameIndex;
@@ -3179,8 +3475,11 @@ class Enemy {
                 }
                 const elapsed = Date.now() - this.deathAnimStartTime;
                 frameIndex = Math.min(Math.floor(elapsed / FPS_INTERVAL), totalFrames - 1);
+            } else if (this.isAttacking) {
+                // Attack: use internal attack frame counter
+                frameIndex = Math.min(this.attackAnimFrame, totalFrames - 1);
             } else {
-                // Fly/Attack: loop animation
+                // Fly: loop animation
                 frameIndex = Math.floor(Date.now() / FPS_INTERVAL) % totalFrames;
             }
 
@@ -4267,6 +4566,9 @@ class EnemyManager {
         this.dustDevilSpawnTimer = 0;
         this.dustDevilSpawnCount = 0;
         this.dustDevilMaxThisWave = 0;
+
+        // Reset falling pods
+        fallingPods = [];
     }
 
     startWave(waveNum) {
@@ -4432,8 +4734,11 @@ class EnemyManager {
     }
 
     update(deltaTime, playerX, playerY, projectileManager) {
-        // Handle wave breaks
+        // Handle wave breaks - no dust devils should be present
         if (this.betweenWaves) {
+            // Clear any remaining dust devils immediately
+            dustDevils = [];
+
             this.waveBreakTimer += deltaTime;
             const waveBreakDuration = (typeof CONFIG !== 'undefined' && CONFIG.WAVE_COUNTDOWN_DURATION) || 5;
             if (this.waveBreakTimer >= waveBreakDuration) {
@@ -4539,11 +4844,12 @@ class EnemyManager {
         burrowingPods.forEach(pod => pod.update(deltaTime));
         burrowingPods = burrowingPods.filter(pod => pod.active);
 
-        // Update dust devils (Zone 2 environmental hazards)
-        dustDevils.forEach(dd => dd.update(deltaTime));
-        dustDevils = dustDevils.filter(dd => dd.active);
+        // Update falling pods (Sand Carrier drops)
+        fallingPods.forEach(pod => pod.update(deltaTime));
+        fallingPods = fallingPods.filter(pod => pod.active);
 
         // Spawn dust devils (Zone 2 only, wave 2+)
+        // Note: Dust devil updates are handled at the top of update() so they continue during wave breaks
         const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
         if (zone === 2 && !this.boss && !this.miniBoss && !this.zone2MiniBoss) {
             this.dustDevilSpawnTimer -= deltaTime;
@@ -4611,6 +4917,9 @@ class EnemyManager {
         }
         // Render burrowing pods
         burrowingPods.forEach(pod => pod.render(ctx));
+
+        // Render falling pods
+        fallingPods.forEach(pod => pod.render(ctx));
 
         // Render dust devils
         dustDevils.forEach(dd => dd.render(ctx));

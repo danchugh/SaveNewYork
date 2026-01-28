@@ -704,6 +704,53 @@ function checkCollisions() {
         }
     }
 
+    // Check falling pods (Sand Carrier drops) vs buildings and players
+    if (typeof fallingPods !== 'undefined') {
+        for (const pod of fallingPods) {
+            if (!pod.active) continue;
+
+            const podBounds = {
+                x: pod.x - pod.width / 2,
+                y: pod.y - pod.height / 2,
+                width: pod.width,
+                height: pod.height
+            };
+
+            // Check vs buildings
+            for (const building of buildingManager.buildings) {
+                let hitBuilding = false;
+                for (let row = 0; row < building.heightBlocks && !hitBuilding; row++) {
+                    for (let col = 0; col < building.widthBlocks && !hitBuilding; col++) {
+                        if (!building.blocks[row][col]) continue;
+
+                        const blockPos = building.getBlockWorldPosition(row, col);
+                        if (rectIntersects(podBounds, blockPos)) {
+                            hitBuilding = true;
+                            pod.explodeOnBuilding(building, row, col);
+                        }
+                    }
+                }
+                if (hitBuilding) break;
+            }
+
+            // Check vs players (if pod still active)
+            if (pod.active) {
+                for (const p of playerManager.getActivePlayers()) {
+                    if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+                    const playerBounds = getPlayerBounds(p);
+                    if (rectIntersects(podBounds, playerBounds)) {
+                        const bounceX = (p.x < pod.x) ? -1 : 1;
+                        const bounceY = -1;
+                        p.takeDamage(bounceX, bounceY);
+                        pod.explodeOnPlayer();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     // Check city destruction percentage
     if (buildingManager.getDestructionPercentage() >= CONFIG.CITY_DESTRUCTION_THRESHOLD) {
         game.finalWave = enemyManager.waveNumber;
