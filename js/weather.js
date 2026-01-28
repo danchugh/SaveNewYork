@@ -4,11 +4,15 @@
 
 const WeatherType = {
     CLEAR: 'clear',
+    // Zone 1 (City) weather
     RAIN: 'rain',
     WIND: 'wind',
     LIGHTNING: 'lightning',
     RAIN_WIND: 'rain_wind',
-    RAIN_LIGHTNING: 'rain_lightning'
+    RAIN_LIGHTNING: 'rain_lightning',
+    // Zone 2 (Desert) weather
+    SANDSTORM: 'sandstorm',
+    SANDSTORM_LIGHTNING: 'sandstorm_lightning'
 };
 
 const WeatherManager = {
@@ -22,6 +26,10 @@ const WeatherManager = {
     // Particle arrays
     rainParticles: [],
     mistParticles: [],
+    sandParticles: [],  // Zone 2 sandstorm particles
+
+    // Sand particle colors (warm tan/orange palette)
+    sandColors: ['#d4a574', '#c4956a', '#e8c49a', '#b8956a', '#deb887'],
 
     // Splashes
     splashParticles: [],
@@ -41,6 +49,7 @@ const WeatherManager = {
         this.windStrength = 0;
         this.rainParticles = [];
         this.mistParticles = [];
+        this.sandParticles = [];
         this.splashParticles = [];
         this.lightningTimer = 0;
         this.lightningActive = false;
@@ -54,6 +63,10 @@ const WeatherManager = {
         // Clear existing particles when weather changes
         this.rainParticles = [];
         this.mistParticles = [];
+        this.sandParticles = [];
+
+        // Get current zone
+        const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
 
         // 30% chance for Clear
         if (Math.random() < 0.3) {
@@ -62,18 +75,30 @@ const WeatherManager = {
             return;
         }
 
-        // Pick weighted random weather type (Heavier emphasis on bad weather)
+        // Pick weighted random weather type based on zone
         const roll = Math.random() * 100;
         let weather;
 
-        if (roll < 40) {
-            weather = WeatherType.RAIN;
-        } else if (roll < 60) {
-            weather = WeatherType.RAIN_WIND;
-        } else if (roll < 80) {
-            weather = WeatherType.RAIN_LIGHTNING;
+        if (zone === 2) {
+            // Zone 2 (Desert): Sandstorm and dry lightning only - NO RAIN
+            if (roll < 50) {
+                weather = WeatherType.SANDSTORM;
+            } else if (roll < 80) {
+                weather = WeatherType.SANDSTORM_LIGHTNING;
+            } else {
+                weather = WeatherType.LIGHTNING; // Dry lightning only
+            }
         } else {
-            weather = WeatherType.LIGHTNING; // Dry lightning
+            // Zone 1 (City): Rain-based weather
+            if (roll < 40) {
+                weather = WeatherType.RAIN;
+            } else if (roll < 60) {
+                weather = WeatherType.RAIN_WIND;
+            } else if (roll < 80) {
+                weather = WeatherType.RAIN_LIGHTNING;
+            } else {
+                weather = WeatherType.LIGHTNING; // Dry lightning
+            }
         }
 
         this.currentWeather = weather;
@@ -83,7 +108,7 @@ const WeatherManager = {
         this.windDirection = Math.random() < 0.5 ? -1 : 1;
         this.windStrength = 30 + Math.random() * 70;
 
-        console.log(`Weather started: ${weather}, wind: ${this.windStrength}`);
+        console.log(`Weather started: ${weather}, wind: ${this.windStrength}, zone: ${zone}`);
     },
 
     fadeOut() {
@@ -94,8 +119,15 @@ const WeatherManager = {
         return this.currentWeather.includes('rain');
     },
 
+    hasSandstorm() {
+        return this.currentWeather.includes('sandstorm');
+    },
+
     hasWind() {
-        return this.currentWeather.includes('wind') || this.windStrength > 20;
+        // Wind applies during rain_wind, sandstorm, or when windStrength is high
+        return this.currentWeather.includes('wind') ||
+               this.currentWeather.includes('sandstorm') ||
+               this.windStrength > 20;
     },
 
     hasLightning() {
@@ -124,6 +156,7 @@ const WeatherManager = {
 
         // Update particles
         this.updateRain(deltaTime);
+        this.updateSand(deltaTime);
         this.updateMist(deltaTime);
         this.updateSplashes(deltaTime);
         this.updateLightning(deltaTime);
@@ -135,6 +168,7 @@ const WeatherManager = {
         // Render particles
         this.renderMist(ctx);
         this.renderRain(ctx);
+        this.renderSand(ctx);
         this.renderSplashes(ctx);
 
         // Render lightning last so flash overlays everything
@@ -273,6 +307,100 @@ const WeatherManager = {
             ctx.arc(p.x, p.y - 2, 2, 0, Math.PI, true); // Semi circle up
             ctx.fill();
         });
+    },
+
+    // ===========================================
+    // SANDSTORM SYSTEM (Zone 2)
+    // ===========================================
+
+    initSandParticles() {
+        this.sandParticles = [];
+        // 3 layers for parallax: 0=close(fast), 1=mid, 2=far(slow)
+        // Subtle ambient effect - not too many particles
+        const density = 150;
+        for (let i = 0; i < density; i++) {
+            this.sandParticles.push({
+                x: Math.random() * CONFIG.CANVAS_WIDTH * 1.5,
+                y: Math.random() * CONFIG.CANVAS_HEIGHT,
+                layer: Math.floor(Math.random() * 3),
+                size: 1 + Math.random() * 2,
+                colorIndex: Math.floor(Math.random() * this.sandColors.length),
+                // Slight vertical wobble for natural movement
+                wobbleOffset: Math.random() * Math.PI * 2,
+                wobbleSpeed: 2 + Math.random() * 2
+            });
+        }
+    },
+
+    updateSand(deltaTime) {
+        if (!this.hasSandstorm()) return;
+        if (this.sandParticles.length === 0) this.initSandParticles();
+
+        // Horizontal movement based on wind direction and strength
+        const baseSpeed = 200; // Base horizontal speed
+        const settleSpeed = 15; // Slow downward drift (sand settling)
+
+        this.sandParticles.forEach(p => {
+            // Speed based on layer (0 is fastest/closest)
+            const layerMod = 1 - p.layer * 0.25;
+            const speed = baseSpeed * layerMod * (this.windStrength / 50);
+
+            // Horizontal movement in wind direction
+            p.x += this.windDirection * speed * deltaTime;
+
+            // Slight vertical wobble + settling
+            p.wobbleOffset += p.wobbleSpeed * deltaTime;
+            const wobble = Math.sin(p.wobbleOffset) * 10 * deltaTime;
+            p.y += settleSpeed * deltaTime + wobble;
+
+            // Wrap around horizontally
+            if (this.windDirection > 0) {
+                if (p.x > CONFIG.CANVAS_WIDTH + 50) {
+                    p.x = -50;
+                    p.y = Math.random() * CONFIG.CANVAS_HEIGHT;
+                }
+            } else {
+                if (p.x < -50) {
+                    p.x = CONFIG.CANVAS_WIDTH + 50;
+                    p.y = Math.random() * CONFIG.CANVAS_HEIGHT;
+                }
+            }
+
+            // Reset if below screen
+            if (p.y > CONFIG.CANVAS_HEIGHT + 20) {
+                p.y = -20;
+                p.x = Math.random() * CONFIG.CANVAS_WIDTH * 1.5;
+            }
+        });
+    },
+
+    renderSand(ctx) {
+        if (!this.hasSandstorm()) return;
+
+        this.sandParticles.forEach(p => {
+            // Opacity based on layer (closer = more visible) and intensity
+            const layerAlpha = (1 - p.layer * 0.2);
+            const alpha = layerAlpha * this.intensity * 0.6;
+
+            const color = this.sandColors[p.colorIndex];
+
+            // Draw as small horizontal streaks to show wind direction
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = p.size * (1 - p.layer * 0.2);
+            ctx.lineCap = 'round';
+
+            // Streak length based on wind strength and layer
+            const streakLength = (this.windStrength / 50) * (8 + p.layer * 4);
+
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x + this.windDirection * streakLength, p.y + 2);
+            ctx.stroke();
+        });
+
+        ctx.globalAlpha = 1;
+        ctx.lineCap = 'butt';
     },
 
     // ===========================================

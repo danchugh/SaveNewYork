@@ -1426,6 +1426,8 @@ class Enemy {
                 this.targetBuilding = this.findBestTargetBuilding();
                 this.blocksDestroyedAtTarget = 0;
                 this.hoveringAboveTarget = false;
+                this.isAttacking = false;
+                this.attackAnimFrame = 0;
                 this.attackCooldown = CONFIG.SAND_CARRIER_ARRIVAL_DELAY || 1.0;
             }
 
@@ -1434,6 +1436,8 @@ class Enemy {
                 this.targetBuilding = this.findClosestBuilding();
                 this.blocksDestroyedAtTarget = 0;
                 this.hoveringAboveTarget = false;
+                this.isAttacking = false;
+                this.attackAnimFrame = 0;
                 this.attackCooldown = CONFIG.SAND_CARRIER_ARRIVAL_DELAY || 1.0;
             }
 
@@ -2881,6 +2885,23 @@ class Enemy {
                     this.animations.death.reset();
                 }
                 this.fallSpeed = -50; // Small hop up
+                if (typeof SoundManager !== 'undefined') SoundManager.enemyFalling();
+                return;
+            }
+        }
+
+        // SAND_CARRIER: takes multiple hits, then falls with death animation
+        if (this.type === EnemyType.SAND_CARRIER) {
+            if (this.health > 1 && !forceImmediate) {
+                this.health--;
+                if (typeof SoundManager !== 'undefined') SoundManager.tankHit();
+                if (typeof EffectsManager !== 'undefined') EffectsManager.addExplosion(this.x, this.y, 15, '#ffffff');
+                return; // Survives
+            }
+            // Final hit - fall with death animation
+            if (this.state !== EnemyState.FALLING) {
+                this.state = EnemyState.FALLING;
+                this.fallSpeed = -50;
                 if (typeof SoundManager !== 'undefined') SoundManager.enemyFalling();
                 return;
             }
@@ -4631,7 +4652,9 @@ class EnemyManager {
                 Math.floor(Math.random() * (CONFIG.DUST_DEVIL_SPAWN_MAX - CONFIG.DUST_DEVIL_SPAWN_MIN + 1));
             this.dustDevilSpawnCount = 0;
             this.dustDevilSpawnTimer = 3 + Math.random() * 5;
-            console.log(`Dust Devils this wave: ${this.dustDevilMaxThisWave}`);
+            console.log(`Dust Devils initialized - zone: ${zone}, wave: ${waveNum}, max: ${this.dustDevilMaxThisWave}, timer: ${this.dustDevilSpawnTimer.toFixed(1)}s`);
+        } else {
+            console.log(`Dust Devils NOT initialized - zone: ${zone}, wave: ${waveNum}`);
         }
     }
 
@@ -4848,8 +4871,11 @@ class EnemyManager {
         fallingPods.forEach(pod => pod.update(deltaTime));
         fallingPods = fallingPods.filter(pod => pod.active);
 
+        // Update dust devils (Zone 2 environmental hazards)
+        dustDevils.forEach(dd => dd.update(deltaTime));
+        dustDevils = dustDevils.filter(dd => dd.active);
+
         // Spawn dust devils (Zone 2 only, wave 2+)
-        // Note: Dust devil updates are handled at the top of update() so they continue during wave breaks
         const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
         if (zone === 2 && !this.boss && !this.miniBoss && !this.zone2MiniBoss) {
             this.dustDevilSpawnTimer -= deltaTime;
@@ -4860,6 +4886,7 @@ class EnemyManager {
                 this.spawnDustDevil();
                 this.dustDevilSpawnCount++;
                 this.dustDevilSpawnTimer = 8 + Math.random() * 12;
+                console.log(`Dust Devil spawned! Count: ${this.dustDevilSpawnCount}/${this.dustDevilMaxThisWave}`);
             }
 
             // Despawn dust devils if last enemy is gone
