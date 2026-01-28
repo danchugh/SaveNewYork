@@ -107,9 +107,12 @@ const ArtilleryManager = {
             // Launch from random points along the horizon
             const launchX = 50 + Math.random() * (CONFIG.CANVAS_WIDTH - 100);
 
-            // Target location (where shell will land)
+            // Target location (where shell will land) - aim at upper/mid building height
             const targetX = 80 + Math.random() * (CONFIG.CANVAS_WIDTH - 160);
-            const targetY = CONFIG.STREET_Y - 20 - Math.random() * 80;  // Near ground level
+            // Target mid-to-upper building area (more visible, still damages buildings)
+            const minY = CONFIG.SKY_TOP + 150;  // Upper sky area
+            const maxY = CONFIG.STREET_Y - 150; // Above street level
+            const targetY = minY + Math.random() * (maxY - minY);
 
             // Create launch trail
             this.launchTrails.push({
@@ -363,24 +366,33 @@ const ArtilleryManager = {
             SoundManager.fallingCrash();
         }
 
-        // Damage buildings
+        // Damage buildings - find blocks near impact point and destroy them
         if (typeof buildingManager !== 'undefined') {
-            // Find nearest building and damage it
-            const damageRadius = 40;
-            const damageAmount = CONFIG.MISSILE_DAMAGE_MIN || 3;
+            const damageAmount = (CONFIG.MISSILE_DAMAGE_MIN || 3) + Math.floor(Math.random() * 3);
+            let destroyed = 0;
 
             for (const building of buildingManager.buildings) {
-                const bCenterX = building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                if (destroyed >= damageAmount) break;
 
-                if (Math.abs(bCenterX - shell.x) < damageRadius + building.widthBlocks * CONFIG.BLOCK_SIZE / 2) {
-                    // Damage this building
-                    const blocksToDestroy = damageAmount + Math.floor(Math.random() * 3);
-                    for (let j = 0; j < blocksToDestroy; j++) {
-                        const hitX = shell.x + (Math.random() - 0.5) * 30;
-                        const hitY = shell.y - Math.random() * 40;
-                        building.damageAt(hitX, hitY, 1);
+                // Check each block in the building
+                for (let row = 0; row < building.heightBlocks && destroyed < damageAmount; row++) {
+                    for (let col = 0; col < building.widthBlocks && destroyed < damageAmount; col++) {
+                        if (!building.blocks[row][col]) continue;
+
+                        const blockPos = building.getBlockWorldPosition(row, col);
+                        const blockCenterX = blockPos.x + blockPos.width / 2;
+                        const blockCenterY = blockPos.y + blockPos.height / 2;
+
+                        // Check distance from shell impact
+                        const dx = shell.x - blockCenterX;
+                        const dy = shell.y - blockCenterY;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < 40) {  // Damage radius
+                            building.destroyBlock(row, col);
+                            destroyed++;
+                        }
                     }
-                    break;
                 }
             }
         }
@@ -517,37 +529,41 @@ const ArtilleryManager = {
 
             ctx.save();
             ctx.translate(shell.x, shell.y);
-            ctx.rotate(shell.rotation);
+            // Nose pointing down (no rotation needed, draw with nose at bottom)
 
-            // Shell body (elongated oval)
-            ctx.fillStyle = '#333333';
+            // Shell body (elongated oval) - red color
+            ctx.fillStyle = '#8b0000';  // Dark red
             ctx.beginPath();
             ctx.ellipse(0, 0, 6, 14, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // Nose cone
-            ctx.fillStyle = '#222222';
+            // Nose cone pointing DOWN (at bottom of shell)
+            ctx.fillStyle = '#aa0000';  // Slightly brighter red
             ctx.beginPath();
-            ctx.moveTo(0, -14);
-            ctx.lineTo(-4, -8);
-            ctx.lineTo(4, -8);
+            ctx.moveTo(0, 14);   // Point at bottom
+            ctx.lineTo(-4, 8);
+            ctx.lineTo(4, 8);
             ctx.closePath();
             ctx.fill();
 
-            // Fins
-            ctx.fillStyle = '#444444';
+            // Fins at TOP (opposite of nose)
+            ctx.fillStyle = '#660000';  // Darker red
             ctx.beginPath();
-            ctx.moveTo(-6, 10);
-            ctx.lineTo(-10, 16);
-            ctx.lineTo(-4, 12);
+            ctx.moveTo(-6, -10);
+            ctx.lineTo(-10, -16);
+            ctx.lineTo(-4, -12);
             ctx.closePath();
             ctx.fill();
             ctx.beginPath();
-            ctx.moveTo(6, 10);
-            ctx.lineTo(10, 16);
-            ctx.lineTo(4, 12);
+            ctx.moveTo(6, -10);
+            ctx.lineTo(10, -16);
+            ctx.lineTo(4, -12);
             ctx.closePath();
             ctx.fill();
+
+            // Center stripe highlight
+            ctx.fillStyle = '#cc2222';
+            ctx.fillRect(-2, -8, 4, 16);
 
             ctx.restore();
         }
