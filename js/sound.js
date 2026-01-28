@@ -904,5 +904,25 @@ const SoundManager = {
         // Disabled ambient sounds - they interfere with gameplay audio
         // and the bird chirps sound like enemy effects
         this.stopAmbient();
+    },
+
+    // ========== DUST DEVIL SOUNDS ==========
+
+    dustDevilSuction() {
+        // Ascending whoosh + noise for suction effect
+        this.playLaser(100, 400, 0.3, 0.4);
+        this.playNoise(0.3, 0.4);
+    },
+
+    dustDevilSpin() {
+        // Periodic whoosh while entities inside
+        this.playNoise(0.2, 0.3);
+        this.playPunchyTone(150, 0.15, 'sine', 0.2);
+    },
+
+    dustDevilThrow() {
+        // Descending whoosh for throw
+        this.playLaser(500, 100, 0.25, 0.5);
+        this.playNoise(0.2, 0.5);
     }
 };

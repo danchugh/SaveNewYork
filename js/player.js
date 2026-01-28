@@ -82,6 +82,11 @@ class Player {
 
         // Weapon mode: 'combat' (normal shots) or 'repair' (repair beam)
         this.weaponMode = 'combat';
+
+        // Dust Devil capture state
+        this.dustDevilCaptured = false;
+        this.dustDevilCapturedBy = null;
+        this.dustDevilThrown = false;
     }
 
     // Get input state for this player from InputManager
@@ -106,13 +111,29 @@ class Player {
             }
         }
 
+        // If captured by dust devil, position is controlled by the dust devil
+        if (this.dustDevilCaptured) {
+            return;
+        }
+
         if (this.bounceVx !== 0 || this.bounceVy !== 0) {
             this.x += this.bounceVx * deltaTime;
             this.y += this.bounceVy * deltaTime;
-            this.bounceVx *= 0.9;
-            this.bounceVy *= 0.9;
-            if (Math.abs(this.bounceVx) < 1) this.bounceVx = 0;
-            if (Math.abs(this.bounceVy) < 1) this.bounceVy = 0;
+            this.bounceVx *= 0.95;
+            this.bounceVy *= 0.95;
+
+            if (this.dustDevilThrown) {
+                // When thrown by dust devil, only regain control when velocity drops below threshold
+                const velocity = Math.sqrt(this.bounceVx ** 2 + this.bounceVy ** 2);
+                if (velocity < CONFIG.DUST_DEVIL_PLAYER_CONTROL_THRESHOLD) {
+                    this.dustDevilThrown = false;
+                    this.bounceVx = 0;
+                    this.bounceVy = 0;
+                }
+            } else {
+                if (Math.abs(this.bounceVx) < 1) this.bounceVx = 0;
+                if (Math.abs(this.bounceVy) < 1) this.bounceVy = 0;
+            }
         }
 
         // Check for weapon mode toggle (A key for P1, Q key for P2)
@@ -448,6 +469,7 @@ class Player {
 
     render(ctx) {
         if (this.state === PlayerState.EXPLODING || this.state === PlayerState.DEAD) return;
+        if (this.dustDevilCaptured) return; // Dust devil handles rendering
 
         const c = this.colors;
         const spriteKey = this.id === 1 ? 'player_p1' : 'player_p2';

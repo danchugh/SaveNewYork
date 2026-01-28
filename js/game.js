@@ -581,6 +581,129 @@ function checkCollisions() {
         }
     }
 
+    // Check thrown entities (from Dust Devil) vs buildings
+    // Thrown players hitting buildings
+    for (const p of playerManager.getActivePlayers()) {
+        if (!p.dustDevilThrown) continue;
+        const velocity = Math.sqrt(p.bounceVx ** 2 + p.bounceVy ** 2);
+        if (velocity < 100) continue;
+
+        const playerBounds = getPlayerBounds(p);
+
+        for (const building of buildingManager.buildings) {
+            let hitBuilding = false;
+            for (let row = 0; row < building.heightBlocks && !hitBuilding; row++) {
+                for (let col = 0; col < building.widthBlocks && !hitBuilding; col++) {
+                    if (!building.blocks[row][col]) continue;
+
+                    const blockPos = building.getBlockWorldPosition(row, col);
+                    if (rectIntersects(playerBounds, blockPos)) {
+                        hitBuilding = true;
+
+                        // Destroy blocks on impact
+                        let destroyed = 0;
+                        for (let dr = -2; dr <= 2 && destroyed < CONFIG.DUST_DEVIL_THROW_BUILDING_DAMAGE; dr++) {
+                            for (let dc = -2; dc <= 2 && destroyed < CONFIG.DUST_DEVIL_THROW_BUILDING_DAMAGE; dc++) {
+                                const tr = row + dr;
+                                const tc = col + dc;
+                                if (tr >= 0 && tr < building.heightBlocks &&
+                                    tc >= 0 && tc < building.widthBlocks &&
+                                    building.blocks[tr][tc]) {
+                                    building.destroyBlock(tr, tc);
+                                    destroyed++;
+                                }
+                            }
+                        }
+
+                        // Stop the throw and damage player
+                        p.dustDevilThrown = false;
+                        p.bounceVx = 0;
+                        p.bounceVy = 0;
+                        p.takeDamage(0, 0);
+
+                        if (typeof EffectsManager !== 'undefined') {
+                            EffectsManager.addExplosion(p.x, p.y, 40, '#ff8800');
+                            EffectsManager.shake(15);
+                        }
+                        SoundManager.fallingCrash();
+                    }
+                }
+            }
+            if (hitBuilding) break;
+        }
+    }
+
+    // Thrown enemies hitting buildings and players
+    for (const e of enemyManager.enemies) {
+        if (!e.dustDevilThrown || !e.active) continue;
+        const velocity = Math.sqrt(e.bounceVx ** 2 + e.bounceVy ** 2);
+        if (velocity < 100) continue;
+
+        const enemyBounds = {
+            x: e.x - e.width / 2,
+            y: e.y - e.height / 2,
+            width: e.width,
+            height: e.height
+        };
+
+        // Check building collision
+        for (const building of buildingManager.buildings) {
+            let hitBuilding = false;
+            for (let row = 0; row < building.heightBlocks && !hitBuilding; row++) {
+                for (let col = 0; col < building.widthBlocks && !hitBuilding; col++) {
+                    if (!building.blocks[row][col]) continue;
+
+                    const blockPos = building.getBlockWorldPosition(row, col);
+                    if (rectIntersects(enemyBounds, blockPos)) {
+                        hitBuilding = true;
+
+                        // Destroy blocks on impact
+                        let destroyed = 0;
+                        for (let dr = -2; dr <= 2 && destroyed < CONFIG.DUST_DEVIL_THROW_BUILDING_DAMAGE; dr++) {
+                            for (let dc = -2; dc <= 2 && destroyed < CONFIG.DUST_DEVIL_THROW_BUILDING_DAMAGE; dc++) {
+                                const tr = row + dr;
+                                const tc = col + dc;
+                                if (tr >= 0 && tr < building.heightBlocks &&
+                                    tc >= 0 && tc < building.widthBlocks &&
+                                    building.blocks[tr][tc]) {
+                                    building.destroyBlock(tr, tc);
+                                    destroyed++;
+                                }
+                            }
+                        }
+
+                        // Kill the enemy
+                        e.die();
+
+                        if (typeof EffectsManager !== 'undefined') {
+                            EffectsManager.addExplosion(e.x, e.y, 35, '#ff6600');
+                            EffectsManager.shake(10);
+                        }
+                        SoundManager.fallingCrash();
+                    }
+                }
+            }
+            if (hitBuilding) break;
+        }
+
+        // Check player collision (thrown enemy hits player)
+        if (e.active && e.dustDevilThrown) {
+            for (const p of playerManager.getActivePlayers()) {
+                if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+                const playerBounds = getPlayerBounds(p);
+                if (rectIntersects(enemyBounds, playerBounds)) {
+                    // Enemy hits player - damage player and kill enemy
+                    const bounceX = (p.x < e.x) ? -1 : 1;
+                    const bounceY = (p.y < e.y) ? -1 : 1;
+                    p.takeDamage(bounceX, bounceY);
+                    e.die();
+                    break;
+                }
+            }
+        }
+    }
+
     // Check city destruction percentage
     if (buildingManager.getDestructionPercentage() >= CONFIG.CITY_DESTRUCTION_THRESHOLD) {
         game.finalWave = enemyManager.waveNumber;

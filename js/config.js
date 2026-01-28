@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.65',
+    VERSION: 'v1.0.66',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -162,6 +162,21 @@ const CONFIG = {
     ARTILLERY_SHELL_INTERVAL: 0.8,
     ARTILLERY_DELAY_MIN: 5,   // Seconds into wave before possible trigger
     ARTILLERY_DELAY_MAX: 15,
+
+    // Dust Devil Configuration (Zone 2 Environmental Hazard)
+    DUST_DEVIL_MAX_ACTIVE: 2,
+    DUST_DEVIL_SPAWN_MIN: 1,
+    DUST_DEVIL_SPAWN_MAX: 4,
+    DUST_DEVIL_LIFETIME: 30,
+    DUST_DEVIL_SUCTION_RADIUS: 24,
+    DUST_DEVIL_CAPTURE_DURATION: 2,
+    DUST_DEVIL_THROW_VELOCITY: 375,
+    DUST_DEVIL_THROW_BUILDING_DAMAGE: 10,
+    DUST_DEVIL_PLAYER_CONTROL_THRESHOLD: 100,
+    DUST_DEVIL_FADE_DURATION: 1.0,
+    DUST_DEVIL_SPEED: 40,
+    DUST_DEVIL_PLAYER_BIAS: 0.3,
+    DUST_DEVIL_ENEMY_BIAS: 0.2,
 
     // Win/Lose
     CITY_DESTRUCTION_THRESHOLD: 0.8,

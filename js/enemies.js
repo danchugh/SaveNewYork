@@ -70,6 +70,395 @@ class BurrowingPod {
     }
 }
 
+// Global array for dust devils (Zone 2 environmental hazards)
+let dustDevils = [];
+
+class DustDevil {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.active = true;
+
+        // Sprite dimensions
+        this.width = 64;
+        this.height = 95;
+
+        // Fade system
+        this.opacity = 0;
+        this.targetOpacity = 1;
+        this.fadeSpeed = 1 / CONFIG.DUST_DEVIL_FADE_DURATION;
+
+        // Lifetime
+        this.lifetime = CONFIG.DUST_DEVIL_LIFETIME;
+        this.despawning = false;
+
+        // Movement
+        this.velX = (Math.random() - 0.5) * 2;
+        this.velY = (Math.random() - 0.5) * 2;
+        this.directionChangeTimer = 0;
+
+        // Captured entities: {entity, type, timer, spinAngle, collidedWith}
+        this.capturedEntities = [];
+
+        // Visual
+        this.rotation = 0;
+        this.spinSoundTimer = 0;
+    }
+
+    update(deltaTime) {
+        // Handle fade in/out
+        if (this.despawning) {
+            this.opacity -= this.fadeSpeed * deltaTime;
+            if (this.opacity <= 0) {
+                this.opacity = 0;
+                this.active = false;
+                return;
+            }
+        } else {
+            if (this.opacity < this.targetOpacity) {
+                this.opacity += this.fadeSpeed * deltaTime;
+                if (this.opacity >= this.targetOpacity) {
+                    this.opacity = this.targetOpacity;
+                }
+            }
+        }
+
+        // Countdown lifetime
+        this.lifetime -= deltaTime;
+        if (this.lifetime <= 0 && !this.despawning) {
+            this.startDespawn();
+        }
+
+        // Update movement with bias toward player/enemies
+        this.updateMovement(deltaTime);
+
+        // Check suction radius (only when not despawning)
+        if (!this.despawning) {
+            this.checkSuction();
+        }
+
+        // Update captured entities
+        this.updateCaptured(deltaTime);
+
+        // Visual rotation
+        this.rotation += deltaTime * 5;
+
+        // Play periodic spin sound when entities are captured
+        if (this.capturedEntities.length > 0) {
+            this.spinSoundTimer -= deltaTime;
+            if (this.spinSoundTimer <= 0) {
+                if (typeof SoundManager !== 'undefined' && SoundManager.dustDevilSpin) {
+                    SoundManager.dustDevilSpin();
+                }
+                this.spinSoundTimer = 0.5;
+            }
+        }
+    }
+
+    updateMovement(deltaTime) {
+        // Direction change timer
+        this.directionChangeTimer -= deltaTime;
+        if (this.directionChangeTimer <= 0) {
+            this.directionChangeTimer = 2 + Math.random() * 3;
+
+            // Base random movement
+            let targetVelX = (Math.random() - 0.5) * 2;
+            let targetVelY = (Math.random() - 0.5) * 2;
+
+            // Bias toward nearest player
+            if (typeof playerManager !== 'undefined') {
+                const players = playerManager.getActivePlayers();
+                let nearestPlayer = null;
+                let nearestDist = Infinity;
+
+                for (const p of players) {
+                    if (p.state === 'flying' && !p.dustDevilCaptured) {
+                        const dist = Math.sqrt((p.x - this.x) ** 2 + (p.y - this.y) ** 2);
+                        if (dist < nearestDist) {
+                            nearestDist = dist;
+                            nearestPlayer = p;
+                        }
+                    }
+                }
+
+                if (nearestPlayer && nearestDist < 400) {
+                    const dx = nearestPlayer.x - this.x;
+                    const dy = nearestPlayer.y - this.y;
+                    const mag = Math.sqrt(dx * dx + dy * dy);
+                    if (mag > 0) {
+                        targetVelX += (dx / mag) * CONFIG.DUST_DEVIL_PLAYER_BIAS;
+                        targetVelY += (dy / mag) * CONFIG.DUST_DEVIL_PLAYER_BIAS;
+                    }
+                }
+            }
+
+            // Bias toward nearest enemy (to suck them in too)
+            if (typeof enemyManager !== 'undefined') {
+                let nearestEnemy = null;
+                let nearestEnemyDist = Infinity;
+
+                for (const e of enemyManager.enemies) {
+                    if (e.active && e.type !== EnemyType.DUST_DEVIL && !e.dustDevilCaptured) {
+                        const dist = Math.sqrt((e.x - this.x) ** 2 + (e.y - this.y) ** 2);
+                        if (dist < nearestEnemyDist) {
+                            nearestEnemyDist = dist;
+                            nearestEnemy = e;
+                        }
+                    }
+                }
+
+                if (nearestEnemy && nearestEnemyDist < 300) {
+                    const dx = nearestEnemy.x - this.x;
+                    const dy = nearestEnemy.y - this.y;
+                    const mag = Math.sqrt(dx * dx + dy * dy);
+                    if (mag > 0) {
+                        targetVelX += (dx / mag) * CONFIG.DUST_DEVIL_ENEMY_BIAS;
+                        targetVelY += (dy / mag) * CONFIG.DUST_DEVIL_ENEMY_BIAS;
+                    }
+                }
+            }
+
+            // Normalize
+            const mag = Math.sqrt(targetVelX * targetVelX + targetVelY * targetVelY);
+            if (mag > 0) {
+                this.velX = targetVelX / mag;
+                this.velY = targetVelY / mag;
+            }
+        }
+
+        // Apply movement
+        this.x += this.velX * CONFIG.DUST_DEVIL_SPEED * deltaTime;
+        this.y += this.velY * CONFIG.DUST_DEVIL_SPEED * deltaTime;
+
+        // Keep within bounds
+        const margin = 50;
+        if (this.x < margin) {
+            this.x = margin;
+            this.velX = Math.abs(this.velX);
+        }
+        if (this.x > CONFIG.CANVAS_WIDTH - margin) {
+            this.x = CONFIG.CANVAS_WIDTH - margin;
+            this.velX = -Math.abs(this.velX);
+        }
+        if (this.y < CONFIG.SKY_TOP + margin) {
+            this.y = CONFIG.SKY_TOP + margin;
+            this.velY = Math.abs(this.velY);
+        }
+        if (this.y > CONFIG.STREET_Y - margin - this.height / 2) {
+            this.y = CONFIG.STREET_Y - margin - this.height / 2;
+            this.velY = -Math.abs(this.velY);
+        }
+    }
+
+    checkSuction() {
+        const suctionRadius = CONFIG.DUST_DEVIL_SUCTION_RADIUS;
+
+        // Check players
+        if (typeof playerManager !== 'undefined') {
+            for (const p of playerManager.getActivePlayers()) {
+                if (p.state !== 'flying' || p.dustDevilCaptured) continue;
+
+                const dist = Math.sqrt((p.x - this.x) ** 2 + (p.y - this.y) ** 2);
+                if (dist < suctionRadius) {
+                    this.captureEntity(p, 'player');
+                }
+            }
+        }
+
+        // Check enemies (except dust devils)
+        if (typeof enemyManager !== 'undefined') {
+            for (const e of enemyManager.enemies) {
+                if (!e.active || e.type === EnemyType.DUST_DEVIL || e.dustDevilCaptured) continue;
+                if (e.state === EnemyState.DYING || e.state === EnemyState.DEAD) continue;
+
+                const dist = Math.sqrt((e.x - this.x) ** 2 + (e.y - this.y) ** 2);
+                if (dist < suctionRadius) {
+                    this.captureEntity(e, 'enemy');
+                }
+            }
+        }
+    }
+
+    captureEntity(entity, type) {
+        // Mark as captured
+        entity.dustDevilCaptured = true;
+        entity.dustDevilCapturedBy = this;
+
+        // For enemies, freeze behavior
+        if (type === 'enemy') {
+            entity.bellSlowed = true;
+        }
+
+        // Add to captured list
+        this.capturedEntities.push({
+            entity: entity,
+            type: type,
+            timer: CONFIG.DUST_DEVIL_CAPTURE_DURATION,
+            spinAngle: Math.random() * Math.PI * 2,
+            collidedWith: new Set()
+        });
+
+        // Play suction sound
+        if (typeof SoundManager !== 'undefined' && SoundManager.dustDevilSuction) {
+            SoundManager.dustDevilSuction();
+        }
+    }
+
+    updateCaptured(deltaTime) {
+        // Process each captured entity
+        for (let i = this.capturedEntities.length - 1; i >= 0; i--) {
+            const captured = this.capturedEntities[i];
+            const entity = captured.entity;
+
+            // Check if entity died while captured
+            if (captured.type === 'enemy' && (!entity.active || entity.state === EnemyState.DEAD)) {
+                this.capturedEntities.splice(i, 1);
+                continue;
+            }
+
+            // Update spin angle
+            captured.spinAngle += deltaTime * 8;
+
+            // Position entity at dust devil center (spinning)
+            const orbitRadius = 15;
+            entity.x = this.x + Math.cos(captured.spinAngle) * orbitRadius;
+            entity.y = this.y + Math.sin(captured.spinAngle) * orbitRadius;
+
+            // Check collision between captured entities
+            for (let j = 0; j < this.capturedEntities.length; j++) {
+                if (i === j) continue;
+                const other = this.capturedEntities[j];
+
+                // Only deal collision damage once per pair
+                const pairKey = i < j ? `${i}-${j}` : `${j}-${i}`;
+                if (captured.collidedWith.has(pairKey)) continue;
+
+                // Different types colliding - deal damage
+                if (captured.type !== other.type) {
+                    captured.collidedWith.add(pairKey);
+                    other.collidedWith.add(pairKey);
+
+                    // Enemy takes damage when colliding with player
+                    if (captured.type === 'enemy' && other.type === 'player') {
+                        entity.die();
+                    } else if (captured.type === 'player' && other.type === 'enemy') {
+                        other.entity.die();
+                    }
+                }
+            }
+
+            // Countdown timer
+            captured.timer -= deltaTime;
+            if (captured.timer <= 0) {
+                this.throwEntity(captured);
+                this.capturedEntities.splice(i, 1);
+            }
+        }
+    }
+
+    throwEntity(captured) {
+        const entity = captured.entity;
+
+        // Random throw direction
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = CONFIG.DUST_DEVIL_THROW_VELOCITY;
+
+        entity.bounceVx = Math.cos(angle) * velocity;
+        entity.bounceVy = Math.sin(angle) * velocity;
+
+        // Mark as thrown
+        entity.dustDevilThrown = true;
+        entity.dustDevilCaptured = false;
+        entity.dustDevilCapturedBy = null;
+
+        // Clear enemy frozen state
+        if (captured.type === 'enemy') {
+            entity.bellSlowed = false;
+        }
+
+        // Play throw sound
+        if (typeof SoundManager !== 'undefined' && SoundManager.dustDevilThrow) {
+            SoundManager.dustDevilThrow();
+        }
+    }
+
+    startDespawn() {
+        if (this.despawning) return;
+        this.despawning = true;
+
+        // Throw any remaining captured entities immediately
+        for (const captured of this.capturedEntities) {
+            this.throwEntity(captured);
+        }
+        this.capturedEntities = [];
+    }
+
+    render(ctx) {
+        if (!this.active) return;
+
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+
+        // Draw dust devil sprite
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_dust_devil') : null;
+
+        ctx.translate(this.x, this.y);
+
+        if (sprite) {
+            // Apply subtle rotation for swirling effect
+            ctx.rotate(Math.sin(this.rotation) * 0.1);
+            ctx.drawImage(sprite, -this.width / 2, -this.height / 2, this.width, this.height);
+        } else {
+            // Fallback: draw a simple tornado shape
+            ctx.fillStyle = `rgba(210, 180, 140, ${this.opacity})`;
+            ctx.beginPath();
+            // Wide top, narrow bottom
+            ctx.moveTo(-25, -40);
+            ctx.lineTo(25, -40);
+            ctx.lineTo(10, 40);
+            ctx.lineTo(-10, 40);
+            ctx.closePath();
+            ctx.fill();
+
+            // Swirl lines
+            ctx.strokeStyle = `rgba(180, 150, 100, ${this.opacity})`;
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 3; i++) {
+                const yOffset = -30 + i * 25;
+                const width = 20 - i * 5;
+                ctx.beginPath();
+                ctx.arc(0, yOffset, width, 0, Math.PI, false);
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
+
+        // Draw captured entities (scaled down and spinning)
+        for (const captured of this.capturedEntities) {
+            const entity = captured.entity;
+            ctx.save();
+            ctx.globalAlpha = this.opacity * 0.8;
+            ctx.translate(entity.x, entity.y);
+            ctx.rotate(captured.spinAngle * 2);
+            ctx.scale(0.5, 0.5);
+
+            // Simple representation
+            if (captured.type === 'player') {
+                ctx.fillStyle = entity.colors ? entity.colors.cockpit : '#00aaff';
+                ctx.beginPath();
+                ctx.arc(0, 0, 15, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = '#ff6600';
+                ctx.fillRect(-10, -10, 20, 20);
+            }
+
+            ctx.restore();
+        }
+    }
+}
+
 class Enemy {
     constructor(x, y, type) {
         this.x = x;
@@ -137,6 +526,13 @@ class Enemy {
             Math.random() * (CONFIG.CARRIER_ATTACK_COOLDOWN_MAX - CONFIG.CARRIER_ATTACK_COOLDOWN_MIN);
         this.carrierAttackFrameTriggered = false;  // Track if drones spawned this attack
         this.isCarrierSpawned = false;    // Flag for drones spawned by carriers (don't count for wave)
+
+        // Dust Devil capture state
+        this.dustDevilCaptured = false;
+        this.dustDevilCapturedBy = null;
+        this.dustDevilThrown = false;
+        this.bounceVx = 0;
+        this.bounceVy = 0;
 
         this.active = true;
     }
@@ -576,6 +972,29 @@ class Enemy {
 
     update(deltaTime) {
         if (this.state === EnemyState.DEAD) return;
+
+        // If captured by dust devil, position is controlled by the dust devil
+        if (this.dustDevilCaptured) {
+            return;
+        }
+
+        // Handle throw physics from dust devil
+        if (this.bounceVx !== 0 || this.bounceVy !== 0) {
+            this.x += this.bounceVx * deltaTime;
+            this.y += this.bounceVy * deltaTime;
+            this.bounceVx *= 0.95;
+            this.bounceVy *= 0.95;
+
+            const velocity = Math.sqrt(this.bounceVx ** 2 + this.bounceVy ** 2);
+            if (velocity < 50) {
+                this.bounceVx = 0;
+                this.bounceVy = 0;
+                this.dustDevilThrown = false;
+            }
+
+            // Skip normal movement while being thrown
+            if (this.dustDevilThrown) return;
+        }
 
         // Update animations for STANDARD, AGGRESSIVE, SPLITTER (carrier), and TANK (gunship) types
         if ((this.type === EnemyType.STANDARD || this.type === EnemyType.AGGRESSIVE || this.type === EnemyType.SPLITTER || this.type === EnemyType.TANK) && this.animations) {
@@ -3749,6 +4168,11 @@ class EnemyManager {
 
         // Zone tracking
         this.currentZone = 1;
+
+        // Dust Devil spawning (Zone 2 environmental hazard)
+        this.dustDevilSpawnTimer = 0;
+        this.dustDevilSpawnCount = 0;
+        this.dustDevilMaxThisWave = 0;
     }
 
     reset() {
@@ -3774,6 +4198,12 @@ class EnemyManager {
         // Enemy kill tracking for powerup drops
         this.enemiesKilledThisWave = 0;
         this.totalEnemiesInWave = 0;
+
+        // Reset dust devils
+        dustDevils = [];
+        this.dustDevilSpawnTimer = 0;
+        this.dustDevilSpawnCount = 0;
+        this.dustDevilMaxThisWave = 0;
     }
 
     startWave(waveNum) {
@@ -3828,6 +4258,16 @@ class EnemyManager {
 
         // Initialize artillery event for wave 4+
         if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.startWave(waveNum);
+
+        // Initialize dust devil spawning for Zone 2, wave 2+
+        const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
+        if (zone === 2 && waveNum >= 2) {
+            this.dustDevilMaxThisWave = CONFIG.DUST_DEVIL_SPAWN_MIN +
+                Math.floor(Math.random() * (CONFIG.DUST_DEVIL_SPAWN_MAX - CONFIG.DUST_DEVIL_SPAWN_MIN + 1));
+            this.dustDevilSpawnCount = 0;
+            this.dustDevilSpawnTimer = 3 + Math.random() * 5;
+            console.log(`Dust Devils this wave: ${this.dustDevilMaxThisWave}`);
+        }
     }
 
     pickEnemyType() {
@@ -3901,6 +4341,13 @@ class EnemyManager {
         const enemy = new Enemy(x, y, type);
         enemy.wasActive = true;
         this.enemies.push(enemy);
+    }
+
+    spawnDustDevil() {
+        const x = 100 + Math.random() * (CONFIG.CANVAS_WIDTH - 200);
+        const y = CONFIG.SKY_TOP + 50 + Math.random() * 200;
+        dustDevils.push(new DustDevil(x, y));
+        console.log(`Dust Devil spawned at (${Math.round(x)}, ${Math.round(y)})`);
     }
 
     spawnBoss() {
@@ -4029,6 +4476,31 @@ class EnemyManager {
         burrowingPods.forEach(pod => pod.update(deltaTime));
         burrowingPods = burrowingPods.filter(pod => pod.active);
 
+        // Update dust devils (Zone 2 environmental hazards)
+        dustDevils.forEach(dd => dd.update(deltaTime));
+        dustDevils = dustDevils.filter(dd => dd.active);
+
+        // Spawn dust devils (Zone 2 only, wave 2+)
+        const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
+        if (zone === 2 && !this.boss && !this.miniBoss && !this.zone2MiniBoss) {
+            this.dustDevilSpawnTimer -= deltaTime;
+
+            if (this.dustDevilSpawnTimer <= 0 &&
+                dustDevils.length < CONFIG.DUST_DEVIL_MAX_ACTIVE &&
+                this.dustDevilSpawnCount < this.dustDevilMaxThisWave) {
+                this.spawnDustDevil();
+                this.dustDevilSpawnCount++;
+                this.dustDevilSpawnTimer = 8 + Math.random() * 12;
+            }
+
+            // Despawn dust devils if last enemy is gone
+            if (this.enemiesRemainingInWave <= 0 && this.enemies.length === 0) {
+                dustDevils.forEach(dd => {
+                    if (!dd.despawning) dd.startDespawn();
+                });
+            }
+        }
+
         // Check wave progress for parachute drops
         if (this.totalEnemiesInWave > 0 && typeof PowerupManager !== 'undefined') {
             const waveProgress = this.enemiesKilledThisWave / this.totalEnemiesInWave;
@@ -4076,6 +4548,9 @@ class EnemyManager {
         }
         // Render burrowing pods
         burrowingPods.forEach(pod => pod.render(ctx));
+
+        // Render dust devils
+        dustDevils.forEach(dd => dd.render(ctx));
     }
 
     getUpcomingBoss() {
@@ -4130,10 +4605,9 @@ class EnemyManager {
         // Wave 1: Mostly standard but some variety
         weights[EnemyType.STANDARD] = 25;  // Reduced from 40
 
-        // Wave 2+: Add Aggressive and Dust Devil
+        // Wave 2+: Add Aggressive (Dust Devils spawn as environmental hazards separately)
         if (waveNumber >= 2) {
             weights[EnemyType.AGGRESSIVE] = 15;
-            weights[EnemyType.DUST_DEVIL] = 20;  // Added earlier, increased weight
         }
 
         // Wave 3+: Add Sandworm and Scorpion
