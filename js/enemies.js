@@ -79,11 +79,11 @@ class DustDevil {
         this.y = y;
         this.active = true;
 
-        // Sprite frame dimensions (each frame is 64x95)
+        // Sprite frame dimensions (each frame is 64x64)
         this.frameWidth = 64;
-        this.frameHeight = 95;
+        this.frameHeight = 64;
         this.width = 64;
-        this.height = 95;
+        this.height = 64;
 
         // Animation
         this.animFrame = 0;

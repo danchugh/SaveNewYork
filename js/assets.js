@@ -110,7 +110,7 @@ const AssetManager = {
             'test_civilian': 'assets/test_civilian.png',
 
             // Zone 2 - Desert enemies (all with black backgrounds)
-            'zone2_dust_devil': 'assets/64x95_z2DustDevil.png',
+            'zone2_dust_devil': 'assets/64x64_z2DustDevil.png',
             'zone2_sandworm': 'assets/sprites/enemies/zone2/sandworm.png',
             'zone2_scorpion': 'assets/sprites/enemies/zone2/scorpion.png',
             'zone2_sand_carrier': 'assets/sprites/enemies/zone2/sand_carrier.png',
