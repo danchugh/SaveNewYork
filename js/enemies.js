@@ -79,9 +79,17 @@ class DustDevil {
         this.y = y;
         this.active = true;
 
-        // Sprite dimensions
+        // Sprite frame dimensions (each frame is 64x95)
+        this.frameWidth = 64;
+        this.frameHeight = 95;
         this.width = 64;
         this.height = 95;
+
+        // Animation
+        this.animFrame = 0;
+        this.animTimer = 0;
+        this.animFPS = 10;
+        this.frameCount = 1; // Will be calculated from sprite sheet
 
         // Fade system
         this.opacity = 0;
@@ -142,6 +150,16 @@ class DustDevil {
 
         // Visual rotation
         this.rotation += deltaTime * 5;
+
+        // Update animation frame
+        this.animTimer += deltaTime;
+        if (this.animTimer >= 1 / this.animFPS) {
+            this.animTimer = 0;
+            this.animFrame++;
+            if (this.animFrame >= this.frameCount) {
+                this.animFrame = 0;
+            }
+        }
 
         // Play periodic spin sound when entities are captured
         if (this.capturedEntities.length > 0) {
@@ -409,10 +427,28 @@ class DustDevil {
 
         ctx.translate(this.x, this.y);
 
-        if (sprite) {
+        if (sprite && sprite.width > 0 && sprite.height > 0) {
+            // Calculate frame count from sprite sheet dimensions
+            // Frames can be arranged horizontally (columns) and/or vertically (rows)
+            const framesPerRow = Math.max(1, Math.floor(sprite.width / this.frameWidth));
+            const numRows = Math.max(1, Math.floor(sprite.height / this.frameHeight));
+            this.frameCount = framesPerRow * numRows;
+
+            // Calculate source rectangle for current frame
+            const col = this.animFrame % framesPerRow;
+            const row = Math.floor(this.animFrame / framesPerRow);
+            const srcX = col * this.frameWidth;
+            const srcY = row * this.frameHeight;
+
             // Apply subtle rotation for swirling effect
             ctx.rotate(Math.sin(this.rotation) * 0.1);
-            ctx.drawImage(sprite, -this.width / 2, -this.height / 2, this.width, this.height);
+
+            // Draw the current frame from sprite sheet
+            ctx.drawImage(
+                sprite,
+                srcX, srcY, this.frameWidth, this.frameHeight,  // Source rectangle
+                -this.width / 2, -this.height / 2, this.width, this.height  // Destination
+            );
         } else {
             // Fallback: draw a simple tornado shape
             ctx.fillStyle = `rgba(210, 180, 140, ${this.opacity})`;
@@ -465,12 +501,12 @@ class DustDevil {
                     ctx.fill();
                 }
             } else {
-                // Draw enemy - try to use their sprite or animation
-                if (entity.animations && entity.animations.fly) {
-                    entity.animations.fly.draw(ctx, 0, 0, !entity.facingRight);
+                // Draw enemy - try to use their animation sprite
+                if (entity.animations && entity.animations.fly && entity.animations.fly.render) {
+                    entity.animations.fly.render(ctx, 0, 0);
                 } else {
-                    // Fallback to colored rectangle
-                    ctx.fillStyle = '#ff6600';
+                    // Fallback to colored rectangle based on enemy type
+                    ctx.fillStyle = entity.type === EnemyType.AGGRESSIVE ? '#ff4444' : '#ff6600';
                     ctx.fillRect(-entity.width / 2, -entity.height / 2, entity.width, entity.height);
                 }
             }
