@@ -107,12 +107,9 @@ const ArtilleryManager = {
             // Launch from random points along the horizon
             const launchX = 50 + Math.random() * (CONFIG.CANVAS_WIDTH - 100);
 
-            // Target location (where shell will land) - aim at upper/mid building height
+            // Target location (where shell will land) - near ground/building level
             const targetX = 80 + Math.random() * (CONFIG.CANVAS_WIDTH - 160);
-            // Target mid-to-upper building area (more visible, still damages buildings)
-            const minY = CONFIG.SKY_TOP + 150;  // Upper sky area
-            const maxY = CONFIG.STREET_Y - 150; // Above street level
-            const targetY = minY + Math.random() * (maxY - minY);
+            const targetY = CONFIG.STREET_Y - 20 - Math.random() * 80;
 
             // Create launch trail
             this.launchTrails.push({

@@ -1014,9 +1014,6 @@ function renderGame() {
     // Draw background (behind buildings)
     BackgroundManager.render(ctx);
 
-    // Draw distant artillery (background layer, behind buildings)
-    if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.render(ctx);
-
     // Draw buildings
     buildingManager.render(ctx);
 
@@ -1034,6 +1031,9 @@ function renderGame() {
 
     // Draw powerups
     PowerupManager.render(ctx);
+
+    // Draw artillery (target reticles on top of buildings for visibility)
+    if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.render(ctx);
 
     // Draw players
     playerManager.render(ctx);
