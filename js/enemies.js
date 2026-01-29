@@ -3931,7 +3931,7 @@ class Boss {
         this.phase = 0; // 0: Hover, 1: Strafe
         this.timer = 0;
         this.shootTimer = 0;
-        this.shootInterval = 1.0;
+        this.shootInterval = 1.8;
 
         // Animation
         this.swoopPhase = 0;

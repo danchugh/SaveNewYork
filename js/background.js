@@ -777,41 +777,9 @@ const BackgroundManager = {
         const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
         const isDusk = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'dusk';
 
-        // Try sprite first
-        const skylineSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('bg_skyline') : null;
-
-        if (skylineSprite) {
-            // === SPRITE RENDERING ===
-            // Seamlessly tile the skyline sprite horizontally
-            const spriteWidth = skylineSprite.width;
-            const spriteHeight = skylineSprite.height;
-            const baseY = CONFIG.STREET_Y - spriteHeight;
-
-            // Calculate base offset for parallax tiling
-            const totalOffset = offset + this.layer1Offset;
-            const tileOffset = ((totalOffset % spriteWidth) + spriteWidth) % spriteWidth;
-
-            // Use additive blending for black background transparency
-            ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
-
-            // Apply time-of-day dimming
-            if (isNight) {
-                ctx.globalAlpha = 0.6;
-            } else if (isDusk) {
-                ctx.globalAlpha = 0.8;
-            }
-
-            // Draw enough tiles to cover the screen
-            for (let x = -tileOffset; x < CONFIG.CANVAS_WIDTH + spriteWidth; x += spriteWidth) {
-                ctx.drawImage(skylineSprite, x, baseY);
-            }
-
-            ctx.restore();
-        } else {
-            // === PROCEDURAL FALLBACK ===
-            const silhouetteColor = isNight ? '#0f172a' : (isDusk ? '#431407' : '#374151');
-            ctx.fillStyle = silhouetteColor;
+        // Procedural NYC skyline with landmarks
+        const silhouetteColor = isNight ? '#0f172a' : (isDusk ? '#431407' : '#374151');
+        ctx.fillStyle = silhouetteColor;
 
             this.skyline.forEach(b => {
                 let rx = b.x - offset - this.layer1Offset;
@@ -858,48 +826,16 @@ const BackgroundManager = {
                     }
                 }
             });
-        }
     },
 
     renderRuins(ctx, offset) {
         const isNight = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'night';
         const isDusk = typeof DayCycle !== 'undefined' && DayCycle.currentTime === 'dusk';
 
-        // Try sprite first
-        const ruinsSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('bg_ruins') : null;
-
-        if (ruinsSprite) {
-            // === SPRITE RENDERING ===
-            const spriteWidth = ruinsSprite.width;
-            const spriteHeight = ruinsSprite.height;
-            const baseY = CONFIG.STREET_Y - spriteHeight;
-
-            // Calculate base offset for parallax tiling
-            const totalOffset = offset + this.layer2Offset;
-            const tileOffset = ((totalOffset % spriteWidth) + spriteWidth) % spriteWidth;
-
-            // Use additive blending for black background transparency
-            ctx.save();
-            ctx.globalCompositeOperation = 'lighter';
-
-            // Apply time-of-day dimming
-            if (isNight) {
-                ctx.globalAlpha = 0.5;
-            } else if (isDusk) {
-                ctx.globalAlpha = 0.7;
-            }
-
-            // Draw enough tiles to cover the screen
-            for (let x = -tileOffset; x < CONFIG.CANVAS_WIDTH + spriteWidth; x += spriteWidth) {
-                ctx.drawImage(ruinsSprite, x, baseY);
-            }
-
-            ctx.restore();
-        } else {
-            // === PROCEDURAL FALLBACK ===
-            const ruinColor = isNight ? '#1e293b' : (isDusk ? '#78350f' : '#4b5563');
-            const windowDark = isNight ? '#0f172a' : '#1f2937';
-            const windowLit = '#fbbf24';
+        // Procedural mid-ground ruins
+        const ruinColor = isNight ? '#1e293b' : (isDusk ? '#78350f' : '#4b5563');
+        const windowDark = isNight ? '#0f172a' : '#1f2937';
+        const windowLit = '#fbbf24';
 
             this.ruins.forEach(r => {
                 let rx = r.x - offset - this.layer2Offset;
@@ -932,7 +868,6 @@ const BackgroundManager = {
                     ctx.fillRect(rx + w.x, baseY - r.height + w.y, w.w, w.h);
                 });
             });
-        }
     },
 
     renderDebris(ctx, offset) {
