@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.74',
+    VERSION: 'v1.0.75',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -139,8 +139,8 @@ const CONFIG = {
     // Gunship Configuration
     GUNSHIP_SPEED: 35,
     GUNSHIP_HEALTH: 4,
-    GUNSHIP_ATTACK_COOLDOWN_MIN: 6,   // Seconds
-    GUNSHIP_ATTACK_COOLDOWN_MAX: 12,  // Seconds
+    GUNSHIP_ATTACK_COOLDOWN_MIN: 3,   // Seconds (was 6)
+    GUNSHIP_ATTACK_COOLDOWN_MAX: 6,   // Seconds (was 12)
     GUNSHIP_ATTACK_FRAME: 4,          // Frame to fire bombs during attack
     GUNSHIP_PROJECTILE_COUNT: 3,      // Number of bombs per attack
     GUNSHIP_BOMB_SPEED: 150,
@@ -153,7 +153,7 @@ const CONFIG = {
     MISSILE_DAMAGE_MIN: 3,
     MISSILE_DAMAGE_MAX: 5,
     GUNSHIP_MISSILES_PER_BARRAGE: 7,  // 6-8 range, use 7
-    GUNSHIP_POST_ATTACK_FLY_TIME: 3,  // Seconds to fly after attack before next attack
+    GUNSHIP_POST_ATTACK_FLY_TIME: 2,  // Seconds to fly after attack before next attack (was 3)
 
     // Artillery Configuration (Background artillery event)
     ARTILLERY_MIN_WAVE: 4,

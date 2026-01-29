@@ -293,6 +293,9 @@ const ArtilleryManager = {
     updateFallPhase(deltaTime) {
         this.phaseTimer += deltaTime;
 
+        // Check for player projectiles intercepting shells
+        this.checkProjectileCollisions();
+
         let allLanded = true;
 
         for (const shell of this.fallingShells) {
@@ -405,6 +408,56 @@ const ArtilleryManager = {
                 alpha: 0.7,
                 color: '#444444'
             });
+        }
+    },
+
+    // Check if player projectiles hit falling shells
+    checkProjectileCollisions() {
+        if (typeof projectileManager === 'undefined') return;
+
+        const playerProjectiles = projectileManager.getPlayerProjectiles();
+
+        for (const shell of this.fallingShells) {
+            if (!shell.active) continue;
+
+            for (const proj of playerProjectiles) {
+                if (!proj.active) continue;
+
+                // Simple circle collision
+                const dx = proj.x - shell.x;
+                const dy = proj.y - shell.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 20) {  // Shell hitbox radius
+                    // Destroy the shell
+                    shell.active = false;
+                    proj.active = false;
+
+                    // Small explosion effect
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addExplosion(shell.x, shell.y, 20, '#ff4400');
+                    }
+
+                    // Sound
+                    if (typeof SoundManager !== 'undefined') {
+                        SoundManager.enemyDeath();
+                    }
+
+                    // Award points (50-100)
+                    if (typeof game !== 'undefined' && game.addScore) {
+                        game.addScore(75);
+                    }
+
+                    // Clear the corresponding reticle
+                    if (this.targetReticles[shell.reticleIndex]) {
+                        this.targetReticles[shell.reticleIndex].shellLanded = true;
+                        this.targetReticles[shell.reticleIndex].alpha = 0;
+                    }
+
+                    console.log('Artillery shell intercepted!');
+                    break;
+                }
+            }
         }
     },
 

@@ -2387,11 +2387,12 @@ class Enemy {
                 if (!this.gunshipAttackFrameTriggered && (anim.isComplete || anim.currentFrame === anim.frameCount - 1)) {
                     this.gunshipAttackFrameTriggered = true;
 
-                    // Fire 6-8 missiles in a downward spread (220-320 degrees)
+                    // Fire 6-8 missiles in a downward spread (45-135 degrees)
+                    // Canvas: 0°=right, 90°=down, 180°=left
                     const missileCount = CONFIG.GUNSHIP_MISSILES_PER_BARRAGE ||
                         (6 + Math.floor(Math.random() * 3));
-                    const angleStart = 220;  // Down-left
-                    const angleEnd = 320;    // Down-right
+                    const angleStart = 45;   // Down-right
+                    const angleEnd = 135;    // Down-left
                     const angleStep = (angleEnd - angleStart) / (missileCount - 1);
 
                     if (typeof projectileManager !== 'undefined') {
