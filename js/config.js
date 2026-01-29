@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.75',
+    VERSION: 'v1.0.76',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -16,16 +16,16 @@ const CONFIG = {
     SKY_TOP: 40,           // Below HUD
     STREET_Y: 680,         // Street level (at bottom, no subway)
 
-    // Colors - Contra Operation Galuga style palette
+    // Colors - Bright NYC style palette
     COLORS: {
-        // DAY - Moody atmospheric (not bright blue)
-        SKY: '#5b7c99',            // Muted steel blue
-        SKY_TOP: '#3d5a73',        // Darker at top
-        STREET: '#2d2d2d',         // Dark asphalt
-        BUILDING_LIGHT: '#6b7280', // Steel grey buildings
-        BUILDING_DARK: '#4b5563',  // Darker grey buildings
-        BUILDING_WINDOW: '#1f2937', // Very dark windows
-        BUILDING_WINDOW_LIT: '#fbbf24', // Amber lit windows
+        // DAY - Vibrant city colors
+        SKY: '#4da6ff',            // Bright sky blue
+        SKY_TOP: '#1e90ff',        // Dodger blue at top
+        STREET: '#3a3a3a',         // Medium asphalt
+        BUILDING_LIGHT: '#8899aa', // Light steel blue buildings
+        BUILDING_DARK: '#667788',  // Medium blue-grey buildings
+        BUILDING_WINDOW: '#2a3a4a', // Dark blue windows
+        BUILDING_WINDOW_LIT: '#ffd700', // Gold lit windows
 
         // UI
         HUD_BG: '#0f0f0f',

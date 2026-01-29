@@ -62,12 +62,48 @@ const ConstructionManager = {
     triggerRepair(building) {
         // Check if this building already has an active repair job
         const existingJob = this.activeJobs.find(job => job.targetBuilding === building);
+
         if (existingJob) {
-            console.log('Building already being repaired - rescue bonus only');
+            if (existingJob.state === ConstructionState.DRIVING_OUT) {
+                // Vehicle is leaving - check for pending queued job
+                const pendingJob = this.activeJobs.find(job =>
+                    job.targetBuilding === building && job.state === ConstructionState.PENDING
+                );
+
+                if (pendingJob) {
+                    // Stack bonus onto existing pending job
+                    pendingJob.maxBlocksToRepair += 10;
+                    console.log(`Stacked +10 blocks onto pending repair (now ${pendingJob.maxBlocksToRepair} total)`);
+
+                    if (typeof EffectsManager !== 'undefined') {
+                        const bx = building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                        EffectsManager.addTextPopup(bx, CONFIG.STREET_Y - 50, '+10 QUEUED', '#4ade80');
+                    }
+                } else {
+                    // Create new pending job for after current leaves
+                    const job = createRepairJob(building);
+                    this.activeJobs.push(job);
+                    console.log(`Construction crew queued for building (vehicle departing)`);
+
+                    if (typeof EffectsManager !== 'undefined') {
+                        const bx = building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                        EffectsManager.addTextPopup(bx, CONFIG.STREET_Y - 50, 'CREW QUEUED', '#22d3ee');
+                    }
+                }
+            } else {
+                // Active repair in progress - stack bonus blocks
+                existingJob.maxBlocksToRepair += 10;
+                console.log(`Stacked +10 blocks onto active repair (now ${existingJob.maxBlocksToRepair} total)`);
+
+                if (typeof EffectsManager !== 'undefined') {
+                    const bx = building.x + (building.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                    EffectsManager.addTextPopup(bx, building.y - 20, `+10 REPAIR (${existingJob.maxBlocksToRepair} TOTAL)`, '#4ade80');
+                }
+            }
             return false;
         }
 
-        // Create new repair job for this building
+        // No existing job - create new repair job for this building
         const job = createRepairJob(building);
         this.activeJobs.push(job);
         console.log(`Construction crew dispatched to building! (${this.activeJobs.length} active jobs)`);

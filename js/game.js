@@ -471,6 +471,36 @@ function checkCollisions() {
         }
     }
 
+    // Gunship missiles vs players
+    if (typeof projectileManager !== 'undefined' && projectileManager.missiles) {
+        for (const p of playerManager.getActivePlayers()) {
+            if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+            const playerBounds = getPlayerBounds(p);
+
+            for (const missile of projectileManager.missiles) {
+                if (!missile.active) continue;
+
+                if (circleRectIntersects(
+                    { x: missile.x, y: missile.y, radius: missile.radius },
+                    playerBounds
+                )) {
+                    // Calculate bounce direction from missile angle
+                    const bounceX = Math.cos(missile.angle * Math.PI / 180);
+                    const bounceY = Math.sin(missile.angle * Math.PI / 180);
+                    p.takeDamage(-bounceX, -bounceY);
+                    missile.active = false;
+
+                    // Explosion effect
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addExplosion(missile.x, missile.y, 25, '#ff4400');
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     // Enemy projectiles vs buildings
     for (const proj of enemyProjectiles) {
         if (!proj.active) continue;
@@ -993,11 +1023,11 @@ function renderGame() {
         skyGradient.addColorStop(0.7, '#9d4edd');  // Bright purple
         skyGradient.addColorStop(1, '#c77dff');    // Light purple-pink at horizon
     } else {
-        // Day - moody atmospheric, not bright blue
-        skyGradient.addColorStop(0, '#3d5a73');    // Dark steel blue at top
-        skyGradient.addColorStop(0.4, '#5b7c99');  // Muted steel blue
-        skyGradient.addColorStop(0.8, '#8fa4b8');  // Lighter at middle
-        skyGradient.addColorStop(1, '#b8c9d6');    // Hazy at horizon
+        // Day - bright vibrant NYC sky
+        skyGradient.addColorStop(0, '#1e90ff');    // Dodger blue at top
+        skyGradient.addColorStop(0.35, '#4da6ff'); // Bright sky blue
+        skyGradient.addColorStop(0.7, '#87ceeb');  // Light sky blue
+        skyGradient.addColorStop(1, '#c5e8f7');    // Pale blue at horizon
     }
 
     ctx.fillStyle = skyGradient;
@@ -1013,6 +1043,9 @@ function renderGame() {
 
     // Draw background (behind buildings)
     BackgroundManager.render(ctx);
+
+    // Draw artillery launch trails (distant, behind buildings)
+    if (typeof ArtilleryManager !== 'undefined') ArtilleryManager.renderBackground(ctx);
 
     // Draw buildings
     buildingManager.render(ctx);

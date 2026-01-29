@@ -473,14 +473,29 @@ const ArtilleryManager = {
     },
 
     render(ctx) {
+        // Render foreground elements (reticles, shells, smoke) - call after buildings
+        this.renderForeground(ctx);
+    },
+
+    // Render background elements (launch trails) - call BEFORE buildings
+    renderBackground(ctx) {
         // Only render in wave 4+ and during gameplay
         if (typeof game === 'undefined' || game.state !== GameState.PLAYING) return;
         if (typeof enemyManager === 'undefined' || enemyManager.waveNumber < (CONFIG.ARTILLERY_MIN_WAVE || 4)) return;
 
         ctx.save();
-
-        // Render launch trails (during launch phase)
+        // Render launch trails (distant rockets in background)
         this.renderLaunchTrails(ctx);
+        ctx.restore();
+    },
+
+    // Render foreground elements - call AFTER buildings
+    renderForeground(ctx) {
+        // Only render in wave 4+ and during gameplay
+        if (typeof game === 'undefined' || game.state !== GameState.PLAYING) return;
+        if (typeof enemyManager === 'undefined' || enemyManager.waveNumber < (CONFIG.ARTILLERY_MIN_WAVE || 4)) return;
+
+        ctx.save();
 
         // Render target reticles (during hang and fall phases)
         this.renderTargetReticles(ctx);

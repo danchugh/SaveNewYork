@@ -369,8 +369,8 @@ class CivilianManager {
     constructor() {
         this.civilians = [];
         this.spawnTimer = 0;
-        this.spawnInterval = 15;
-        this.maxCivilians = 3;
+        this.spawnInterval = 12;  // Was 15, reduced for ~25% faster spawns
+        this.maxCivilians = 4;    // Was 3, allow one more simultaneous
     }
 
     reset() {
