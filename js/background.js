@@ -300,35 +300,10 @@ const BackgroundManager = {
             // Zone 2: Desert background
             this.renderDesertBackground(ctx, offsetX, isNight, isDusk);
         } else {
-            // Zone 1: City background
-            const cityscapeSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('bg_cityscape') : null;
-
-            if (cityscapeSprite) {
-                const spriteWidth = cityscapeSprite.width;
-                const spriteHeight = cityscapeSprite.height;
-
-                const scaleX = CONFIG.CANVAS_WIDTH / spriteWidth;
-                const scaleY = CONFIG.CANVAS_HEIGHT / spriteHeight;
-                const scale = Math.max(scaleX, scaleY);
-
-                const scaledWidth = spriteWidth * scale;
-                const scaledHeight = spriteHeight * scale;
-
-                const drawX = (CONFIG.CANVAS_WIDTH - scaledWidth) / 2;
-                const drawY = (CONFIG.CANVAS_HEIGHT - scaledHeight) / 2;
-
-                ctx.save();
-                if (isNight) {
-                    ctx.globalAlpha = 0.7;
-                } else if (isDusk) {
-                    ctx.globalAlpha = 0.9;
-                }
-                ctx.drawImage(cityscapeSprite, drawX, drawY, scaledWidth, scaledHeight);
-                ctx.restore();
-            } else {
-                this.renderSkyline(ctx, offsetX * 0.15);
-                this.renderRuins(ctx, offsetX * 0.3);
-            }
+            // Zone 1: City background - use procedural rendering with bright sky
+            // Render distant skyline silhouettes (sky gradient shows through from game.js)
+            this.renderSkyline(ctx, offsetX * 0.15);
+            this.renderRuins(ctx, offsetX * 0.3);
 
             // Render ash particles for Zone 1
             this.ashParticles.forEach(a => {
