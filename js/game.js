@@ -1024,10 +1024,10 @@ function renderGame() {
         skyGradient.addColorStop(1, '#c77dff');    // Light purple-pink at horizon
     } else {
         // Day - bright vibrant NYC sky
-        skyGradient.addColorStop(0, '#1e90ff');    // Dodger blue at top
-        skyGradient.addColorStop(0.35, '#4da6ff'); // Bright sky blue
-        skyGradient.addColorStop(0.7, '#87ceeb');  // Light sky blue
-        skyGradient.addColorStop(1, '#c5e8f7');    // Pale blue at horizon
+        skyGradient.addColorStop(0, '#0077BB');    // Deep blue at top
+        skyGradient.addColorStop(0.35, '#56B4E9'); // Clear sky blue
+        skyGradient.addColorStop(0.7, '#87CEEB');  // Light sky blue
+        skyGradient.addColorStop(1, '#B0E0E6');    // Powder blue at horizon
     }
 
     ctx.fillStyle = skyGradient;
@@ -1037,6 +1037,16 @@ function renderGame() {
         CONFIG.CANVAS_WIDTH + EffectsManager.shakeIntensity * 2,
         CONFIG.STREET_Y - CONFIG.SKY_TOP + EffectsManager.shakeIntensity * 2
     );
+
+    // Add city ambient glow at night (light pollution effect)
+    if (DayCycle.currentTime === 'night') {
+        const cityGlow = ctx.createLinearGradient(0, CONFIG.STREET_Y, 0, CONFIG.STREET_Y - 250);
+        cityGlow.addColorStop(0, 'rgba(255, 180, 120, 0.12)');
+        cityGlow.addColorStop(0.5, 'rgba(255, 150, 100, 0.06)');
+        cityGlow.addColorStop(1, 'rgba(255, 180, 120, 0)');
+        ctx.fillStyle = cityGlow;
+        ctx.fillRect(0, CONFIG.STREET_Y - 250, CONFIG.CANVAS_WIDTH, 250);
+    }
 
     // Draw celestial bodies (stars, sun/moon, clouds, fireflies)
     DayCycle.render(ctx);

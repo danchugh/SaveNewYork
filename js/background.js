@@ -2,6 +2,111 @@
 // PARALLAX BACKGROUND SYSTEM - Contra Operation Galuga Style
 // ============================================
 
+// NYC Landmark silhouette templates for Zone 1 skyline
+const NYC_LANDMARKS = {
+    empireState: {
+        width: 50,
+        height: 320,
+        draw: function(ctx, x, baseY) {
+            ctx.beginPath();
+            ctx.moveTo(x, baseY);
+            ctx.lineTo(x, baseY - 200);
+            ctx.lineTo(x + 8, baseY - 200);
+            ctx.lineTo(x + 8, baseY - 240);
+            ctx.lineTo(x + 15, baseY - 240);
+            ctx.lineTo(x + 15, baseY - 270);
+            ctx.lineTo(x + 20, baseY - 270);
+            ctx.lineTo(x + 25, baseY - 320);  // Spire tip
+            ctx.lineTo(x + 30, baseY - 270);
+            ctx.lineTo(x + 35, baseY - 270);
+            ctx.lineTo(x + 35, baseY - 240);
+            ctx.lineTo(x + 42, baseY - 240);
+            ctx.lineTo(x + 42, baseY - 200);
+            ctx.lineTo(x + 50, baseY - 200);
+            ctx.lineTo(x + 50, baseY);
+            ctx.closePath();
+            ctx.fill();
+        }
+    },
+    chrysler: {
+        width: 45,
+        height: 280,
+        draw: function(ctx, x, baseY) {
+            ctx.beginPath();
+            ctx.moveTo(x, baseY);
+            ctx.lineTo(x, baseY - 180);
+            // Art deco crown - triangular arches
+            var crownLevels = 6;
+            for (var i = 0; i < crownLevels; i++) {
+                var py = baseY - 180 - i * 15;
+                var inset = i * 3;
+                ctx.lineTo(x + inset, py);
+                ctx.lineTo(x + 22, py - 8);
+                ctx.lineTo(x + 45 - inset, py);
+            }
+            ctx.lineTo(x + 22, baseY - 280);  // Spire
+            ctx.lineTo(x + 45, baseY);
+            ctx.closePath();
+            ctx.fill();
+        }
+    },
+    freedomTower: {
+        width: 40,
+        height: 350,
+        draw: function(ctx, x, baseY) {
+            ctx.beginPath();
+            ctx.moveTo(x, baseY);
+            ctx.lineTo(x + 3, baseY - 280);
+            ctx.lineTo(x + 15, baseY - 320);
+            ctx.lineTo(x + 20, baseY - 350);  // Antenna tip
+            ctx.lineTo(x + 25, baseY - 320);
+            ctx.lineTo(x + 37, baseY - 280);
+            ctx.lineTo(x + 40, baseY);
+            ctx.closePath();
+            ctx.fill();
+        }
+    },
+    woolworth: {
+        width: 35,
+        height: 240,
+        draw: function(ctx, x, baseY) {
+            // Gothic revival tower
+            ctx.beginPath();
+            ctx.moveTo(x, baseY);
+            ctx.lineTo(x, baseY - 180);
+            ctx.lineTo(x + 5, baseY - 180);
+            ctx.lineTo(x + 5, baseY - 220);
+            ctx.lineTo(x + 17, baseY - 240);  // Gothic spire
+            ctx.lineTo(x + 30, baseY - 220);
+            ctx.lineTo(x + 30, baseY - 180);
+            ctx.lineTo(x + 35, baseY - 180);
+            ctx.lineTo(x + 35, baseY);
+            ctx.closePath();
+            ctx.fill();
+        }
+    },
+    waterTower: {
+        width: 25,
+        height: 50,
+        draw: function(ctx, x, baseY) {
+            // Legs
+            ctx.fillRect(x + 4, baseY - 35, 3, 35);
+            ctx.fillRect(x + 18, baseY - 35, 3, 35);
+            // Tank body (cylinder as ellipse)
+            ctx.beginPath();
+            ctx.ellipse(x + 12, baseY - 45, 12, 18, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Conical roof
+            ctx.beginPath();
+            ctx.moveTo(x, baseY - 55);
+            ctx.lineTo(x + 12, baseY - 75);
+            ctx.lineTo(x + 25, baseY - 55);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+};
+
 const BackgroundManager = {
     time: 0,
     volcanoPulse: 0,
@@ -69,20 +174,48 @@ const BackgroundManager = {
             this.ashParticles.push(this.createAshParticle());
         }
 
-        // LAYER 1: Far distant city silhouettes
+        // LAYER 1: Far distant city silhouettes with NYC landmarks
         this.skyline = [];
         let x = 0;
+        let landmarkIndex = 0;
+        const landmarkTypes = ['empireState', 'chrysler', 'freedomTower', 'woolworth'];
+        const landmarkSpacing = 280; // Space between landmarks
+
         while (x < CONFIG.CANVAS_WIDTH * 1.5) {
-            const width = 30 + Math.random() * 60;
-            const height = 120 + Math.random() * 180;
-            this.skyline.push({
-                x: x,
-                width: width,
-                height: height,
-                type: Math.random() > 0.6 ? 'spire' : 'block',
-                damaged: Math.random() > 0.4
-            });
-            x += width - 5;
+            // Check if we should place a landmark
+            if (x > 50 && (x % landmarkSpacing) < 60 && landmarkIndex < landmarkTypes.length) {
+                const landmarkType = landmarkTypes[landmarkIndex];
+                const landmark = NYC_LANDMARKS[landmarkType];
+                this.skyline.push({
+                    x: x,
+                    width: landmark.width,
+                    height: landmark.height,
+                    type: 'landmark',
+                    landmarkType: landmarkType,
+                    damaged: false
+                });
+                x += landmark.width + 10;
+                landmarkIndex++;
+            } else {
+                // Regular building
+                const width = 30 + Math.random() * 60;
+                const height = 120 + Math.random() * 180;
+                this.skyline.push({
+                    x: x,
+                    width: width,
+                    height: height,
+                    type: Math.random() > 0.7 ? 'spire' : 'block',
+                    damaged: Math.random() > 0.5
+                });
+                x += width - 5;
+            }
+        }
+
+        // Add scattered water towers on some buildings
+        for (let i = 0; i < this.skyline.length; i++) {
+            if (this.skyline[i].type === 'block' && Math.random() > 0.85) {
+                this.skyline[i].hasWaterTower = true;
+            }
         }
 
         // LAYER 2: Mid-ground ruined buildings with windows
@@ -304,6 +437,12 @@ const BackgroundManager = {
             // Render distant skyline silhouettes (sky gradient shows through from game.js)
             this.renderSkyline(ctx, offsetX * 0.15);
             this.renderRuins(ctx, offsetX * 0.3);
+
+            // Atmospheric haze for depth
+            this.renderAtmosphericHaze(ctx, isNight, isDusk);
+
+            // God rays during dusk/dawn
+            this.renderGodRays(ctx);
 
             // Render ash particles for Zone 1
             this.ashParticles.forEach(a => {
@@ -681,8 +820,11 @@ const BackgroundManager = {
 
                 const baseY = CONFIG.STREET_Y;
 
-                // Draw building shape
-                if (b.damaged) {
+                // Check if this is a landmark
+                if (b.type === 'landmark' && NYC_LANDMARKS[b.landmarkType]) {
+                    NYC_LANDMARKS[b.landmarkType].draw(ctx, rx, baseY);
+                } else if (b.damaged) {
+                    // Damaged building silhouette
                     ctx.beginPath();
                     ctx.moveTo(rx, baseY);
                     ctx.lineTo(rx, baseY - b.height * 0.7);
@@ -693,7 +835,15 @@ const BackgroundManager = {
                     ctx.lineTo(rx + b.width, baseY);
                     ctx.fill();
                 } else {
+                    // Regular building
                     ctx.fillRect(rx, baseY - b.height, b.width, b.height);
+                }
+
+                // Draw water tower if present
+                if (b.hasWaterTower && NYC_LANDMARKS.waterTower) {
+                    const towerX = rx + b.width / 2 - 12;
+                    const towerBaseY = baseY - b.height;
+                    NYC_LANDMARKS.waterTower.draw(ctx, towerX, towerBaseY);
                 }
 
                 // Antenna on spires
@@ -807,5 +957,68 @@ const BackgroundManager = {
                 ctx.fill();
             }
         });
+    },
+
+    renderAtmosphericHaze(ctx, isNight, isDusk) {
+        // Skip for Zone 2
+        const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
+        if (zone !== 1) return;
+
+        const baseAlpha = isNight ? 0.2 : (isDusk ? 0.25 : 0.35);
+
+        // Far distance haze (gives depth to skyline)
+        const haze = ctx.createLinearGradient(0, CONFIG.STREET_Y - 350, 0, CONFIG.STREET_Y - 50);
+        haze.addColorStop(0, 'rgba(70, 130, 180, 0)');
+        haze.addColorStop(0.5, `rgba(70, 130, 180, ${baseAlpha * 0.5})`);
+        haze.addColorStop(1, `rgba(70, 130, 180, ${baseAlpha})`);
+
+        ctx.fillStyle = haze;
+        ctx.fillRect(0, CONFIG.STREET_Y - 350, CONFIG.CANVAS_WIDTH, 300);
+    },
+
+    renderGodRays(ctx) {
+        // Only render during dusk or dawn in Zone 1
+        const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
+        if (zone !== 1) return;
+
+        const time = typeof DayCycle !== 'undefined' ? DayCycle.currentTime : 'day';
+        if (time !== 'dusk' && time !== 'dawn') return;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        // Different colors for dusk vs dawn
+        const rayColor = time === 'dusk'
+            ? 'rgba(255, 180, 80, 0.10)'   // Warm orange for dusk
+            : 'rgba(255, 200, 230, 0.08)'; // Pink for dawn
+
+        // 5 light rays at different positions
+        const rayPositions = [120, 280, 460, 640, 820];
+
+        rayPositions.forEach((startX, i) => {
+            const rayWidth = 35 + (i % 3) * 15;
+            // Subtle animation - rays drift slowly
+            const drift = Math.sin(this.time * 0.3 + i * 1.5) * 15;
+            const spreadX = 70 + i * 5; // How much ray spreads at bottom
+
+            const gradient = ctx.createLinearGradient(
+                startX + drift, CONFIG.SKY_TOP,
+                startX + spreadX + drift, CONFIG.STREET_Y
+            );
+            gradient.addColorStop(0, rayColor);
+            gradient.addColorStop(0.4, rayColor.replace('0.10', '0.06').replace('0.08', '0.04'));
+            gradient.addColorStop(1, 'rgba(255, 200, 150, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(startX + drift, CONFIG.SKY_TOP);
+            ctx.lineTo(startX + rayWidth + drift, CONFIG.SKY_TOP);
+            ctx.lineTo(startX + spreadX + rayWidth + drift, CONFIG.STREET_Y);
+            ctx.lineTo(startX + spreadX * 0.3 + drift, CONFIG.STREET_Y);
+            ctx.closePath();
+            ctx.fill();
+        });
+
+        ctx.restore();
     }
 };

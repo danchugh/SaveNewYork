@@ -3,7 +3,7 @@
 // ============================================
 const CONFIG = {
     // Version for debugging (increment with each change)
-    VERSION: 'v1.0.77',
+    VERSION: 'v1.0.78',
     // Canvas - Base design resolution (game logic uses these)
     CANVAS_WIDTH: 960,
     CANVAS_HEIGHT: 720,
@@ -18,13 +18,13 @@ const CONFIG = {
 
     // Colors - Bright NYC style palette
     COLORS: {
-        // DAY - Vibrant city colors
-        SKY: '#4da6ff',            // Bright sky blue
-        SKY_TOP: '#1e90ff',        // Dodger blue at top
-        STREET: '#3a3a3a',         // Medium asphalt
-        BUILDING_LIGHT: '#8899aa', // Light steel blue buildings
-        BUILDING_DARK: '#667788',  // Medium blue-grey buildings
-        BUILDING_WINDOW: '#2a3a4a', // Dark blue windows
+        // DAY - Brighter, cleaner NYC sky
+        SKY: '#56B4E9',              // Clear sky blue
+        SKY_TOP: '#0077BB',          // Deep blue at top
+        STREET: '#4a4a4a',           // Lighter asphalt
+        BUILDING_LIGHT: '#A5B5C5',   // Light steel
+        BUILDING_DARK: '#8595A5',    // Medium steel
+        BUILDING_WINDOW: '#2a3a4a',  // Dark blue windows
         BUILDING_WINDOW_LIT: '#ffd700', // Gold lit windows
 
         // UI
@@ -32,23 +32,23 @@ const CONFIG = {
         HUD_TEXT: '#22d3ee',   // Cyan neon
         BORDER: '#1a1a2e',     // Deep blue-black
 
-        // NIGHT - Deep purple/dark blue (like concept art)
-        SKY_NIGHT: '#1a1a2e',      // Deep purple-black
-        SKY_NIGHT_TOP: '#0d0d1a',  // Almost black at top
+        // NIGHT - Deeper blues
+        SKY_NIGHT: '#0D1B2A',        // Deep blue-black
+        SKY_NIGHT_TOP: '#0d0d1a',    // Almost black at top
         STREET_NIGHT: '#0f0f0f',
-        BUILDING_LIGHT_NIGHT: '#2d2d44',
+        BUILDING_LIGHT_NIGHT: '#1B263B',
         BUILDING_DARK_NIGHT: '#1a1a2e',
         BUILDING_WINDOW_NIGHT: '#fbbf24',
 
-        // DUSK - Orange/red to purple gradient
-        SKY_DUSK: '#7c2d12',       // Deep burnt orange
-        SKY_DUSK_TOP: '#4a1942',   // Purple at top
-        BUILDING_LIGHT_DUSK: '#5c3d2e',
+        // DUSK - Warmer orange/gold
+        SKY_DUSK: '#CC5500',         // Vibrant orange
+        SKY_DUSK_TOP: '#6B2D5C',     // Purple-magenta
+        BUILDING_LIGHT_DUSK: '#B87333', // Copper/bronze
         BUILDING_DARK_DUSK: '#3d2520',
 
-        // DAWN - Purple/pink  
-        SKY_DAWN: '#9d4edd',       // Purple
-        SKY_DAWN_TOP: '#5b2c6f',   // Deeper purple at top
+        // DAWN - Softer pink/lavender
+        SKY_DAWN: '#E0AAFF',         // Soft lavender
+        SKY_DAWN_TOP: '#7B2CBF',     // Rich purple
         BUILDING_LIGHT_DAWN: '#6b4984',
         BUILDING_DARK_DAWN: '#4a3660'
     },

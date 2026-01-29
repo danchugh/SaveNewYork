@@ -456,6 +456,27 @@ class Building {
             ctx.fillRect(pos.x + pos.width - 2, pos.y, 2, pos.height);
         }
 
+        // Fire escape on left edge of some buildings
+        if (col === 0 && row > 1 && row < this.heightBlocks - 1) {
+            var fireEscapeSeed = (this.x + row) % 5;
+            if (fireEscapeSeed === 0) {  // Every 5th eligible row
+                ctx.fillStyle = '#1a1a1a';
+                // Platform
+                ctx.fillRect(pos.x - 12, pos.y + pos.height - 4, 14, 4);
+                // Railing posts
+                ctx.fillRect(pos.x - 12, pos.y + 2, 2, pos.height - 6);
+                ctx.fillRect(pos.x, pos.y + 2, 2, pos.height - 6);
+                // Railing bars
+                ctx.fillRect(pos.x - 12, pos.y + pos.height * 0.3, 14, 2);
+                ctx.fillRect(pos.x - 12, pos.y + pos.height * 0.6, 14, 2);
+                // Ladder going down
+                if (row < this.heightBlocks - 2) {
+                    ctx.fillRect(pos.x - 7, pos.y + pos.height, 2, 8);
+                    ctx.fillRect(pos.x - 3, pos.y + pos.height, 2, 8);
+                }
+            }
+        }
+
         // Horizontal floor line
         ctx.fillStyle = `hsla(0, 0%, 0%, 0.3)`;
         ctx.fillRect(pos.x, pos.y + pos.height - 1, pos.width, 1);
@@ -482,6 +503,45 @@ class Building {
                 ctx.fillRect(pos.x + 2, pos.y - 6, 8, 6);
                 ctx.fillStyle = '#333';
                 ctx.fillRect(pos.x + 3, pos.y - 5, 6, 4);
+            }
+
+            // Rooftop water tank on some buildings (top row, center block)
+            if (col === Math.floor(this.widthBlocks / 2)) {
+                var tankSeed = Math.floor(this.x / 50) % 4;
+                if (tankSeed === 0) {  // ~25% of buildings
+                    var tankX = pos.x + pos.width / 2;
+                    var tankY = pos.y;
+
+                    // Tank legs
+                    ctx.fillStyle = '#2a2a2a';
+                    ctx.fillRect(tankX - 8, tankY - 25, 3, 25);
+                    ctx.fillRect(tankX + 5, tankY - 25, 3, 25);
+
+                    // Tank body (wooden barrel style)
+                    ctx.fillStyle = '#5c4a3a';
+                    ctx.beginPath();
+                    ctx.ellipse(tankX, tankY - 35, 10, 14, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Metal bands
+                    ctx.strokeStyle = '#3a3a3a';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.ellipse(tankX, tankY - 28, 10, 3, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.ellipse(tankX, tankY - 42, 10, 3, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Conical roof
+                    ctx.fillStyle = '#4a4a4a';
+                    ctx.beginPath();
+                    ctx.moveTo(tankX - 12, tankY - 45);
+                    ctx.lineTo(tankX, tankY - 58);
+                    ctx.lineTo(tankX + 12, tankY - 45);
+                    ctx.closePath();
+                    ctx.fill();
+                }
             }
         }
 
@@ -527,7 +587,7 @@ class Building {
             }
         }
 
-        // Windows (middle floors)
+        // Windows (middle floors) with variations
         if (!isTopRow && !isBottomRow) {
             const winsPerBlock = pos.width > 20 ? 2 : 1;
             const winWidth = 6;
@@ -537,20 +597,63 @@ class Building {
             for (let w = 0; w < winsPerBlock; w++) {
                 const winX = pos.x + spacing * (w + 1) - winWidth / 2;
                 const winY = pos.y + (pos.height - winHeight) / 2;
-                const thisWinLit = (isNight || isDusk) && ((blockSeed + w * 37) % 100) < 50;
 
-                if (thisWinLit) {
-                    ctx.fillStyle = '#FFDD33';
+                // Window variation based on stable seed (so windows don't flicker randomly)
+                const windowSeed = (row * 100 + col + Math.floor(this.x) + w * 37) % 100;
+                const windowType = windowSeed % 5;  // 0-4 types
+
+                // Only apply variations at night/dusk when windows matter
+                const isNightOrDusk = isNight || isDusk;
+
+                if (isNightOrDusk && windowSeed < 60) {  // 60% of windows are lit at night
+                    switch(windowType) {
+                        case 0:
+                        case 1:
+                            // Warm yellow light (most common)
+                            ctx.fillStyle = '#FFD700';
+                            ctx.fillRect(winX, winY, winWidth, winHeight);
+                            ctx.fillStyle = '#FFEE88';
+                            ctx.fillRect(winX + 1, winY + 1, winWidth - 2, winHeight - 2);
+                            // Glow
+                            ctx.save();
+                            ctx.globalCompositeOperation = 'lighter';
+                            ctx.globalAlpha = isNight ? 0.25 : 0.1;
+                            ctx.fillStyle = '#FFCC44';
+                            ctx.fillRect(winX - 2, winY - 2, winWidth + 4, winHeight + 4);
+                            ctx.restore();
+                            break;
+                        case 2:
+                            // Cool TV/monitor glow with subtle flicker
+                            var flicker = Math.sin(Date.now() / 300 + windowSeed) > 0.3 ? 1 : 0.75;
+                            ctx.fillStyle = `rgba(140, 170, 255, ${flicker})`;
+                            ctx.fillRect(winX, winY, winWidth, winHeight);
+                            break;
+                        case 3:
+                            // Curtained window - warm glow behind curtain
+                            ctx.fillStyle = '#2a1a10';
+                            ctx.fillRect(winX, winY, winWidth, winHeight);
+                            ctx.fillStyle = 'rgba(255, 200, 120, 0.35)';
+                            ctx.fillRect(winX + 1, winY + 1, winWidth - 2, winHeight - 2);
+                            // Curtain divider line
+                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(winX + winWidth/2, winY);
+                            ctx.lineTo(winX + winWidth/2, winY + winHeight);
+                            ctx.stroke();
+                            break;
+                        case 4:
+                            // Dim/distant light
+                            ctx.fillStyle = 'rgba(255, 220, 150, 0.5)';
+                            ctx.fillRect(winX, winY, winWidth, winHeight);
+                            break;
+                    }
+                } else if (!isNightOrDusk && windowSeed % 8 === 0) {
+                    // Daytime - occasional sky reflection
+                    ctx.fillStyle = 'rgba(135, 206, 235, 0.3)';
                     ctx.fillRect(winX, winY, winWidth, winHeight);
-                    ctx.fillStyle = '#FFEE88';
-                    ctx.fillRect(winX + 1, winY + 1, winWidth - 2, winHeight - 2);
-                    ctx.save();
-                    ctx.globalCompositeOperation = 'lighter';
-                    ctx.globalAlpha = isNight ? 0.25 : 0.1;
-                    ctx.fillStyle = '#FFCC44';
-                    ctx.fillRect(winX - 2, winY - 2, winWidth + 4, winHeight + 4);
-                    ctx.restore();
                 } else {
+                    // Dark window
                     ctx.fillStyle = '#0a0a18';
                     ctx.fillRect(winX, winY, winWidth, winHeight);
                     ctx.fillStyle = 'rgba(100, 120, 150, 0.2)';
