@@ -58,20 +58,37 @@ const WeatherManager = {
         this.pendingDamage = null;
     },
 
-    // Start random weather with 30% chance (More frequent for atmosphere)
+    // Start random weather (reduced frequency)
     startRandomWeather() {
         // Clear existing particles when weather changes
         this.rainParticles = [];
         this.mistParticles = [];
         this.sandParticles = [];
 
-        // Get current zone
+        // Get current zone and time of day
         const zone = (typeof game !== 'undefined' && game.currentZone) ? game.currentZone : 1;
+        const timeOfDay = (typeof DayCycle !== 'undefined') ? DayCycle.currentTime : 'day';
+        const isDay = (timeOfDay === 'day');
 
-        // 30% chance for Clear
-        if (Math.random() < 0.3) {
+        // 55% chance for Clear (reduced weather frequency)
+        if (Math.random() < 0.55) {
             this.currentWeather = WeatherType.CLEAR;
             this.targetIntensity = 0;
+            return;
+        }
+
+        // During daytime, only allow dry lightning (no rain)
+        if (isDay && zone === 1) {
+            // 70% clear during day, 30% dry lightning
+            if (Math.random() < 0.7) {
+                this.currentWeather = WeatherType.CLEAR;
+                this.targetIntensity = 0;
+                return;
+            }
+            this.currentWeather = WeatherType.LIGHTNING;
+            this.targetIntensity = 1;
+            this.windStrength = 0;
+            console.log(`Weather started: lightning (dry), zone: ${zone}`);
             return;
         }
 
@@ -89,7 +106,7 @@ const WeatherManager = {
                 weather = WeatherType.LIGHTNING; // Dry lightning only
             }
         } else {
-            // Zone 1 (City): Rain-based weather
+            // Zone 1 (City): Rain-based weather (only during dusk/night/dawn)
             if (roll < 40) {
                 weather = WeatherType.RAIN;
             } else if (roll < 60) {
@@ -104,11 +121,15 @@ const WeatherManager = {
         this.currentWeather = weather;
         this.targetIntensity = 1;
 
-        // Set wind
+        // Set wind only for wind-based weather types
         this.windDirection = Math.random() < 0.5 ? -1 : 1;
-        this.windStrength = 30 + Math.random() * 70;
+        if (weather === WeatherType.RAIN_WIND || weather === WeatherType.SANDSTORM || weather === WeatherType.SANDSTORM_LIGHTNING) {
+            this.windStrength = 30 + Math.random() * 70;
+        } else {
+            this.windStrength = 0;
+        }
 
-        console.log(`Weather started: ${weather}, wind: ${this.windStrength}, zone: ${zone}`);
+        console.log(`Weather started: ${weather}, wind: ${this.windStrength}, direction: ${this.windDirection}, zone: ${zone}`);
     },
 
     fadeOut() {
@@ -124,10 +145,9 @@ const WeatherManager = {
     },
 
     hasWind() {
-        // Wind applies during rain_wind, sandstorm, or when windStrength is high
+        // Wind only applies during explicit wind weather types
         return this.currentWeather.includes('wind') ||
-               this.currentWeather.includes('sandstorm') ||
-               this.windStrength > 20;
+               this.currentWeather.includes('sandstorm');
     },
 
     hasLightning() {
@@ -135,9 +155,10 @@ const WeatherManager = {
     },
 
     // Get wind effect for player movement (returns pixels per second drift)
+    // Positive = push right, Negative = push left
     getWindEffect() {
-        if (this.intensity <= 0 || this.windStrength <= 0) return 0;
-        return this.windStrength * this.intensity * 0.5; // Scale down for playability
+        if (!this.hasWind() || this.intensity <= 0 || this.windStrength <= 0) return 0;
+        return this.windDirection * this.windStrength * this.intensity * 0.5; // Scale down for playability
     },
 
     update(deltaTime) {
