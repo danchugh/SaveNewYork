@@ -1668,22 +1668,39 @@ class Enemy {
 
             // Update debris physics (falls independently of vulture phase, BUT only after release)
             // Debris falls straight down from where it was dropped
-            if (this.hasDebris && this.debrisTargetBuilding && this.debrisReleased) {
+            if (this.hasDebris && this.debrisReleased) {
                 this.debrisY += this.debrisFallSpeed * deltaTime;
 
-                // Check if debris reached target building (or ground level)
-                if (this.debrisY >= this.debrisTargetBuilding.y) {
-                    // Debris impact - destroy 10 blocks
+                // Find which building (if any) the debris is actually over
+                let hitBuilding = null;
+                if (typeof buildingManager !== 'undefined') {
+                    for (const building of buildingManager.buildings) {
+                        const buildingLeft = building.x;
+                        const buildingRight = building.x + building.widthBlocks * CONFIG.BLOCK_SIZE;
+                        // Check if debris X is within this building's horizontal bounds
+                        if (this.debrisX >= buildingLeft && this.debrisX <= buildingRight) {
+                            // Check if debris Y has reached the building top
+                            if (this.debrisY >= building.y && building.getBlockCount() > 0) {
+                                hitBuilding = building;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Check if debris hit a building OR fell past all buildings (hit ground)
+                if (hitBuilding) {
+                    // Debris impact - destroy 10 blocks on the building it actually hit
                     let blocksDestroyed = 0;
                     const maxAttempts = 50;
                     let attempts = 0;
 
                     while (blocksDestroyed < 10 && attempts < maxAttempts) {
-                        const col = Math.floor(Math.random() * this.debrisTargetBuilding.widthBlocks);
-                        const row = Math.floor(Math.random() * Math.min(5, this.debrisTargetBuilding.heightBlocks));
+                        const col = Math.floor(Math.random() * hitBuilding.widthBlocks);
+                        const row = Math.floor(Math.random() * Math.min(5, hitBuilding.heightBlocks));
 
-                        if (this.debrisTargetBuilding.blocks[row] && this.debrisTargetBuilding.blocks[row][col]) {
-                            this.debrisTargetBuilding.destroyBlock(row, col);
+                        if (hitBuilding.blocks[row] && hitBuilding.blocks[row][col]) {
+                            hitBuilding.destroyBlock(row, col);
                             blocksDestroyed++;
                         }
                         attempts++;
@@ -1691,9 +1708,8 @@ class Enemy {
 
                     // Impact effects
                     if (typeof EffectsManager !== 'undefined') {
-                        // Large dust cloud + explosion debris
-                        EffectsManager.addExplosion(this.debrisX, this.debrisTargetBuilding.y, 45, '#8B7355'); // Dust color
-                        EffectsManager.addExplosion(this.debrisX, this.debrisTargetBuilding.y - 20, 30, '#996633'); // Secondary
+                        EffectsManager.addExplosion(this.debrisX, hitBuilding.y, 45, '#8B7355');
+                        EffectsManager.addExplosion(this.debrisX, hitBuilding.y - 20, 30, '#996633');
                         EffectsManager.shake(15);
                     }
                     if (typeof SoundManager !== 'undefined') {
@@ -1702,6 +1718,14 @@ class Enemy {
 
                     this.hasDebris = false;
                     this.debrisTargetBuilding = null;
+                } else if (this.debrisY >= CONFIG.STREET_Y) {
+                    // Debris hit the ground - no building damage, just remove it
+                    this.hasDebris = false;
+                    this.debrisTargetBuilding = null;
+                    // Small ground impact effect
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addExplosion(this.debrisX, CONFIG.STREET_Y, 25, '#8B7355');
+                    }
                 }
             }
 
@@ -1934,21 +1958,28 @@ class Enemy {
             else if (this.bossPhase === 'recovering') {
                 this.currentAnimName = 'fly';
 
-                // Rise up
-                this.y -= 60 * speedMod * deltaTime;
+                const skyAltitude = CONFIG.SKY_TOP + 80; // Target altitude before moving horizontally
 
-                // Keep in bounds
-                if (this.y < CONFIG.SKY_TOP + 50) {
-                    this.y = CONFIG.SKY_TOP + 50;
+                // First: Rise up into the sky
+                if (this.y > skyAltitude) {
+                    this.y -= 80 * speedMod * deltaTime; // Rise faster
+                    // Update debris position while rising
+                    if (this.hasDebris && !this.debrisReleased) {
+                        this.debrisX = this.x;
+                        this.debrisY = this.y + 25;
+                    }
                 }
+                // Then: Move horizontally toward debris target building
+                else if (this.hasDebris && this.debrisTargetBuilding && !this.debrisReleased) {
+                    // Keep at sky altitude
+                    this.y = skyAltitude;
 
-                // Move horizontally toward debris target building (if carrying debris)
-                if (this.hasDebris && this.debrisTargetBuilding && !this.debrisReleased) {
                     const targetX = this.debrisTargetBuilding.x + (this.debrisTargetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
                     const dx = targetX - this.x;
-                    // Move toward target building at moderate speed
+
+                    // Move toward target building
                     if (Math.abs(dx) > 10) {
-                        this.x += Math.sign(dx) * 120 * speedMod * deltaTime;
+                        this.x += Math.sign(dx) * 150 * speedMod * deltaTime;
                         this.facingRight = dx > 0;
                     }
 
@@ -1965,6 +1996,11 @@ class Enemy {
                             SoundManager.vultureDebrisFall();
                         }
                     }
+                }
+
+                // Keep in bounds
+                if (this.y < CONFIG.SKY_TOP + 50) {
+                    this.y = CONFIG.SKY_TOP + 50;
                 }
 
                 this.recoveryTimer -= deltaTime;
