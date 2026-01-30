@@ -4144,7 +4144,7 @@ class Enemy {
 
             ctx.drawImage(
                 sprite,
-                col * frameSize, row * frameSize, frameSize, frameSize,
+                col * frameSize + 1, row * frameSize + 1, frameSize - 2, frameSize - 2,
                 -displaySize / 2, -displaySize / 2, displaySize, displaySize
             );
 
