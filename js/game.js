@@ -220,17 +220,13 @@ function checkCollisions() {
 
             if (dist < proj.radius + miniBoss.width / 2) {
                 proj.active = false;
-                const killed = miniBoss.takeDamage();
+                // die() handles health decrement and returns early if not dead yet
+                miniBoss.die();
                 addScore(Math.floor(75 * DayCycle.getScoreMultiplier()), proj.ownerId);
-                if (typeof SoundManager !== 'undefined') {
-                    SoundManager.miniBossHit();
-                }
 
-                if (killed) {
+                // Check if actually killed (die() transitions to DYING state on final hit)
+                if (miniBoss.state === EnemyState.DYING || !miniBoss.active) {
                     addScore(Math.floor(2000 * DayCycle.getScoreMultiplier()), proj.ownerId);
-                    if (typeof SoundManager !== 'undefined') {
-                        SoundManager.miniBossDefeat();
-                    }
                 }
                 break;
             }

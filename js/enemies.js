@@ -905,8 +905,18 @@ class Enemy {
                 this.hasDebris = false;
                 this.debrisX = 0;
                 this.debrisY = 0;
-                this.debrisFallSpeed = 200;
+                this.debrisFallSpeed = 100; // Slower fall (was 200)
                 this.debrisTargetBuilding = null;
+                // Pre-calculate debris shape for consistency
+                this.debrisShape = [];
+                for (let i = 0; i < 5; i++) {
+                    this.debrisShape.push({
+                        x: (Math.random() - 0.5) * 30,
+                        y: (Math.random() - 0.5) * 20,
+                        r: 8 + Math.random() * 8,
+                        color: Math.random() > 0.5 ? '#8B7355' : '#6B5344'
+                    });
+                }
 
                 // Recovery properties
                 this.recoveryTimer = 0;
@@ -1655,8 +1665,9 @@ class Enemy {
                 }
             }
 
-            // Update debris physics (falls independently of vulture phase)
-            if (this.hasDebris && this.debrisTargetBuilding) {
+            // Update debris physics (falls independently of vulture phase, BUT only after release)
+            // It is "carried" during recovering phase
+            if (this.hasDebris && this.debrisTargetBuilding && this.bossPhase !== 'recovering') {
                 this.debrisY += this.debrisFallSpeed * deltaTime;
 
                 // Check if debris reached target building
@@ -1679,8 +1690,10 @@ class Enemy {
 
                     // Impact effects
                     if (typeof EffectsManager !== 'undefined') {
-                        EffectsManager.addExplosion(this.debrisX, this.debrisTargetBuilding.y, 35, '#996633');
-                        EffectsManager.shake(10);
+                        // Large dust cloud + explosion debris
+                        EffectsManager.addExplosion(this.debrisX, this.debrisTargetBuilding.y, 45, '#8B7355'); // Dust color
+                        EffectsManager.addExplosion(this.debrisX, this.debrisTargetBuilding.y - 20, 30, '#996633'); // Secondary
+                        EffectsManager.shake(15);
                     }
                     if (typeof SoundManager !== 'undefined') {
                         SoundManager.buildingCollapse();
@@ -1691,14 +1704,21 @@ class Enemy {
                 }
             }
 
+
+
             // ========== PHASE: CIRCLING ==========
             if (this.bossPhase === 'circling') {
                 this.currentAnimName = 'fly';
 
-                // Circle high above battlefield
+                // Calculate target position on circle
                 this.circleAngle += deltaTime * 1.5 * speedMod;
-                this.x = this.circleCenter.x + Math.cos(this.circleAngle) * this.circleRadius;
-                this.y = this.circleCenter.y + Math.sin(this.circleAngle) * this.circleRadius * 0.3;
+                const targetX = this.circleCenter.x + Math.cos(this.circleAngle) * this.circleRadius;
+                const targetY = this.circleCenter.y + Math.sin(this.circleAngle) * this.circleRadius * 0.3;
+
+                // Smoothly lerp to circle position (prevents teleporting)
+                const lerpSpeed = 3 * deltaTime;
+                this.x += (targetX - this.x) * Math.min(lerpSpeed, 1);
+                this.y += (targetY - this.y) * Math.min(lerpSpeed, 1);
 
                 // Face direction of movement
                 this.facingRight = Math.cos(this.circleAngle) > 0;
@@ -1711,6 +1731,7 @@ class Enemy {
                     this.swoopTargetY = playerY;
                     this.hasHitPlayer = false;
                     this.currentAnimName = 'attack';
+                    this.attackAnimStartTime = null; // Reset attack animation
 
                     // Screech sound
                     if (typeof SoundManager !== 'undefined' && SoundManager.vultureScreech) {
@@ -1757,6 +1778,7 @@ class Enemy {
                         y: (Math.random() - 0.5)
                     };
                     this.currentAnimName = 'fly';
+                    this.attackAnimStartTime = null; // Reset for when we go back to attack
                 }
             }
 
@@ -1792,6 +1814,8 @@ class Enemy {
                             this.targetBuilding = buildings[Math.floor(Math.random() * buildings.length)];
                             this.bossPhase = 'windUp';
                             this.windUpTimer = this.windUpDuration;
+                            this.attackAnimStartTime = null; // Reset attack animation
+                            this.hasHitBuilding = false; // Reset for dive
 
                             // Screech before dive
                             if (typeof SoundManager !== 'undefined' && SoundManager.vultureScreech) {
@@ -1819,6 +1843,7 @@ class Enemy {
                     this.windUpTimer -= deltaTime;
                     if (this.windUpTimer <= 0) {
                         this.bossPhase = 'buildingDive';
+                        this.attackAnimStartTime = null; // Reset attack animation for dive
 
                         // Dive sound
                         if (typeof SoundManager !== 'undefined' && SoundManager.vultureDive) {
@@ -1847,8 +1872,10 @@ class Enemy {
                         // Dive toward building at double speed
                         this.x += (dx / dist) * this.speed * 2.5 * speedMod * deltaTime;
                         this.y += (dy / dist) * this.speed * 2.5 * speedMod * deltaTime;
-                    } else {
+                    } else if (!this.hasHitBuilding) {
                         // HIT BUILDING - Destroy 10 blocks (GUARANTEED)
+                        // Mark as hit to prevent double damage
+                        this.hasHitBuilding = true;
                         let blocksDestroyed = 0;
                         const maxAttempts = 50;
                         let attempts = 0;
@@ -1899,6 +1926,7 @@ class Enemy {
 
                 // Rise up
                 this.y -= 60 * speedMod * deltaTime;
+                this.debrisY = this.y + 25; // Update debris position to follow vulture while carried
 
                 // Keep in bounds
                 if (this.y < CONFIG.SKY_TOP + 50) {
@@ -1907,11 +1935,19 @@ class Enemy {
 
                 this.recoveryTimer -= deltaTime;
                 if (this.recoveryTimer <= 0) {
-                    // Return to circling
+                    // Return to circling and DROP DEBRIS
                     this.bossPhase = 'circling';
                     this.circleTimer = 3 + Math.random() * 2; // 3-5 seconds before next attack cycle
                     this.targetBuilding = null;
-                    this.circleCenter = { x: this.x, y: 180 }; // Re-center circle on current position
+
+                    // Smooth circle transition setup
+                    this.circleCenter = { x: this.x, y: 180 };
+                    this.circleAngle = Math.atan2(this.y - 180, this.x - this.x); // Start angle based on current pos
+
+                    // Play falling sound
+                    if (typeof SoundManager !== 'undefined' && SoundManager.vultureDebrisFall) {
+                        SoundManager.vultureDebrisFall();
+                    }
                 }
             }
 
@@ -3144,6 +3180,28 @@ class Enemy {
             }
         }
 
+        // VULTURE_KING: Zone 2 mini-boss, takes 15 hits
+        if (this.type === EnemyType.VULTURE_KING) {
+            if (this.health > 1 && !forceImmediate) {
+                this.health--;
+                if (typeof SoundManager !== 'undefined') SoundManager.miniBossHit();
+                if (typeof EffectsManager !== 'undefined') EffectsManager.addExplosion(this.x, this.y, 20, '#ffffff');
+                return; // Survives
+            }
+            // Final hit - play death animation
+            if (this.state !== EnemyState.DYING && !forceImmediate) {
+                this.state = EnemyState.DYING;
+                this.currentAnimName = 'death';
+                this.deathAnimStartTime = null; // Reset for fresh death animation
+                if (typeof SoundManager !== 'undefined') SoundManager.miniBossDefeat();
+                if (typeof EffectsManager !== 'undefined') {
+                    EffectsManager.addExplosion(this.x, this.y, 50, '#ff6600');
+                    EffectsManager.shake(15);
+                }
+                return;
+            }
+        }
+
         // GUNSHIP (TANK): takes multiple hits, then plays death animation in place (no falling)
         if (this.type === EnemyType.TANK) {
             if (this.health > 1 && !forceImmediate) {
@@ -3893,44 +3951,74 @@ class Enemy {
     }
 
     renderVultureKing(ctx) {
-        // RENDER FALLING DEBRIS FIRST (in world space, before vulture transform)
+        // RENDER DEBRIS (Carried or Falling)
         if (this.hasDebris && this.debrisTargetBuilding) {
-            ctx.save();
-            // Debris is in world coordinates, so we need to undo the translate to (this.x, this.y)
-            ctx.translate(-this.x, -this.y);
 
-            // Draw debris cluster falling toward secondary building
-            const debrisX = this.debrisX;
-            const debrisY = this.debrisY;
+            // 1. CARRIED DEBRIS (During recovery phase)
+            if (this.bossPhase === 'recovering') {
+                ctx.save();
+                // Check facing to position correctly under "feet"
+                const carryOffsetX = this.facingRight ? 5 : -5;
+                const carryOffsetY = 25;
 
-            // Multiple debris chunks
-            ctx.fillStyle = '#8B7355'; // Rock brown
-            ctx.beginPath();
-            ctx.arc(debrisX - 15, debrisY, 12, 0, Math.PI * 2);
-            ctx.fill();
+                // Draw boulder being carried
+                this.debrisShape.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(carryOffsetX + p.x, carryOffsetY + p.y, p.r, 0, Math.PI * 2);
+                    ctx.fill();
+                });
 
-            ctx.fillStyle = '#6B5344';
-            ctx.beginPath();
-            ctx.arc(debrisX + 10, debrisY + 5, 10, 0, Math.PI * 2);
-            ctx.fill();
+                ctx.restore();
+            }
+            // 2. FALLING DEBRIS (After release)
+            else {
+                ctx.save();
+                // Debris is in world coordinates, so we need to undo the translate to (this.x, this.y)
+                ctx.translate(-this.x, -this.y);
 
-            ctx.fillStyle = '#9B8365';
-            ctx.beginPath();
-            ctx.arc(debrisX + 5, debrisY - 8, 8, 0, Math.PI * 2);
-            ctx.fill();
+                const debrisX = this.debrisX;
+                const debrisY = this.debrisY;
 
-            ctx.fillStyle = '#7B6354';
-            ctx.beginPath();
-            ctx.arc(debrisX - 5, debrisY + 12, 7, 0, Math.PI * 2);
-            ctx.fill();
+                // --- SHADOW ON BUILDING ---
+                const distToTarget = Math.max(0, this.debrisTargetBuilding.y - debrisY);
+                if (distToTarget < 300) { // Show shadow when getting closer
+                    const shadowAlpha = Math.max(0, 0.6 - (distToTarget / 300));
+                    const shadowScale = Math.min(1.5, 0.5 + (300 - distToTarget) / 300);
 
-            // Dust trail
-            ctx.fillStyle = 'rgba(180, 160, 130, 0.4)';
-            ctx.beginPath();
-            ctx.ellipse(debrisX, debrisY - 30, 25, 15, 0, 0, Math.PI * 2);
-            ctx.fill();
+                    ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+                    ctx.beginPath();
+                    ctx.ellipse(debrisX, this.debrisTargetBuilding.y, 30 * shadowScale, 10 * shadowScale, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
 
-            ctx.restore();
+                // --- TRAILING PARTICLES ---
+                const time = Date.now();
+                if (time % 40 < 20) { // Add some intermittency
+                    ctx.fillStyle = Math.random() > 0.5 ? '#8B7355' : '#888888';
+                    const pX = debrisX + (Math.random() - 0.5) * 20;
+                    const pY = debrisY - 20 - Math.random() * 30;
+                    ctx.beginPath();
+                    ctx.arc(pX, pY, 2 + Math.random() * 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // --- FALLING BOULDER CLUSTER ---
+                this.debrisShape.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(debrisX + p.x, debrisY + p.y, p.r, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // Dust trail
+                ctx.fillStyle = 'rgba(180, 160, 130, 0.4)';
+                ctx.beginPath();
+                ctx.ellipse(debrisX, debrisY - 30, 30, 40, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
         }
 
         // RENDER SPEED LINES during swoop attacks

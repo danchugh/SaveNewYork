@@ -1039,5 +1039,31 @@ const SoundManager = {
             // Wind noise layer
             this.playNoise(0.4, 0.35 * volMod);
         }, 0.6);
+    },
+
+    vultureDebrisFall() {
+        // Falling whistle + rumble
+        this._requestSound('vultureDebrisFall', (volMod) => {
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // Whistle (falling bomb sound)
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 1.5);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.3 * volMod * this.masterVolume, now + 0.5);
+            gain.gain.linearRampToValueAtTime(0, now + 1.5);
+            osc.start(now);
+            osc.stop(now + 1.5);
+
+            // Rumble layer
+            this.playNoise(1.5, 0.2 * volMod);
+        }, 1.6);
     }
 };
