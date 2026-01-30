@@ -25,7 +25,9 @@ const AssetManager = {
         'zone2_dust_devil', 'zone2_sandworm', 'zone2_scorpion',
         'zone2_sand_carrier', 'zone2_vulture_king', 'zone2_sandstorm_colossus',
         // Zone 2 Sand Carrier animation states (128x128 frames)
-        'z2_carrier_fly', 'z2_carrier_attack', 'z2_carrier_death'
+        'z2_carrier_fly', 'z2_carrier_attack', 'z2_carrier_death',
+        // Zone 2 Vulture King animation states (192x192 frames)
+        'z2_vulture_fly', 'z2_vulture_attack', 'z2_vulture_death'
     ],
 
     // Asset manifest - add entries here as sprites are created
@@ -120,7 +122,12 @@ const AssetManager = {
             // Zone 2 Sand Carrier animation states (128x128 frames)
             'z2_carrier_fly': 'assets/128x128_z2SandCarrier_Fly.png',
             'z2_carrier_attack': 'assets/128x128_z2SandCarrier_Attack.png',
-            'z2_carrier_death': 'assets/128x128_z2SandCarrier_Death.png'
+            'z2_carrier_death': 'assets/128x128_z2SandCarrier_Death.png',
+
+            // Zone 2 Vulture King animation states (192x192 frames)
+            'z2_vulture_fly': 'assets/192x192_z2Miniboss_Vulture_Fly.png',
+            'z2_vulture_attack': 'assets/192x192_z2Miniboss_Vulture_Attack.png',
+            'z2_vulture_death': 'assets/192x192_z2Miniboss_Vulture_Death.png'
         },
         sounds: {
             // Phase 3 - Audio Overhaul (royalty-free samples)

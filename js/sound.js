@@ -9,28 +9,28 @@ const SoundConfig = {
 
     SOUNDS: {
         // Critical - always play
-        playerDeath:     { priority: 100, throttle: 0,   maxVoices: 2 },
-        victory:         { priority: 100, throttle: 0,   maxVoices: 1 },
-        gameOver:        { priority: 100, throttle: 0,   maxVoices: 1 },
-        oneUp:           { priority: 100, throttle: 0,   maxVoices: 1 },
+        playerDeath: { priority: 100, throttle: 0, maxVoices: 2 },
+        victory: { priority: 100, throttle: 0, maxVoices: 1 },
+        gameOver: { priority: 100, throttle: 0, maxVoices: 1 },
+        oneUp: { priority: 100, throttle: 0, maxVoices: 1 },
 
         // High - important feedback
-        shoot:           { priority: 75, throttle: 50,  maxVoices: 3 },
-        enemyDeath:      { priority: 75, throttle: 60,  maxVoices: 4, intensityScale: true },
-        bossHit:         { priority: 75, throttle: 100, maxVoices: 2 },
-        shieldCollect:   { priority: 75, throttle: 0,   maxVoices: 1 },
-        shieldBreak:     { priority: 75, throttle: 0,   maxVoices: 1 },
-        miniBossAppear:  { priority: 75, throttle: 0,   maxVoices: 1 },
+        shoot: { priority: 75, throttle: 50, maxVoices: 3 },
+        enemyDeath: { priority: 75, throttle: 60, maxVoices: 4, intensityScale: true },
+        bossHit: { priority: 75, throttle: 100, maxVoices: 2 },
+        shieldCollect: { priority: 75, throttle: 0, maxVoices: 1 },
+        shieldBreak: { priority: 75, throttle: 0, maxVoices: 1 },
+        miniBossAppear: { priority: 75, throttle: 0, maxVoices: 1 },
 
         // Medium - environmental
-        blockDestroyed:  { priority: 50, throttle: 25,  maxVoices: 3, intensityScale: true },
-        fallingCrash:    { priority: 50, throttle: 120, maxVoices: 2 },
-        tankHit:         { priority: 50, throttle: 80,  maxVoices: 2 },
-        thunder:         { priority: 50, throttle: 2000, maxVoices: 1 },
+        blockDestroyed: { priority: 50, throttle: 25, maxVoices: 3, intensityScale: true },
+        fallingCrash: { priority: 50, throttle: 120, maxVoices: 2 },
+        tankHit: { priority: 50, throttle: 80, maxVoices: 2 },
+        thunder: { priority: 50, throttle: 2000, maxVoices: 1 },
 
         // Low - can be skipped when busy
-        materialCollect: { priority: 25, throttle: 40,  maxVoices: 2, intensityScale: true },
-        blockRepaired:   { priority: 25, throttle: 80,  maxVoices: 2 },
+        materialCollect: { priority: 25, throttle: 40, maxVoices: 2, intensityScale: true },
+        blockRepaired: { priority: 25, throttle: 80, maxVoices: 2 },
     },
 
     GLOBAL_MAX_VOICES: 16,
@@ -924,5 +924,120 @@ const SoundManager = {
         // Descending whoosh for throw
         this.playLaser(500, 100, 0.25, 0.5);
         this.playNoise(0.2, 0.5);
+    },
+
+    // ========== VULTURE KING SOUNDS ==========
+
+    vultureScreech() {
+        // High-pitched attack screech for swoop attacks
+        this._requestSound('vultureScreech', (volMod) => {
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // Main screech - ascending harsh tone
+            const osc1 = this.ctx.createOscillator();
+            const gain1 = this.ctx.createGain();
+            osc1.connect(gain1);
+            gain1.connect(this.ctx.destination);
+            osc1.type = 'sawtooth';
+            osc1.frequency.setValueAtTime(800, now);
+            osc1.frequency.exponentialRampToValueAtTime(1600, now + 0.1);
+            osc1.frequency.exponentialRampToValueAtTime(1200, now + 0.25);
+            gain1.gain.setValueAtTime(0, now);
+            gain1.gain.linearRampToValueAtTime(0.4 * volMod * this.masterVolume, now + 0.02);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc1.start(now);
+            osc1.stop(now + 0.3);
+
+            // Harmonic overtone for harshness
+            const osc2 = this.ctx.createOscillator();
+            const gain2 = this.ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(this.ctx.destination);
+            osc2.type = 'square';
+            osc2.frequency.setValueAtTime(1200, now);
+            osc2.frequency.exponentialRampToValueAtTime(2000, now + 0.1);
+            gain2.gain.setValueAtTime(0.2 * volMod * this.masterVolume, now);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            osc2.start(now);
+            osc2.stop(now + 0.2);
+
+            // Noise burst for texture
+            this.playNoise(0.15, 0.25 * volMod);
+        }, 0.3);
+    },
+
+    vultureWingFlap() {
+        // Periodic wing flap during flight - whooshing sound
+        this._requestSound('vultureWingFlap', (volMod) => {
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // Low whoosh for wing flap
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            const lowpass = this.ctx.createBiquadFilter();
+            lowpass.type = 'lowpass';
+            lowpass.frequency.value = 400;
+            osc.connect(lowpass);
+            lowpass.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(80, now);
+            osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
+            osc.frequency.exponentialRampToValueAtTime(60, now + 0.2);
+            gain.gain.setValueAtTime(0.15 * volMod * this.masterVolume, now);
+            gain.gain.linearRampToValueAtTime(0.25 * volMod * this.masterVolume, now + 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            osc.start(now);
+            osc.stop(now + 0.25);
+
+            // Subtle noise for air displacement
+            this.playNoise(0.15, 0.1 * volMod);
+        }, 0.25);
+    },
+
+    vultureDive() {
+        // Menacing descending whoosh for building dive attacks
+        this._requestSound('vultureDive', (volMod) => {
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // Main descending whoosh
+            const osc1 = this.ctx.createOscillator();
+            const gain1 = this.ctx.createGain();
+            const distortion = this.ctx.createWaveShaper();
+            distortion.curve = this.createDistortionCurve(20);
+            osc1.connect(distortion);
+            distortion.connect(gain1);
+            gain1.connect(this.ctx.destination);
+            osc1.type = 'sawtooth';
+            osc1.frequency.setValueAtTime(400, now);
+            osc1.frequency.exponentialRampToValueAtTime(100, now + 0.5);
+            gain1.gain.setValueAtTime(0.3 * volMod * this.masterVolume, now);
+            gain1.gain.linearRampToValueAtTime(0.5 * volMod * this.masterVolume, now + 0.3);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+            osc1.start(now);
+            osc1.stop(now + 0.6);
+
+            // Low rumble for power
+            const osc2 = this.ctx.createOscillator();
+            const gain2 = this.ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(this.ctx.destination);
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(60, now);
+            osc2.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+            gain2.gain.setValueAtTime(0.25 * volMod * this.masterVolume, now);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+            osc2.start(now);
+            osc2.stop(now + 0.5);
+
+            // Wind noise layer
+            this.playNoise(0.4, 0.35 * volMod);
+        }, 0.6);
     }
 };

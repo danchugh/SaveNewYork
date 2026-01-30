@@ -206,12 +206,64 @@ function checkCollisions() {
         }
     }
 
+    // Player projectiles vs Zone 2 mini-boss (VULTURE_KING, SANDSTORM_COLOSSUS)
+    // CRITICAL: Must handle BEFORE generic enemy loop to use takeDamage() instead of die()
+    if (enemyManager.zone2MiniBoss && enemyManager.zone2MiniBoss.active) {
+        for (const proj of playerProjectiles) {
+            if (!proj.active) continue;
+
+            const miniBoss = enemyManager.zone2MiniBoss;
+            const dist = Math.sqrt(
+                Math.pow(proj.x - miniBoss.x, 2) +
+                Math.pow(proj.y - miniBoss.y, 2)
+            );
+
+            if (dist < proj.radius + miniBoss.width / 2) {
+                proj.active = false;
+                const killed = miniBoss.takeDamage();
+                addScore(Math.floor(75 * DayCycle.getScoreMultiplier()), proj.ownerId);
+                if (typeof SoundManager !== 'undefined') {
+                    SoundManager.miniBossHit();
+                }
+
+                if (killed) {
+                    addScore(Math.floor(2000 * DayCycle.getScoreMultiplier()), proj.ownerId);
+                    if (typeof SoundManager !== 'undefined') {
+                        SoundManager.miniBossDefeat();
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // Player collision with Zone 2 mini-boss (swoop attacks deal damage)
+    if (enemyManager.zone2MiniBoss && enemyManager.zone2MiniBoss.active) {
+        for (const p of playerManager.getActivePlayers()) {
+            if (p.state !== 'flying' || p.launchGraceTimer > 0) continue;
+
+            const miniBoss = enemyManager.zone2MiniBoss;
+            const dist = Math.sqrt(
+                Math.pow(p.x - miniBoss.x, 2) +
+                Math.pow(p.y - miniBoss.y, 2)
+            );
+
+            if (dist < p.width / 2 + miniBoss.width / 2) {
+                const bounceX = (p.x < miniBoss.x) ? -1 : 1;
+                const bounceY = (p.y < miniBoss.y) ? -1 : 1;
+                p.takeDamage(bounceX, bounceY);
+            }
+        }
+    }
+
     // Player projectiles vs enemies
     for (const proj of playerProjectiles) {
         if (!proj.active) continue;
 
         for (const enemy of enemyManager.enemies) {
             if (!enemy.active) continue;
+            // Skip zone2MiniBoss - handled separately above with takeDamage()
+            if (enemy === enemyManager.zone2MiniBoss) continue;
 
             const dist = Math.sqrt(
                 Math.pow(proj.x - enemy.x, 2) +

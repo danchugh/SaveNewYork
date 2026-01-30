@@ -870,17 +870,55 @@ class Enemy {
                 this.speed = 120;
                 this.health = 15;
                 this.maxHealth = 15;
-                this.width = 64;
-                this.height = 64;
+                this.width = 80;   // Larger for 192px sprite
+                this.height = 80;
                 this.isBoss = true;
-                this.bossPhase = 'circling'; // circling, diving, recovering
+
+                // Phase management: circling, playerSwoop, flyAround, windUp, buildingDive, recovering
+                this.bossPhase = 'circling';
+
+                // Circling properties
                 this.circleAngle = 0;
                 this.circleRadius = 200;
-                this.circleCenter = { x: CONFIG.CANVAS_WIDTH / 2, y: 200 };
+                this.circleCenter = { x: CONFIG.CANVAS_WIDTH / 2, y: 180 };
+                this.circleTimer = 3; // Time in circling before first attack
+
+                // Player swoop properties
+                this.swoopTargetX = 0;
+                this.swoopTargetY = 0;
+                this.swoopSpeed = 350; // Fast swoop
+                this.hasHitPlayer = false;
+
+                // Fly around properties
+                this.flyAroundTimer = 0;
+                this.flyAroundDuration = 2 + Math.random(); // 2-3 seconds
+                this.flyDirection = { x: 1, y: 0 };
+
+                // Wind-up properties (visual warning before dive)
+                this.windUpTimer = 0;
+                this.windUpDuration = 0.5; // 0.5 second warning
+
+                // Building dive properties
                 this.targetBuilding = null;
-                this.diveTimer = 3; // Time before first dive
-                this.recoveryTimer = 0;
+
+                // Debris properties (for visible falling debris)
                 this.hasDebris = false;
+                this.debrisX = 0;
+                this.debrisY = 0;
+                this.debrisFallSpeed = 200;
+                this.debrisTargetBuilding = null;
+
+                // Recovery properties
+                this.recoveryTimer = 0;
+
+                // Animation state
+                this.currentAnimName = 'fly';
+                this.animations = null;
+                this.facingRight = true;
+                this.deathAnimStartTime = null;
+
+                // Wing flap sound timer
+                this.wingFlapTimer = 0;
                 break;
 
             case EnemyType.SANDSTORM_COLOSSUS:
@@ -1599,86 +1637,283 @@ class Enemy {
             return;
         }
 
-        // Vulture King Mini-Boss
+        // Vulture King Mini-Boss - New 6-phase behavior
         if (this.type === EnemyType.VULTURE_KING) {
             const speedMod = this.bellSlowed ? 0.3 : 1.0;
 
+            // Get player position for swoop targeting
+            const playerX = (typeof player !== 'undefined') ? player.x : CONFIG.CANVAS_WIDTH / 2;
+            const playerY = (typeof player !== 'undefined') ? player.y : 300;
+
+            // Wing flap sound timer
+            this.wingFlapTimer -= deltaTime;
+            if (this.wingFlapTimer <= 0 && this.bossPhase !== 'buildingDive') {
+                this.wingFlapTimer = 0.8 + Math.random() * 0.4; // Every 0.8-1.2 seconds
+                if (typeof SoundManager !== 'undefined' && SoundManager.vultureWingFlap) {
+                    SoundManager.vultureWingFlap();
+                }
+            }
+
+            // Update debris physics (falls independently of vulture phase)
+            if (this.hasDebris && this.debrisTargetBuilding) {
+                this.debrisY += this.debrisFallSpeed * deltaTime;
+
+                // Check if debris reached target building
+                if (this.debrisY >= this.debrisTargetBuilding.y) {
+                    // Debris impact - destroy 10 blocks
+                    let blocksDestroyed = 0;
+                    const maxAttempts = 50;
+                    let attempts = 0;
+
+                    while (blocksDestroyed < 10 && attempts < maxAttempts) {
+                        const col = Math.floor(Math.random() * this.debrisTargetBuilding.widthBlocks);
+                        const row = Math.floor(Math.random() * Math.min(5, this.debrisTargetBuilding.heightBlocks));
+
+                        if (this.debrisTargetBuilding.blocks[row] && this.debrisTargetBuilding.blocks[row][col]) {
+                            this.debrisTargetBuilding.destroyBlock(row, col);
+                            blocksDestroyed++;
+                        }
+                        attempts++;
+                    }
+
+                    // Impact effects
+                    if (typeof EffectsManager !== 'undefined') {
+                        EffectsManager.addExplosion(this.debrisX, this.debrisTargetBuilding.y, 35, '#996633');
+                        EffectsManager.shake(10);
+                    }
+                    if (typeof SoundManager !== 'undefined') {
+                        SoundManager.explosion();
+                    }
+
+                    this.hasDebris = false;
+                    this.debrisTargetBuilding = null;
+                }
+            }
+
+            // ========== PHASE: CIRCLING ==========
             if (this.bossPhase === 'circling') {
+                this.currentAnimName = 'fly';
+
                 // Circle high above battlefield
                 this.circleAngle += deltaTime * 1.5 * speedMod;
                 this.x = this.circleCenter.x + Math.cos(this.circleAngle) * this.circleRadius;
                 this.y = this.circleCenter.y + Math.sin(this.circleAngle) * this.circleRadius * 0.3;
 
-                this.diveTimer -= deltaTime;
-                if (this.diveTimer <= 0) {
-                    // Pick a building target
+                // Face direction of movement
+                this.facingRight = Math.cos(this.circleAngle) > 0;
+
+                this.circleTimer -= deltaTime;
+                if (this.circleTimer <= 0) {
+                    // Start player swoop
+                    this.bossPhase = 'playerSwoop';
+                    this.swoopTargetX = playerX;
+                    this.swoopTargetY = playerY;
+                    this.hasHitPlayer = false;
+                    this.currentAnimName = 'attack';
+
+                    // Screech sound
+                    if (typeof SoundManager !== 'undefined' && SoundManager.vultureScreech) {
+                        SoundManager.vultureScreech();
+                    }
+                }
+            }
+
+            // ========== PHASE: PLAYER SWOOP ==========
+            else if (this.bossPhase === 'playerSwoop') {
+                this.currentAnimName = 'attack';
+
+                const dx = this.swoopTargetX - this.x;
+                const dy = this.swoopTargetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Face swoop direction
+                this.facingRight = dx > 0;
+
+                if (dist > 20) {
+                    // Move toward target
+                    this.x += (dx / dist) * this.swoopSpeed * speedMod * deltaTime;
+                    this.y += (dy / dist) * this.swoopSpeed * speedMod * deltaTime;
+
+                    // Check player collision during swoop
+                    if (!this.hasHitPlayer && typeof player !== 'undefined' && player.state === 'flying') {
+                        const playerDist = Math.sqrt(
+                            Math.pow(player.x - this.x, 2) + Math.pow(player.y - this.y, 2)
+                        );
+                        if (playerDist < this.width / 2 + player.width / 2) {
+                            player.takeDamage(1);
+                            this.hasHitPlayer = true;
+                            if (typeof EffectsManager !== 'undefined') {
+                                EffectsManager.addExplosion(this.x, this.y, 15, '#ff6600');
+                            }
+                        }
+                    }
+                } else {
+                    // Reached target, transition to fly around
+                    this.bossPhase = 'flyAround';
+                    this.flyAroundTimer = 2 + Math.random(); // 2-3 seconds
+                    this.flyDirection = {
+                        x: (Math.random() - 0.5) * 2,
+                        y: (Math.random() - 0.5)
+                    };
+                    this.currentAnimName = 'fly';
+                }
+            }
+
+            // ========== PHASE: FLY AROUND ==========
+            else if (this.bossPhase === 'flyAround') {
+                this.currentAnimName = 'fly';
+
+                // Random flight pattern
+                this.x += this.flyDirection.x * this.speed * speedMod * deltaTime;
+                this.y += this.flyDirection.y * this.speed * 0.5 * speedMod * deltaTime;
+
+                // Face movement direction
+                this.facingRight = this.flyDirection.x > 0;
+
+                // Bounce off screen edges
+                if (this.x < 50 || this.x > CONFIG.CANVAS_WIDTH - 50) {
+                    this.flyDirection.x *= -1;
+                }
+                if (this.y < CONFIG.SKY_TOP + 50 || this.y > CONFIG.STREET_Y - 150) {
+                    this.flyDirection.y *= -1;
+                }
+
+                // Keep in bounds
+                this.x = Math.max(50, Math.min(CONFIG.CANVAS_WIDTH - 50, this.x));
+                this.y = Math.max(CONFIG.SKY_TOP + 50, Math.min(CONFIG.STREET_Y - 150, this.y));
+
+                this.flyAroundTimer -= deltaTime;
+                if (this.flyAroundTimer <= 0) {
+                    // Pick building target for dive
                     if (typeof buildingManager !== 'undefined') {
                         const buildings = buildingManager.buildings.filter(b => b.getBlockCount() > 0);
                         if (buildings.length > 0) {
                             this.targetBuilding = buildings[Math.floor(Math.random() * buildings.length)];
-                            this.bossPhase = 'diving';
+                            this.bossPhase = 'windUp';
+                            this.windUpTimer = this.windUpDuration;
+
+                            // Screech before dive
+                            if (typeof SoundManager !== 'undefined' && SoundManager.vultureScreech) {
+                                SoundManager.vultureScreech();
+                            }
                         }
                     }
                 }
-            } else if (this.bossPhase === 'diving') {
-                // Dive toward target building
+            }
+
+            // ========== PHASE: WIND_UP (0.5s visual warning) ==========
+            else if (this.bossPhase === 'windUp') {
+                this.currentAnimName = 'attack';
+
                 if (this.targetBuilding) {
+                    // Circle tightly above target building as warning
                     const targetX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
-                    const targetY = this.targetBuilding.y;
+                    const targetY = this.targetBuilding.y - 100;
+
+                    // Quick circling above building
+                    this.circleAngle += deltaTime * 8 * speedMod;
+                    this.x = targetX + Math.cos(this.circleAngle) * 50;
+                    this.y = targetY + Math.sin(this.circleAngle) * 20;
+
+                    this.windUpTimer -= deltaTime;
+                    if (this.windUpTimer <= 0) {
+                        this.bossPhase = 'buildingDive';
+
+                        // Dive sound
+                        if (typeof SoundManager !== 'undefined' && SoundManager.vultureDive) {
+                            SoundManager.vultureDive();
+                        }
+                    }
+                }
+            }
+
+            // ========== PHASE: BUILDING DIVE ==========
+            else if (this.bossPhase === 'buildingDive') {
+                this.currentAnimName = 'attack';
+
+                if (this.targetBuilding) {
+                    // Target CENTER of building (never miss)
+                    const targetX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                    const targetY = this.targetBuilding.y + 20; // Slightly into building
+
                     const dx = targetX - this.x;
                     const dy = targetY - this.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist > 30) {
-                        this.x += (dx / dist) * this.speed * 1.5 * speedMod * deltaTime;
-                        this.y += (dy / dist) * this.speed * 1.5 * speedMod * deltaTime;
+                    this.facingRight = dx > 0;
+
+                    if (dist > 25) {
+                        // Dive toward building at double speed
+                        this.x += (dx / dist) * this.speed * 2.5 * speedMod * deltaTime;
+                        this.y += (dy / dist) * this.speed * 2.5 * speedMod * deltaTime;
                     } else {
-                        // Hit building - damage it
-                        for (let i = 0; i < 3; i++) {
+                        // HIT BUILDING - Destroy 10 blocks (GUARANTEED)
+                        let blocksDestroyed = 0;
+                        const maxAttempts = 50;
+                        let attempts = 0;
+
+                        while (blocksDestroyed < 10 && attempts < maxAttempts) {
                             const col = Math.floor(Math.random() * this.targetBuilding.widthBlocks);
-                            const row = Math.floor(Math.random() * Math.min(5, this.targetBuilding.heightBlocks));
-                            this.targetBuilding.destroyBlock(row, col);
+                            const row = Math.floor(Math.random() * Math.min(8, this.targetBuilding.heightBlocks));
+
+                            if (this.targetBuilding.blocks[row] && this.targetBuilding.blocks[row][col]) {
+                                this.targetBuilding.destroyBlock(row, col);
+                                blocksDestroyed++;
+                            }
+                            attempts++;
                         }
+
+                        // Effects
                         if (typeof EffectsManager !== 'undefined') {
-                            EffectsManager.addExplosion(this.x, this.y, 30, '#cc9944');
-                            EffectsManager.shake(8);
+                            EffectsManager.addExplosion(this.x, this.y, 40, '#cc9944');
+                            EffectsManager.shake(12);
                         }
-                        this.hasDebris = true;
+                        if (typeof SoundManager !== 'undefined') {
+                            SoundManager.explosion();
+                        }
+
+                        // Pick up debris and start recovering
+                        // Find a different building for debris target
+                        if (typeof buildingManager !== 'undefined') {
+                            const otherBuildings = buildingManager.buildings.filter(
+                                b => b !== this.targetBuilding && b.getBlockCount() > 0
+                            );
+                            if (otherBuildings.length > 0) {
+                                this.debrisTargetBuilding = otherBuildings[Math.floor(Math.random() * otherBuildings.length)];
+                                this.debrisX = this.debrisTargetBuilding.x + (this.debrisTargetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                                this.debrisY = this.y; // Start from vulture position
+                                this.hasDebris = true;
+                            }
+                        }
+
                         this.bossPhase = 'recovering';
-                        this.recoveryTimer = 2.0;
+                        this.recoveryTimer = 2.5;
                     }
-                }
-            } else if (this.bossPhase === 'recovering') {
-                // Hover briefly then return to circling
-                this.y -= 30 * speedMod * deltaTime; // Rise up
-                this.recoveryTimer -= deltaTime;
-
-                // Drop debris on another building
-                if (this.hasDebris && this.recoveryTimer < 1.0) {
-                    this.hasDebris = false;
-                    if (typeof buildingManager !== 'undefined') {
-                        const buildings = buildingManager.buildings.filter(b => b !== this.targetBuilding && b.getBlockCount() > 0);
-                        if (buildings.length > 0) {
-                            const dropTarget = buildings[Math.floor(Math.random() * buildings.length)];
-                            // Damage drop target
-                            for (let i = 0; i < 2; i++) {
-                                const col = Math.floor(Math.random() * dropTarget.widthBlocks);
-                                dropTarget.destroyBlock(0, col);
-                            }
-                            if (typeof EffectsManager !== 'undefined') {
-                                const dropX = dropTarget.x + (dropTarget.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
-                                EffectsManager.addExplosion(dropX, dropTarget.y, 25, '#996633');
-                            }
-                        }
-                    }
-                }
-
-                if (this.recoveryTimer <= 0) {
-                    this.bossPhase = 'circling';
-                    this.diveTimer = 3 + Math.random() * 2;
-                    this.targetBuilding = null;
                 }
             }
+
+            // ========== PHASE: RECOVERING ==========
+            else if (this.bossPhase === 'recovering') {
+                this.currentAnimName = 'fly';
+
+                // Rise up
+                this.y -= 60 * speedMod * deltaTime;
+
+                // Keep in bounds
+                if (this.y < CONFIG.SKY_TOP + 50) {
+                    this.y = CONFIG.SKY_TOP + 50;
+                }
+
+                this.recoveryTimer -= deltaTime;
+                if (this.recoveryTimer <= 0) {
+                    // Return to circling
+                    this.bossPhase = 'circling';
+                    this.circleTimer = 3 + Math.random() * 2; // 3-5 seconds before next attack cycle
+                    this.targetBuilding = null;
+                    this.circleCenter = { x: this.x, y: 180 }; // Re-center circle on current position
+                }
+            }
+
             return;
         }
 
@@ -3657,41 +3892,123 @@ class Enemy {
     }
 
     renderVultureKing(ctx) {
-        // Try sprite-based rendering first
-        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('zone2_vulture_king') : null;
+        // RENDER FALLING DEBRIS FIRST (in world space, before vulture transform)
+        if (this.hasDebris && this.debrisTargetBuilding) {
+            ctx.save();
+            // Debris is in world coordinates, so we need to undo the translate to (this.x, this.y)
+            ctx.translate(-this.x, -this.y);
+
+            // Draw debris cluster falling toward secondary building
+            const debrisX = this.debrisX;
+            const debrisY = this.debrisY;
+
+            // Multiple debris chunks
+            ctx.fillStyle = '#8B7355'; // Rock brown
+            ctx.beginPath();
+            ctx.arc(debrisX - 15, debrisY, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#6B5344';
+            ctx.beginPath();
+            ctx.arc(debrisX + 10, debrisY + 5, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#9B8365';
+            ctx.beginPath();
+            ctx.arc(debrisX + 5, debrisY - 8, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#7B6354';
+            ctx.beginPath();
+            ctx.arc(debrisX - 5, debrisY + 12, 7, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Dust trail
+            ctx.fillStyle = 'rgba(180, 160, 130, 0.4)';
+            ctx.beginPath();
+            ctx.ellipse(debrisX, debrisY - 30, 25, 15, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // Get appropriate sprite based on animation state
+        let spriteKey;
+        if (this.state === EnemyState.DYING || this.state === EnemyState.DEAD) {
+            spriteKey = 'z2_vulture_death';
+        } else if (this.currentAnimName === 'attack') {
+            spriteKey = 'z2_vulture_attack';
+        } else {
+            spriteKey = 'z2_vulture_fly';
+        }
+
+        const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage(spriteKey) : null;
 
         if (sprite && sprite.width > 0) {
-            // Sprite sheet: grid layout (assume 3x3 or calculate)
-            const cols = 3;
-            const rows = Math.ceil(8 / cols); // 8 frames total
-            const frameWidth = sprite.width / cols;
-            const frameHeight = sprite.height / rows;
+            // 192x192 sprite sheets - calculate frame layout
+            const frameSize = 192;
+            const cols = Math.floor(sprite.width / frameSize);
+            const rows = Math.floor(sprite.height / frameSize);
+            const totalFrames = cols * rows;
 
-            // Choose frame based on phase
-            let frameIndex;
-            if (this.bossPhase === 'diving') {
-                frameIndex = 4 + (Math.floor(Date.now() / 100) % 4); // Frames 4-7 for diving
+            // Animation timing (10 FPS for fly, 12 FPS for attack, slower for death)
+            let frameDelay;
+            if (spriteKey === 'z2_vulture_death') {
+                frameDelay = 120; // Slower death animation
+            } else if (spriteKey === 'z2_vulture_attack') {
+                frameDelay = 83;  // Fast attack (12 FPS)
             } else {
-                frameIndex = Math.floor(Date.now() / 150) % 4; // Frames 0-3 for flying
+                frameDelay = 100; // Fly (10 FPS)
+            }
+
+            // Calculate frame (loop for fly/attack, one-shot for death)
+            let frameIndex;
+            if (spriteKey === 'z2_vulture_death') {
+                // One-shot death animation
+                if (!this.deathAnimStartTime) {
+                    this.deathAnimStartTime = Date.now();
+                }
+                frameIndex = Math.min(
+                    Math.floor((Date.now() - this.deathAnimStartTime) / frameDelay),
+                    totalFrames - 1
+                );
+            } else {
+                frameIndex = Math.floor(Date.now() / frameDelay) % totalFrames;
             }
 
             const row = Math.floor(frameIndex / cols);
             const col = frameIndex % cols;
 
-            // Scale to match enemy actual size (this.width = 60, this.height = 60 for mini-boss)
-            const displaySize = Math.max(this.width, 60);  // Ensure minimum 60px display
+            // Display larger for mini-boss visibility (80x80 minimum)
+            const displaySize = Math.max(this.width, 80);
+
+            ctx.save();
+
+            // Flip sprite based on facing direction
+            if (!this.facingRight) {
+                ctx.scale(-1, 1);
+            }
 
             ctx.drawImage(
                 sprite,
-                col * frameWidth, row * frameHeight, frameWidth, frameHeight,
+                col * frameSize, row * frameSize, frameSize, frameSize,
                 -displaySize / 2, -displaySize / 2, displaySize, displaySize
             );
-            this.renderHealthBar(ctx, 60);
+
+            ctx.restore();
+
+            // Health bar (larger for boss)
+            this.renderHealthBar(ctx, 70);
             return;
         }
 
-        // Procedural fallback
+        // Procedural fallback if no sprites
         ctx.save();
+
+        // Flip for facing direction
+        if (!this.facingRight) {
+            ctx.scale(-1, 1);
+        }
 
         const flapAngle = Math.sin(Date.now() / 100) * 0.3;
 
@@ -3738,16 +4055,10 @@ class Enemy {
         ctx.closePath();
         ctx.fill();
 
-        // Debris if carrying
-        if (this.hasDebris) {
-            ctx.fillStyle = '#666666';
-            ctx.fillRect(-10, 15, 20, 10);
-        }
-
         ctx.restore();
 
         // Health bar (larger for boss)
-        this.renderHealthBar(ctx, 60);
+        this.renderHealthBar(ctx, 70);
     }
 
     renderSandstormColossus(ctx) {
