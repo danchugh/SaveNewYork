@@ -916,6 +916,7 @@ class Enemy {
                 this.animations = null;
                 this.facingRight = true;
                 this.deathAnimStartTime = null;
+                this.attackAnimStartTime = null;
 
                 // Wing flap sound timer
                 this.wingFlapTimer = 0;
@@ -1682,7 +1683,7 @@ class Enemy {
                         EffectsManager.shake(10);
                     }
                     if (typeof SoundManager !== 'undefined') {
-                        SoundManager.explosion();
+                        SoundManager.buildingCollapse();
                     }
 
                     this.hasDebris = false;
@@ -1869,7 +1870,7 @@ class Enemy {
                             EffectsManager.shake(12);
                         }
                         if (typeof SoundManager !== 'undefined') {
-                            SoundManager.explosion();
+                            SoundManager.buildingCollapse();
                         }
 
                         // Pick up debris and start recovering
@@ -3932,6 +3933,47 @@ class Enemy {
             ctx.restore();
         }
 
+        // RENDER SPEED LINES during swoop attacks
+        if (this.bossPhase === 'playerSwoop' || this.bossPhase === 'buildingDive') {
+            ctx.save();
+
+            // Calculate movement direction for speed lines
+            let moveAngle;
+            if (this.bossPhase === 'playerSwoop') {
+                moveAngle = Math.atan2(this.swoopTargetY - this.y, this.swoopTargetX - this.x);
+            } else {
+                // Building dive - generally downward
+                moveAngle = Math.PI / 2; // Pointing down
+            }
+
+            // Draw 5-7 speed lines trailing behind vulture
+            const lineCount = 5 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < lineCount; i++) {
+                // Lines trail BEHIND the vulture (opposite of movement direction)
+                const trailAngle = moveAngle + Math.PI + (Math.random() - 0.5) * 0.6;
+                const startDist = 30 + Math.random() * 20;
+                const lineLength = 40 + Math.random() * 60;
+
+                const startX = Math.cos(trailAngle) * startDist;
+                const startY = Math.sin(trailAngle) * startDist;
+                const endX = startX + Math.cos(trailAngle) * lineLength;
+                const endY = startY + Math.sin(trailAngle) * lineLength;
+
+                // Animated offset for streaming effect
+                const timeOffset = (Date.now() / 50 + i * 20) % 100;
+                const alpha = 0.3 + Math.sin(timeOffset * 0.1) * 0.2;
+
+                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.lineWidth = 2 + Math.random();
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
         // Get appropriate sprite based on animation state
         let spriteKey;
         if (this.state === EnemyState.DYING || this.state === EnemyState.DEAD) {
@@ -3949,31 +3991,54 @@ class Enemy {
             const frameSize = 192;
             const cols = Math.floor(sprite.width / frameSize);
             const rows = Math.floor(sprite.height / frameSize);
-            const totalFrames = cols * rows;
 
-            // Animation timing (10 FPS for fly, 12 FPS for attack, slower for death)
+            // Use explicit frame counts to avoid empty frame flicker
+            // Fly: typically 8 frames, Attack: typically 8 frames, Death: typically 8 frames
+            let actualFrameCount;
+            if (spriteKey === 'z2_vulture_fly') {
+                actualFrameCount = Math.min(cols * rows, 8); // Cap at 8 frames for fly
+            } else if (spriteKey === 'z2_vulture_attack') {
+                actualFrameCount = Math.min(cols * rows, 8); // Cap at 8 frames for attack
+            } else {
+                actualFrameCount = Math.min(cols * rows, 8); // Cap at 8 frames for death
+            }
+
+            // Animation timing
             let frameDelay;
             if (spriteKey === 'z2_vulture_death') {
                 frameDelay = 120; // Slower death animation
             } else if (spriteKey === 'z2_vulture_attack') {
-                frameDelay = 83;  // Fast attack (12 FPS)
+                frameDelay = 100; // Attack (10 FPS)
             } else {
                 frameDelay = 100; // Fly (10 FPS)
             }
 
-            // Calculate frame (loop for fly/attack, one-shot for death)
+            // Calculate frame
             let frameIndex;
+
             if (spriteKey === 'z2_vulture_death') {
-                // One-shot death animation
+                // One-shot death animation - freeze on last frame
                 if (!this.deathAnimStartTime) {
                     this.deathAnimStartTime = Date.now();
                 }
                 frameIndex = Math.min(
                     Math.floor((Date.now() - this.deathAnimStartTime) / frameDelay),
-                    totalFrames - 1
+                    actualFrameCount - 1
+                );
+            } else if (spriteKey === 'z2_vulture_attack') {
+                // One-shot attack animation - freeze on last frame
+                if (!this.attackAnimStartTime) {
+                    this.attackAnimStartTime = Date.now();
+                }
+                frameIndex = Math.min(
+                    Math.floor((Date.now() - this.attackAnimStartTime) / frameDelay),
+                    actualFrameCount - 1
                 );
             } else {
-                frameIndex = Math.floor(Date.now() / frameDelay) % totalFrames;
+                // Fly animation - loops normally
+                // Reset attack anim timer when switching to fly
+                this.attackAnimStartTime = null;
+                frameIndex = Math.floor(Date.now() / frameDelay) % actualFrameCount;
             }
 
             const row = Math.floor(frameIndex / cols);
