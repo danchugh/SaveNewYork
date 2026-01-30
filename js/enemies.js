@@ -903,6 +903,7 @@ class Enemy {
 
                 // Debris properties (for visible falling debris)
                 this.hasDebris = false;
+                this.debrisReleased = false; // True when debris is falling (no longer carried)
                 this.debrisX = 0;
                 this.debrisY = 0;
                 this.debrisFallSpeed = 100; // Slower fall (was 200)
@@ -1666,20 +1667,11 @@ class Enemy {
             }
 
             // Update debris physics (falls independently of vulture phase, BUT only after release)
-            // It is "carried" during recovering phase
-            if (this.hasDebris && this.debrisTargetBuilding && this.bossPhase !== 'recovering') {
+            // Debris falls straight down from where it was dropped
+            if (this.hasDebris && this.debrisTargetBuilding && this.debrisReleased) {
                 this.debrisY += this.debrisFallSpeed * deltaTime;
 
-                // Move debris horizontally toward target building center
-                const targetX = this.debrisTargetBuilding.x + (this.debrisTargetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
-                const dx = targetX - this.debrisX;
-                // Move at a rate that will reach the target by the time it lands
-                const horizontalSpeed = Math.abs(dx) * 0.5; // Gradual horizontal movement
-                if (Math.abs(dx) > 5) {
-                    this.debrisX += Math.sign(dx) * Math.min(horizontalSpeed, Math.abs(dx)) * deltaTime;
-                }
-
-                // Check if debris reached target building
+                // Check if debris reached target building (or ground level)
                 if (this.debrisY >= this.debrisTargetBuilding.y) {
                     // Debris impact - destroy 10 blocks
                     let blocksDestroyed = 0;
@@ -1841,13 +1833,21 @@ class Enemy {
 
                 if (this.targetBuilding) {
                     // Circle tightly above target building as warning
-                    const targetX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
-                    const targetY = this.targetBuilding.y - 100;
+                    const buildingCenterX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                    const buildingAboveY = this.targetBuilding.y - 100;
 
-                    // Quick circling above building
+                    // Calculate target position on small circle above building
                     this.circleAngle += deltaTime * 8 * speedMod;
-                    this.x = targetX + Math.cos(this.circleAngle) * 50;
-                    this.y = targetY + Math.sin(this.circleAngle) * 20;
+                    const targetX = buildingCenterX + Math.cos(this.circleAngle) * 50;
+                    const targetY = buildingAboveY + Math.sin(this.circleAngle) * 20;
+
+                    // Smoothly lerp toward circle position (prevents teleporting)
+                    const lerpSpeed = 5 * deltaTime;
+                    this.x += (targetX - this.x) * Math.min(lerpSpeed, 1);
+                    this.y += (targetY - this.y) * Math.min(lerpSpeed, 1);
+
+                    // Face direction of movement
+                    this.facingRight = Math.cos(this.circleAngle) > 0;
 
                     this.windUpTimer -= deltaTime;
                     if (this.windUpTimer <= 0) {
@@ -1920,6 +1920,7 @@ class Enemy {
                                 this.debrisX = this.x; // Start from vulture's current position
                                 this.debrisY = this.y;
                                 this.hasDebris = true;
+                                this.debrisReleased = false; // Not yet released
                             }
                         }
 
@@ -1935,7 +1936,31 @@ class Enemy {
 
                 // Rise up
                 this.y -= 60 * speedMod * deltaTime;
-                this.debrisY = this.y + 25; // Update debris position to follow vulture while carried
+
+                // Move horizontally toward debris target building (if carrying debris)
+                if (this.hasDebris && this.debrisTargetBuilding && !this.debrisReleased) {
+                    const targetX = this.debrisTargetBuilding.x + (this.debrisTargetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                    const dx = targetX - this.x;
+                    // Move toward target building at moderate speed
+                    if (Math.abs(dx) > 10) {
+                        this.x += Math.sign(dx) * 100 * speedMod * deltaTime;
+                        this.facingRight = dx > 0;
+                    }
+
+                    // Update debris position to follow vulture while carried
+                    this.debrisX = this.x;
+                    this.debrisY = this.y + 25;
+
+                    // Drop debris when directly above target building and high enough
+                    if (Math.abs(dx) <= 10 && this.y < CONFIG.SKY_TOP + 100) {
+                        // Release debris - it will now fall straight down
+                        this.debrisReleased = true;
+                        // Play falling sound
+                        if (typeof SoundManager !== 'undefined' && SoundManager.vultureDebrisFall) {
+                            SoundManager.vultureDebrisFall();
+                        }
+                    }
+                }
 
                 // Keep in bounds
                 if (this.y < CONFIG.SKY_TOP + 50) {
@@ -1944,7 +1969,7 @@ class Enemy {
 
                 this.recoveryTimer -= deltaTime;
                 if (this.recoveryTimer <= 0) {
-                    // Return to circling and DROP DEBRIS
+                    // Return to circling
                     this.bossPhase = 'circling';
                     this.circleTimer = 3 + Math.random() * 2; // 3-5 seconds before next attack cycle
                     this.targetBuilding = null;
@@ -1953,11 +1978,6 @@ class Enemy {
                     this.circleCenter = { x: CONFIG.CANVAS_WIDTH / 2, y: 180 };
                     // Calculate starting angle based on vulture's actual position relative to circle center
                     this.circleAngle = Math.atan2(this.y - this.circleCenter.y, this.x - this.circleCenter.x);
-
-                    // Play falling sound
-                    if (typeof SoundManager !== 'undefined' && SoundManager.vultureDebrisFall) {
-                        SoundManager.vultureDebrisFall();
-                    }
                 }
             }
 
@@ -3964,8 +3984,8 @@ class Enemy {
         // RENDER DEBRIS (Carried or Falling)
         if (this.hasDebris && this.debrisTargetBuilding) {
 
-            // 1. CARRIED DEBRIS (During recovery phase)
-            if (this.bossPhase === 'recovering') {
+            // 1. CARRIED DEBRIS (Not yet released)
+            if (!this.debrisReleased) {
                 ctx.save();
                 // Check facing to position correctly under "feet"
                 const carryOffsetX = this.facingRight ? 5 : -5;
@@ -3981,7 +4001,7 @@ class Enemy {
 
                 ctx.restore();
             }
-            // 2. FALLING DEBRIS (After release)
+            // 2. FALLING DEBRIS (After release - falls straight down)
             else {
                 ctx.save();
                 // Debris is in world coordinates, so we need to undo the translate to (this.x, this.y)
@@ -3989,18 +4009,6 @@ class Enemy {
 
                 const debrisX = this.debrisX;
                 const debrisY = this.debrisY;
-
-                // --- SHADOW ON BUILDING ---
-                const distToTarget = Math.max(0, this.debrisTargetBuilding.y - debrisY);
-                if (distToTarget < 300) { // Show shadow when getting closer
-                    const shadowAlpha = Math.max(0, 0.6 - (distToTarget / 300));
-                    const shadowScale = Math.min(1.5, 0.5 + (300 - distToTarget) / 300);
-
-                    ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
-                    ctx.beginPath();
-                    ctx.ellipse(debrisX, this.debrisTargetBuilding.y, 30 * shadowScale, 10 * shadowScale, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                }
 
                 // --- TRAILING PARTICLES ---
                 const time = Date.now();
