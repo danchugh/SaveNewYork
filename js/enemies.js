@@ -1937,13 +1937,18 @@ class Enemy {
                 // Rise up
                 this.y -= 60 * speedMod * deltaTime;
 
+                // Keep in bounds
+                if (this.y < CONFIG.SKY_TOP + 50) {
+                    this.y = CONFIG.SKY_TOP + 50;
+                }
+
                 // Move horizontally toward debris target building (if carrying debris)
                 if (this.hasDebris && this.debrisTargetBuilding && !this.debrisReleased) {
                     const targetX = this.debrisTargetBuilding.x + (this.debrisTargetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
                     const dx = targetX - this.x;
                     // Move toward target building at moderate speed
                     if (Math.abs(dx) > 10) {
-                        this.x += Math.sign(dx) * 100 * speedMod * deltaTime;
+                        this.x += Math.sign(dx) * 120 * speedMod * deltaTime;
                         this.facingRight = dx > 0;
                     }
 
@@ -1951,8 +1956,8 @@ class Enemy {
                     this.debrisX = this.x;
                     this.debrisY = this.y + 25;
 
-                    // Drop debris when directly above target building and high enough
-                    if (Math.abs(dx) <= 10 && this.y < CONFIG.SKY_TOP + 100) {
+                    // Drop debris when directly above target building
+                    if (Math.abs(dx) <= 10) {
                         // Release debris - it will now fall straight down
                         this.debrisReleased = true;
                         // Play falling sound
@@ -1962,13 +1967,10 @@ class Enemy {
                     }
                 }
 
-                // Keep in bounds
-                if (this.y < CONFIG.SKY_TOP + 50) {
-                    this.y = CONFIG.SKY_TOP + 50;
-                }
-
                 this.recoveryTimer -= deltaTime;
-                if (this.recoveryTimer <= 0) {
+                // Only return to circling after debris is dropped (or if no debris)
+                const canExitRecovery = !this.hasDebris || this.debrisReleased;
+                if (this.recoveryTimer <= 0 && canExitRecovery) {
                     // Return to circling
                     this.bossPhase = 'circling';
                     this.circleTimer = 3 + Math.random() * 2; // 3-5 seconds before next attack cycle

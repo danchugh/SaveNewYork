@@ -12,7 +12,7 @@ const AssetManager = {
     transparencyKeys: [
         'player_p1', 'player_p2',
         'projectile_player', 'projectile_enemy',
-        'enemy_drone', 'enemy_interceptor', 'enemy_gunship', 'enemy_carrier', 'enemy_missile',
+        'enemy_missile',
         'boss_main', 'miniboss_charger', 'miniboss_gunner',
         'civilian', 'construction_vehicle', 'construction_worker',
         'debris_concrete', 'debris_metal', 'debris_spark', 'debris_smoke',
@@ -41,10 +41,7 @@ const AssetManager = {
             'projectile_enemy': 'assets/projectile_enemy.png',
 
             // Phase 3 - Enemies (all with black backgrounds)
-            'enemy_drone': 'assets/enemy_drone.png',
-            'enemy_interceptor': 'assets/enemy_interceptor.png',
-            'enemy_gunship': 'assets/enemy_gunship.png',
-            'enemy_carrier': 'assets/enemy_carrier.png',
+
             'enemy_missile': 'assets/enemy_missile.png',
 
             // Drone animation sprite sheets (64x64 frames)
@@ -79,7 +76,7 @@ const AssetManager = {
 
             // Phase 5 - Environment
             // Building tileset (4x4 grid, dynamically scaled from actual image dimensions)
-            'building_tileset': 'assets/building_tileset.png',
+
             // Background - custom cityscape
             'bg_cityscape': 'assets/bg_cityscape.jpg',
             // Legacy parallax layers (kept for reference)
@@ -109,7 +106,7 @@ const AssetManager = {
             'civilian_fall': 'assets/32x32_Civilian_Fall.png',
 
             // Test sprite for animation debugging
-            'test_civilian': 'assets/test_civilian.png',
+
 
             // Zone 2 - Desert enemies (all with black backgrounds)
             'zone2_dust_devil': 'assets/64x64_z2DustDevil.png',
