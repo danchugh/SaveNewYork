@@ -1670,6 +1670,15 @@ class Enemy {
             if (this.hasDebris && this.debrisTargetBuilding && this.bossPhase !== 'recovering') {
                 this.debrisY += this.debrisFallSpeed * deltaTime;
 
+                // Move debris horizontally toward target building center
+                const targetX = this.debrisTargetBuilding.x + (this.debrisTargetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
+                const dx = targetX - this.debrisX;
+                // Move at a rate that will reach the target by the time it lands
+                const horizontalSpeed = Math.abs(dx) * 0.5; // Gradual horizontal movement
+                if (Math.abs(dx) > 5) {
+                    this.debrisX += Math.sign(dx) * Math.min(horizontalSpeed, Math.abs(dx)) * deltaTime;
+                }
+
                 // Check if debris reached target building
                 if (this.debrisY >= this.debrisTargetBuilding.y) {
                     // Debris impact - destroy 10 blocks
@@ -1908,8 +1917,8 @@ class Enemy {
                             );
                             if (otherBuildings.length > 0) {
                                 this.debrisTargetBuilding = otherBuildings[Math.floor(Math.random() * otherBuildings.length)];
-                                this.debrisX = this.debrisTargetBuilding.x + (this.debrisTargetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
-                                this.debrisY = this.y; // Start from vulture position
+                                this.debrisX = this.x; // Start from vulture's current position
+                                this.debrisY = this.y;
                                 this.hasDebris = true;
                             }
                         }
@@ -1940,9 +1949,10 @@ class Enemy {
                     this.circleTimer = 3 + Math.random() * 2; // 3-5 seconds before next attack cycle
                     this.targetBuilding = null;
 
-                    // Smooth circle transition setup
-                    this.circleCenter = { x: this.x, y: 180 };
-                    this.circleAngle = Math.atan2(this.y - 180, this.x - this.x); // Start angle based on current pos
+                    // Smooth circle transition setup - center the circle at screen center
+                    this.circleCenter = { x: CONFIG.CANVAS_WIDTH / 2, y: 180 };
+                    // Calculate starting angle based on vulture's actual position relative to circle center
+                    this.circleAngle = Math.atan2(this.y - this.circleCenter.y, this.x - this.circleCenter.x);
 
                     // Play falling sound
                     if (typeof SoundManager !== 'undefined' && SoundManager.vultureDebrisFall) {
