@@ -3370,8 +3370,8 @@ class Enemy {
 
         if (this.state === EnemyState.FALLING || this.type === EnemyType.BOMBER) {
             ctx.rotate(this.rotation);
-        } else if (this.type !== EnemyType.SPLITTER && this.type !== EnemyType.SIEGE_CRAWLER) {
-            // Slight bank based on velocity (skip for carrier and ground units - stays horizontal)
+        } else if (this.type !== EnemyType.SPLITTER && this.type !== EnemyType.SIEGE_CRAWLER && this.type !== EnemyType.VULTURE_KING) {
+            // Slight bank based on velocity (skip for carrier, ground units, and vulture - stays horizontal)
             ctx.rotate(this.velX * 0.2);
         }
 
