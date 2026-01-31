@@ -1409,17 +1409,6 @@ class Enemy {
                 } else {
                     currentAnim.update(deltaTime);
                 }
-
-                // Scorpion: Handle pending crawl switch after attack animation completes
-                if (this.type === EnemyType.SCORPION && this.pendingCrawlSwitch && currentAnim.isComplete) {
-                    this.pendingCrawlSwitch = false;
-                    this.currentAnimName = 'crawl';
-                    // Reset crawl animation for clean transition (like civilian does)
-                    if (this.animations.crawl) {
-                        this.animations.crawl.currentFrame = 0;
-                        this.animations.crawl.frameTimer = 0;
-                    }
-                }
             }
         }
 
@@ -3075,14 +3064,20 @@ class Enemy {
             if (this.animations && this.animations.claw && this.animations.claw.isComplete) {
                 this.scorpionState = 'ROOFTOP_IDLE';
                 this.currentAnimName = 'crawl';
+                if (this.animations && this.animations.crawl) {
+                    this.animations.crawl.reset();
+                }
                 this.attackTimer = 4;
             }
         }
 
-        // Check if claw animation completed
+        // Check if claw animation completed - IMMEDIATELY switch to crawl
         if (this.animations && this.animations.claw && this.animations.claw.isComplete) {
             this.scorpionState = 'ROOFTOP_IDLE';
             this.currentAnimName = 'crawl';
+            if (this.animations && this.animations.crawl) {
+                this.animations.crawl.reset();
+            }
             this.attackTimer = 4;
         }
 
@@ -3122,10 +3117,13 @@ class Enemy {
         const anim = this.animations ? this.animations.attack : null;
         const animComplete = anim ? anim.isComplete : true;
 
-        // Mark pending switch to crawl animation once attack animation completes
-        // The actual switch happens in the animation update loop (like civilian pattern)
-        if (animComplete && this.currentAnimName === 'attack' && !this.pendingCrawlSwitch) {
-            this.pendingCrawlSwitch = true;
+        // When attack animation completes, IMMEDIATELY switch to crawl
+        // (Render will show crawl, no disappearing frame)
+        if (animComplete && this.currentAnimName === 'attack') {
+            this.currentAnimName = 'crawl';
+            if (this.animations && this.animations.crawl) {
+                this.animations.crawl.reset();
+            }
         }
 
         // Count down projectile delay
@@ -3153,6 +3151,9 @@ class Enemy {
             if (this.projectileDelay <= -0.3) { // Wait 0.3s after second shot
                 this.scorpionState = 'ROOFTOP_IDLE';
                 this.currentAnimName = 'crawl';
+                if (this.animations && this.animations.crawl) {
+                    this.animations.crawl.reset();
+                }
                 this.attackTimer = 4; // Reset for next attack cycle
             }
         }
@@ -4771,6 +4772,11 @@ class Enemy {
         if (this.hasDebris && this.debrisTargetBuilding) {
             // Get debris_metal sprite
             const debrisSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('debris_metal') : null;
+            // Debug log once per vulture
+            if (!this._debrisLogged) {
+                console.log('Vulture debris:', debrisSprite ? `loaded (${debrisSprite.width}x${debrisSprite.height}, complete=${debrisSprite.complete})` : 'NULL');
+                this._debrisLogged = true;
+            }
             const debrisSize = 32; // Size to render the debris
 
             // 1. CARRIED DEBRIS (Not yet released)
@@ -4785,8 +4791,8 @@ class Enemy {
                     ctx.drawImage(debrisSprite, 0, 0, debrisSprite.width, debrisSprite.height,
                         carryOffsetX - debrisSize / 2, carryOffsetY - debrisSize / 2, debrisSize, debrisSize);
                 } else {
-                    // Fallback: simple circle
-                    ctx.fillStyle = '#8B7355';
+                    // Fallback: RED circle to make it obvious sprite isn't loading
+                    ctx.fillStyle = '#FF0000';
                     ctx.beginPath();
                     ctx.arc(carryOffsetX, carryOffsetY, debrisSize / 2, 0, Math.PI * 2);
                     ctx.fill();
@@ -4824,8 +4830,8 @@ class Enemy {
                     ctx.drawImage(debrisSprite, 0, 0, debrisSprite.width, debrisSprite.height,
                         -debrisSize / 2, -debrisSize / 2, debrisSize, debrisSize);
                 } else {
-                    // Fallback: simple circle
-                    ctx.fillStyle = '#8B7355';
+                    // Fallback: RED circle to make it obvious sprite isn't loading
+                    ctx.fillStyle = '#FF0000';
                     ctx.beginPath();
                     ctx.arc(0, 0, debrisSize / 2, 0, Math.PI * 2);
                     ctx.fill();

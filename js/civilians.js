@@ -150,21 +150,7 @@ class Civilian {
         if (this.animations) {
             const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
-                // Track frame before update to detect cycle completion
-                const prevFrame = currentAnim.currentFrame;
                 currentAnim.update(deltaTime);
-
-                // Check if animation cycled back to start (for pending idle switch)
-                if (this.pendingIdleSwitch && currentAnim.currentFrame < prevFrame) {
-                    // Animation completed a cycle, switch back to idle
-                    this.pendingIdleSwitch = false;
-                    this.currentAnimName = 'idle';
-                    // Reset idle to frame 0 for clean transition
-                    if (this.animations.idle) {
-                        this.animations.idle.currentFrame = 0;
-                        this.animations.idle.frameTimer = 0;
-                    }
-                }
             }
         }
 
@@ -206,14 +192,16 @@ class Civilian {
                 // Player just entered range - switch to help animation
                 if (this.playerInRange && !wasInRange) {
                     this.currentAnimName = 'help';
-                    this.pendingIdleSwitch = false;
                     if (this.animations && this.animations.help) {
                         this.animations.help.reset();
                     }
                 }
-                // Player just left range - mark to switch back after animation completes
+                // Player just left range - IMMEDIATELY switch back to idle
                 else if (!this.playerInRange && wasInRange && this.currentAnimName === 'help') {
-                    this.pendingIdleSwitch = true;
+                    this.currentAnimName = 'idle';
+                    if (this.animations && this.animations.idle) {
+                        this.animations.idle.reset();
+                    }
                 }
             }
 
