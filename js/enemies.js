@@ -2764,6 +2764,16 @@ class Enemy {
 
             // Find nearest column with a block to land on (prevents immediate falling)
             const validCol = this.findNearestTopBlockColumn(building, this.climbSide);
+            const topRow = this.findCurrentTopRow(building);
+            console.log('Scorpion reached rooftop:', {
+                validCol,
+                topRow,
+                climbSide: this.climbSide,
+                buildingWidthBlocks: building.widthBlocks,
+                currentRooftopY,
+                buildingY: building.y
+            });
+
             if (validCol >= 0) {
                 // Position scorpion centered on the valid block
                 this.rooftopX = validCol * CONFIG.BLOCK_SIZE + CONFIG.BLOCK_SIZE / 2 - this.width / 2;
@@ -2773,6 +2783,7 @@ class Enemy {
                 // Fallback to climb side (building may be destroyed)
                 this.rooftopX = this.climbSide === 'left' ? 0 : (building.widthBlocks * CONFIG.BLOCK_SIZE - this.width);
             }
+            console.log('Scorpion rooftopX set to:', this.rooftopX);
 
             this.attackTimer = 4; // Reset attack timer
         }
@@ -2889,6 +2900,15 @@ class Enemy {
         }
 
         // No blocks beneath scorpion - fall
+        // Debug log when falling
+        console.warn('Scorpion falling! No support:', {
+            rooftopX: this.rooftopX,
+            scorpionCol,
+            currentTopRow,
+            buildingWidthBlocks: building.widthBlocks,
+            checkedCols: [Math.max(0, scorpionCol), Math.min(building.widthBlocks - 1, scorpionCol + 1)],
+            blocksAtTopRow: building.blocks[currentTopRow] ? building.blocks[currentTopRow].map((b, i) => b ? i : null).filter(i => i !== null) : 'no row'
+        });
         return false;
     }
 
@@ -4777,7 +4797,13 @@ class Enemy {
             const debrisSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('debris_metal') : null;
             // Debug log once per vulture
             if (!this._debrisLogged) {
-                console.log('Vulture debris:', debrisSprite ? `loaded (${debrisSprite.width}x${debrisSprite.height}, complete=${debrisSprite.complete})` : 'NULL');
+                console.log('Vulture debris sprite:', debrisSprite ? {
+                    type: debrisSprite.constructor.name,
+                    width: debrisSprite.width,
+                    height: debrisSprite.height,
+                    isCanvas: debrisSprite instanceof HTMLCanvasElement,
+                    isImage: debrisSprite instanceof HTMLImageElement
+                } : 'NULL');
                 this._debrisLogged = true;
             }
             const debrisSize = 32; // Size to render the debris
@@ -4793,6 +4819,10 @@ class Enemy {
                     // Draw single frame (128x128) from sprite sheet, no rotation when carried
                     ctx.drawImage(debrisSprite, 0, 0, 128, 128,
                         carryOffsetX - debrisSize / 2, carryOffsetY - debrisSize / 2, debrisSize, debrisSize);
+                    // DEBUG: Draw outline to verify position
+                    ctx.strokeStyle = '#00FF00';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(carryOffsetX - debrisSize / 2, carryOffsetY - debrisSize / 2, debrisSize, debrisSize);
                 } else {
                     // Fallback: procedural debris
                     ctx.fillStyle = '#888888';
@@ -4832,6 +4862,10 @@ class Enemy {
                     // Draw single frame (128x128) from sprite sheet with rotation
                     ctx.drawImage(debrisSprite, 0, 0, 128, 128,
                         -debrisSize / 2, -debrisSize / 2, debrisSize, debrisSize);
+                    // DEBUG: Draw outline to verify position
+                    ctx.strokeStyle = '#00FF00';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-debrisSize / 2, -debrisSize / 2, debrisSize, debrisSize);
                 } else {
                     // Fallback: procedural debris
                     ctx.fillStyle = '#888888';
