@@ -2666,9 +2666,10 @@ class Enemy {
             this.targetBuilding = buildings[Math.floor(Math.random() * buildings.length)];
         }
 
-        // Determine which side to approach from based on spawn side
+        // Determine which side to climb based on approach direction
+        // Walking right (from left) → climb right side, Walking left (from right) → climb left side
         const buildingCenterX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
-        this.climbSide = this.x < buildingCenterX ? 'left' : 'right';
+        this.climbSide = this.x < buildingCenterX ? 'right' : 'left';
     }
 
     /**
@@ -2756,14 +2757,40 @@ class Enemy {
         }
         this.y = this.climbY - this.height / 2;
 
-        // Check if reached rooftop
-        if (this.climbY <= building.y) {
+        // Get current rooftop height (based on remaining blocks, not original building.y)
+        const currentRooftopY = this.getCurrentRooftopY(building);
+
+        // Check if reached current rooftop
+        if (this.climbY <= currentRooftopY) {
             this.scorpionState = 'ROOFTOP_IDLE';
             this.currentAnimName = 'crawl';
-            this.y = building.y - this.height / 2;
+            this.y = currentRooftopY - this.height / 2;
             this.rooftopX = this.climbSide === 'left' ? 0 : (building.widthBlocks * CONFIG.BLOCK_SIZE - this.width);
             this.attackTimer = 4; // Reset attack timer
         }
+    }
+
+    /**
+     * Get the current rooftop Y position based on remaining blocks
+     * Returns the Y coordinate of the top of the highest remaining block row
+     */
+    getCurrentRooftopY(building) {
+        if (!building || !building.blocks) return building.y;
+
+        // Find the first row (from top) that has at least one block
+        for (let row = 0; row < building.heightBlocks; row++) {
+            if (building.blocks[row]) {
+                for (let col = 0; col < building.widthBlocks; col++) {
+                    if (building.blocks[row][col]) {
+                        // Found a block - this row is the current top
+                        return building.y + row * CONFIG.BLOCK_SIZE;
+                    }
+                }
+            }
+        }
+
+        // No blocks found - return original building.y (building is destroyed)
+        return building.y;
     }
 
     /**
@@ -2871,9 +2898,10 @@ class Enemy {
             return;
         }
 
-        // Stay in place - update world position based on rooftopX (doesn't change)
+        // Stay in place - update world position based on current rooftop height
+        const currentRooftopY = this.getCurrentRooftopY(building);
         this.x = building.x + this.rooftopX + this.width / 2;
-        this.y = building.y - this.height / 2;
+        this.y = currentRooftopY - this.height / 2;
 
         // Check for civilians on this building
         if (typeof civilianManager !== 'undefined') {
@@ -2931,6 +2959,10 @@ class Enemy {
         }
 
         const chaseSpeed = 60 * speedMod; // 60 px/s
+
+        // Keep scorpion on current rooftop height
+        const currentRooftopY = this.getCurrentRooftopY(building);
+        this.y = currentRooftopY - this.height / 2;
 
         // Check if civilian is still valid
         if (!this.targetCivilian || !this.targetCivilian.active || this.targetCivilian.state !== 'waiting') {
@@ -2995,6 +3027,12 @@ class Enemy {
             this.fallGravity = 800;
             this.rotation = 0;
             return;
+        }
+
+        // Keep scorpion on current rooftop height
+        if (this.targetBuilding) {
+            const currentRooftopY = this.getCurrentRooftopY(this.targetBuilding);
+            this.y = currentRooftopY - this.height / 2;
         }
 
         // Face toward player
