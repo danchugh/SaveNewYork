@@ -27,7 +27,9 @@ const AssetManager = {
         // Zone 2 Sand Carrier animation states (128x128 frames)
         'z2_carrier_fly', 'z2_carrier_attack', 'z2_carrier_death',
         // Zone 2 Vulture King animation states (192x192 frames)
-        'z2_vulture_fly', 'z2_vulture_attack', 'z2_vulture_death'
+        'z2_vulture_fly', 'z2_vulture_attack', 'z2_vulture_death',
+        // Zone 2 Scorpion animation states (43x64 frames - portrait orientation)
+        'z2_scorpion_attack', 'z2_scorpion_claw', 'z2_scorpion_climb', 'z2_scorpion_crawl', 'z2_scorpion_death'
     ],
 
     // Asset manifest - add entries here as sprites are created
@@ -124,7 +126,14 @@ const AssetManager = {
             // Zone 2 Vulture King animation states (192x192 frames)
             'z2_vulture_fly': 'assets/192x192_z2Miniboss_Vulture_Fly.png',
             'z2_vulture_attack': 'assets/192x192_z2Miniboss_Vulture_Attack.png',
-            'z2_vulture_death': 'assets/192x192_z2Miniboss_Vulture_Death.png'
+            'z2_vulture_death': 'assets/192x192_z2Miniboss_Vulture_Death.png',
+
+            // Zone 2 Scorpion animation states (43x64 frames - portrait orientation)
+            'z2_scorpion_attack': 'assets/64x43_z2Scorpion_Attack.png',
+            'z2_scorpion_claw': 'assets/64x43_z2Scorpion_Claw.png',
+            'z2_scorpion_climb': 'assets/64x43_z2Scorpion_Climb.png',
+            'z2_scorpion_crawl': 'assets/64x43_z2Scorpion_Crawl.png',
+            'z2_scorpion_death': 'assets/64x43_z2Scorpion_Death.png'
         },
         sounds: {
             // Phase 3 - Audio Overhaul (royalty-free samples)

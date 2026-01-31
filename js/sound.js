@@ -1065,5 +1065,91 @@ const SoundManager = {
             // Rumble layer
             this.playNoise(1.5, 0.2 * volMod);
         }, 1.6);
+    },
+
+    // ========== SCORPION SOUNDS ==========
+
+    scorpionScuttle() {
+        // Short clicking/scuttling sound - plays periodically during movement
+        this._requestSound('scorpionScuttle', (volMod) => {
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // Multiple quick clicks
+            for (let i = 0; i < 3; i++) {
+                const clickTime = now + i * 0.04;
+
+                // Click oscillator - high frequency tick
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(2000 + Math.random() * 500, clickTime);
+                osc.frequency.exponentialRampToValueAtTime(800, clickTime + 0.02);
+                gain.gain.setValueAtTime(0.15 * volMod * this.masterVolume, clickTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, clickTime + 0.03);
+                osc.start(clickTime);
+                osc.stop(clickTime + 0.03);
+            }
+
+            // Subtle scrape noise
+            this.playNoise(0.08, 0.1 * volMod);
+        }, 0.15);
+    },
+
+    scorpionHiss() {
+        // Hissing sound before attack - warning to player
+        this._requestSound('scorpionHiss', (volMod) => {
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // Main hiss - filtered noise with pitch envelope
+            const bufferSize = Math.floor(this.ctx.sampleRate * 0.4);
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                // Amplitude envelope - quick attack, longer decay
+                const env = Math.exp(-i / (bufferSize * 0.3)) * (1 - Math.exp(-i / (bufferSize * 0.02)));
+                data[i] = (Math.random() * 2 - 1) * env;
+            }
+
+            const noise = this.ctx.createBufferSource();
+            const gain = this.ctx.createGain();
+            const highpass = this.ctx.createBiquadFilter();
+            const lowpass = this.ctx.createBiquadFilter();
+
+            highpass.type = 'highpass';
+            highpass.frequency.setValueAtTime(1500, now);
+            highpass.frequency.exponentialRampToValueAtTime(800, now + 0.3);
+
+            lowpass.type = 'lowpass';
+            lowpass.frequency.setValueAtTime(4000, now);
+            lowpass.frequency.exponentialRampToValueAtTime(2000, now + 0.3);
+
+            noise.buffer = buffer;
+            noise.connect(highpass);
+            highpass.connect(lowpass);
+            lowpass.connect(gain);
+            gain.connect(this.ctx.destination);
+            gain.gain.setValueAtTime(0.3 * volMod * this.masterVolume, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            noise.start(now);
+
+            // Subtle rattling undertone
+            const rattle = this.ctx.createOscillator();
+            const rattleGain = this.ctx.createGain();
+            rattle.connect(rattleGain);
+            rattleGain.connect(this.ctx.destination);
+            rattle.type = 'sawtooth';
+            rattle.frequency.setValueAtTime(150, now);
+            rattle.frequency.linearRampToValueAtTime(100, now + 0.3);
+            rattleGain.gain.setValueAtTime(0.08 * volMod * this.masterVolume, now);
+            rattleGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+            rattle.start(now);
+            rattle.stop(now + 0.35);
+        }, 0.5);
     }
 };
