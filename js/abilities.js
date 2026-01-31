@@ -199,7 +199,7 @@ const AbilityManager = {
                             if (!enemy.active) continue;
                             // Damage all flying enemies
                             if (enemy.state === EnemyState.FLYING || enemy.state === EnemyState.ATTACKING) {
-                                enemy.takeDamage(999); // Instant kill
+                                enemy.die(); // Instant kill
                                 if (typeof addScore === 'function') addScore(100);
                             }
                         }
@@ -381,7 +381,7 @@ const AbilityManager = {
                         if (!enemy.active) continue;
                         const dist = Math.sqrt((enemy.x - targetX) ** 2 + (enemy.y - targetY) ** 2);
                         if (dist < 60) {
-                            enemy.takeDamage(999); // Instant kill
+                            enemy.die(); // Instant kill
                             if (typeof addScore === 'function') addScore(100);
                         }
                     }

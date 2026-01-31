@@ -890,6 +890,7 @@ class Enemy {
                 this.currentAnimName = 'crawl';
                 this.animations = null;
                 this.facingRight = this.spawnSide === 'left'; // Face direction of movement
+                this.pendingCrawlSwitch = false; // Wait for attack animation to finish before switching to crawl
 
                 // Speed variation (0.85 to 1.15)
                 this.speedModifier = 0.85 + Math.random() * 0.3;
@@ -1414,6 +1415,17 @@ class Enemy {
                     currentAnim.update(deltaTime * 0.25);
                 } else {
                     currentAnim.update(deltaTime);
+                }
+
+                // Scorpion: Handle pending crawl switch after attack animation completes
+                if (this.type === EnemyType.SCORPION && this.pendingCrawlSwitch && currentAnim.isComplete) {
+                    this.pendingCrawlSwitch = false;
+                    this.currentAnimName = 'crawl';
+                    // Reset crawl animation for clean transition (like civilian does)
+                    if (this.animations.crawl) {
+                        this.animations.crawl.currentFrame = 0;
+                        this.animations.crawl.frameTimer = 0;
+                    }
                 }
             }
         }
@@ -2796,6 +2808,7 @@ class Enemy {
 
     /**
      * Damage a block on the building the scorpion is climbing
+     * Never damages the current top row (would cause scorpion to fall)
      */
     damageClimbingBlock(building) {
         if (!building || !building.blocks) return;
@@ -2803,6 +2816,10 @@ class Enemy {
         // Get the row the scorpion is currently at
         const row = Math.floor((this.climbY - building.y) / CONFIG.BLOCK_SIZE);
         if (row < 0 || row >= building.heightBlocks) return;
+
+        // Never damage the current top row - that would make us fall!
+        const currentTopRow = this.findCurrentTopRow(building);
+        if (row === currentTopRow) return;
 
         // Damage block on the climb side
         const col = this.climbSide === 'left' ? 0 : building.widthBlocks - 1;
@@ -2862,19 +2879,40 @@ class Enemy {
         // Check if the building has any blocks left at all
         if (!building.blocks || building.getBlockCount() === 0) return false;
 
-        // Check for blocks in the top row beneath the scorpion's position
+        // Find the current top row (first row with any blocks)
+        const currentTopRow = this.findCurrentTopRow(building);
+        if (currentTopRow < 0) return false; // No blocks found
+
+        // Check for blocks in the current top row beneath the scorpion's position
         const scorpionCol = Math.floor(this.rooftopX / CONFIG.BLOCK_SIZE);
-        const topRow = 0; // Top row of the building
 
         // Check the column directly beneath the scorpion and adjacent columns
         for (let col = Math.max(0, scorpionCol); col <= Math.min(building.widthBlocks - 1, scorpionCol + 1); col++) {
-            if (building.blocks[topRow] && building.blocks[topRow][col]) {
+            if (building.blocks[currentTopRow] && building.blocks[currentTopRow][col]) {
                 return true; // Found support
             }
         }
 
         // No blocks beneath scorpion - fall
         return false;
+    }
+
+    /**
+     * Find the current top row of a building (first row with any blocks)
+     * Returns -1 if no blocks found
+     */
+    findCurrentTopRow(building) {
+        if (!building || !building.blocks) return -1;
+        for (let row = 0; row < building.heightBlocks; row++) {
+            if (building.blocks[row]) {
+                for (let col = 0; col < building.widthBlocks; col++) {
+                    if (building.blocks[row][col]) {
+                        return row;
+                    }
+                }
+            }
+        }
+        return -1;
     }
 
     /**
@@ -3045,14 +3083,10 @@ class Enemy {
         const anim = this.animations ? this.animations.attack : null;
         const animComplete = anim ? anim.isComplete : true;
 
-        // Switch to crawl animation once attack animation completes (prevents disappearing)
-        // Stay in RANGED_ATTACK state to continue firing projectiles
-        if (animComplete && this.currentAnimName === 'attack') {
-            this.currentAnimName = 'crawl';
-            // Reset crawl animation to ensure it's playing
-            if (this.animations && this.animations.crawl) {
-                this.animations.crawl.reset();
-            }
+        // Mark pending switch to crawl animation once attack animation completes
+        // The actual switch happens in the animation update loop (like civilian pattern)
+        if (animComplete && this.currentAnimName === 'attack' && !this.pendingCrawlSwitch) {
+            this.pendingCrawlSwitch = true;
         }
 
         // Count down projectile delay
