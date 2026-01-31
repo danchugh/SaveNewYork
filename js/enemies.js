@@ -855,8 +855,8 @@ class Enemy {
                 // Stats from plan
                 this.health = 6;
                 this.maxHealth = 6;
-                this.width = 43;  // Portrait orientation sprite
-                this.height = 64;
+                this.width = 64;  // Landscape orientation sprite
+                this.height = 43;
 
                 // State machine
                 this.scorpionState = 'SPAWNING'; // SPAWNING, CRAWLING_TO_BUILDING, CLIMBING, ROOFTOP_CRAWL, CLAW_ATTACK, RANGED_ATTACK
@@ -874,6 +874,7 @@ class Enemy {
                 this.climbAnimPhase = 'intro'; // 'intro' or 'loop'
                 this.climbFrame = 0;
                 this.climbY = 0; // Y position on building during climb
+                this.climbDamageTimer = 2; // Deal 1 block damage every 2 seconds while climbing
 
                 // Rooftop behavior
                 this.rooftopDirection = 1; // 1 or -1 for pacing direction
@@ -895,6 +896,11 @@ class Enemy {
 
                 // Sound timers
                 this.scuttleSoundTimer = 0.5 + Math.random() * 0.3;
+
+                // Fall properties (used when building destroyed beneath)
+                this.fallSpeed = 0;
+                this.fallGravity = 800;
+                this.rotation = 0;
                 break;
 
             case EnemyType.VULTURE_KING:
@@ -1267,7 +1273,7 @@ class Enemy {
 
     /**
      * Initialize animated sprites for SCORPION
-     * Frame size: 43w x 64h (portrait orientation)
+     * Frame size: 64w x 43h (landscape orientation)
      * Climb animation has special handling: frames 1-12 intro, frames 13-18 loop
      */
     initScorpionAnimations() {
@@ -1276,8 +1282,8 @@ class Enemy {
         if (typeof AnimatedSprite === 'undefined' || typeof AssetManager === 'undefined') return;
 
         this.animations = {};
-        const frameWidth = 43;
-        const frameHeight = 64;
+        const frameWidth = 64;
+        const frameHeight = 43;
         const scale = 1.0;
 
         // Helper to create animation from sheet
@@ -2616,6 +2622,10 @@ class Enemy {
             case 'RANGED_ATTACK':
                 this.updateScorpionRangedAttack(deltaTime, speedMod);
                 break;
+
+            case 'FALLING':
+                this.updateScorpionFalling(deltaTime);
+                break;
         }
     }
 
@@ -2708,6 +2718,18 @@ class Enemy {
         const climbSpeed = 40 * speedMod * this.speedModifier; // 40 px/s base with variation
         const building = this.targetBuilding;
 
+        // Check if building blocks beneath scorpion are destroyed - fall and die
+        if (!this.checkBuildingSupportBeneath()) {
+            this.scorpionState = 'FALLING';
+            this.currentAnimName = 'death';
+            if (this.animations && this.animations.death) {
+                this.animations.death.reset();
+            }
+            this.fallSpeed = 0;
+            this.fallGravity = 800;
+            return;
+        }
+
         // Handle intro animation transition to loop
         if (this.climbAnimPhase === 'intro') {
             if (this.animations && this.animations.climb_intro && this.animations.climb_intro.isComplete) {
@@ -2717,6 +2739,13 @@ class Enemy {
                     this.animations.climb_loop.reset();
                 }
             }
+        }
+
+        // Deal block damage every 2 seconds while climbing
+        this.climbDamageTimer -= deltaTime * speedMod;
+        if (this.climbDamageTimer <= 0) {
+            this.climbDamageTimer = 2; // Reset timer
+            this.damageClimbingBlock(building);
         }
 
         // Move up
@@ -2742,13 +2771,138 @@ class Enemy {
     }
 
     /**
+     * Check if building has blocks beneath the scorpion to support it
+     */
+    checkBuildingSupportBeneath() {
+        if (!this.targetBuilding) return false;
+        const building = this.targetBuilding;
+
+        // Get the row the scorpion is currently at
+        const row = Math.floor((this.climbY - building.y) / CONFIG.BLOCK_SIZE);
+        if (row < 0 || row >= building.heightBlocks) return true; // Above or at rooftop is fine
+
+        // Check if there's a block at the scorpion's position on the climb side
+        const col = this.climbSide === 'left' ? 0 : building.widthBlocks - 1;
+
+        if (building.blocks && building.blocks[row] && building.blocks[row][col]) {
+            return true; // Block exists, scorpion is supported
+        }
+
+        // Also check adjacent column in case building is narrow
+        const adjCol = this.climbSide === 'left' ? 1 : building.widthBlocks - 2;
+        if (adjCol >= 0 && adjCol < building.widthBlocks) {
+            if (building.blocks && building.blocks[row] && building.blocks[row][adjCol]) {
+                return true;
+            }
+        }
+
+        return false; // No support, scorpion falls
+    }
+
+    /**
+     * Damage a block on the building the scorpion is climbing
+     */
+    damageClimbingBlock(building) {
+        if (!building || !building.blocks) return;
+
+        // Get the row the scorpion is currently at
+        const row = Math.floor((this.climbY - building.y) / CONFIG.BLOCK_SIZE);
+        if (row < 0 || row >= building.heightBlocks) return;
+
+        // Damage block on the climb side
+        const col = this.climbSide === 'left' ? 0 : building.widthBlocks - 1;
+
+        if (building.blocks[row] && building.blocks[row][col]) {
+            building.destroyBlock(row, col);
+            if (typeof EffectsManager !== 'undefined') {
+                const blockX = building.x + col * CONFIG.BLOCK_SIZE + CONFIG.BLOCK_SIZE / 2;
+                const blockY = building.y + row * CONFIG.BLOCK_SIZE + CONFIG.BLOCK_SIZE / 2;
+                EffectsManager.addExplosion(blockX, blockY, 10, '#ff6600');
+            }
+        }
+    }
+
+    /**
+     * Scorpion falling after building support destroyed
+     */
+    updateScorpionFalling(deltaTime) {
+        // Update death animation
+        if (this.animations && this.animations.death) {
+            this.animations.death.update(deltaTime);
+        }
+
+        // Apply gravity
+        this.fallSpeed += this.fallGravity * deltaTime;
+        this.y += this.fallSpeed * deltaTime;
+
+        // Add slight rotation while falling
+        this.rotation += deltaTime * 3;
+
+        // Check if hit ground
+        if (this.y >= CONFIG.STREET_Y - this.height / 2) {
+            this.y = CONFIG.STREET_Y - this.height / 2;
+            // Die on impact
+            this.state = EnemyState.DEAD;
+            this.active = false;
+
+            // Death effects
+            if (typeof EffectsManager !== 'undefined') {
+                EffectsManager.addAnimatedExplosion(this.x, this.y, 'enemy', 25);
+                EffectsManager.addExplosion(this.x, this.y, 30, '#ff6600');
+            }
+            if (typeof SoundManager !== 'undefined') {
+                SoundManager.enemyDeath();
+            }
+        }
+    }
+
+    /**
+     * Check if building has blocks to support scorpion on rooftop
+     */
+    checkRooftopSupport() {
+        if (!this.targetBuilding) return false;
+        const building = this.targetBuilding;
+
+        // Check if the building has any blocks left in the top row
+        if (!building.blocks || building.blocks.length === 0) return false;
+
+        // Check for blocks in the top row beneath the scorpion's position
+        const scorpionCol = Math.floor(this.rooftopX / CONFIG.BLOCK_SIZE);
+        const topRow = 0; // Top row of the building
+
+        // Check a few columns around the scorpion's position
+        for (let col = Math.max(0, scorpionCol - 1); col <= Math.min(building.widthBlocks - 1, scorpionCol + 1); col++) {
+            if (building.blocks[topRow] && building.blocks[topRow][col]) {
+                return true; // Found support
+            }
+        }
+
+        // Also check if there are any blocks in the building at all
+        return building.getBlockCount() > 0;
+    }
+
+    /**
      * Scorpion pacing on rooftop
      */
     updateScorpionRooftop(deltaTime, speedMod) {
         if (!this.targetBuilding) return;
 
-        const rooftopSpeed = 30 * speedMod; // 30 px/s
         const building = this.targetBuilding;
+
+        // Check if building has been destroyed beneath - fall and die
+        if (!this.checkRooftopSupport()) {
+            this.scorpionState = 'FALLING';
+            this.currentAnimName = 'death';
+            if (this.animations && this.animations.death) {
+                this.animations.death.reset();
+            }
+            this.fallSpeed = 0;
+            this.fallGravity = 800;
+            this.rotation = 0;
+            return;
+        }
+
+        const rooftopSpeed = 30 * speedMod; // 30 px/s
         const margin = 10;
         const minX = margin;
         const maxX = building.widthBlocks * CONFIG.BLOCK_SIZE - margin - this.width;
@@ -2810,8 +2964,22 @@ class Enemy {
     updateScorpionClawAttack(deltaTime, speedMod) {
         if (!this.targetBuilding) return;
 
-        const chaseSpeed = 60 * speedMod; // 60 px/s
         const building = this.targetBuilding;
+
+        // Check if building has been destroyed beneath - fall and die
+        if (!this.checkRooftopSupport()) {
+            this.scorpionState = 'FALLING';
+            this.currentAnimName = 'death';
+            if (this.animations && this.animations.death) {
+                this.animations.death.reset();
+            }
+            this.fallSpeed = 0;
+            this.fallGravity = 800;
+            this.rotation = 0;
+            return;
+        }
+
+        const chaseSpeed = 60 * speedMod; // 60 px/s
 
         // Check if civilian is still valid
         if (!this.targetCivilian || !this.targetCivilian.active || this.targetCivilian.state !== 'waiting') {
@@ -2865,6 +3033,19 @@ class Enemy {
      * Scorpion ranged attack - fire 2 projectiles at player
      */
     updateScorpionRangedAttack(deltaTime, speedMod) {
+        // Check if building has been destroyed beneath - fall and die
+        if (!this.checkRooftopSupport()) {
+            this.scorpionState = 'FALLING';
+            this.currentAnimName = 'death';
+            if (this.animations && this.animations.death) {
+                this.animations.death.reset();
+            }
+            this.fallSpeed = 0;
+            this.fallGravity = 800;
+            this.rotation = 0;
+            return;
+        }
+
         // Face toward player
         if (typeof player !== 'undefined') {
             this.facingRight = player.x > this.x;
@@ -4445,6 +4626,11 @@ class Enemy {
                     }
                 }
 
+                // For falling state, apply tumble rotation
+                if (this.scorpionState === 'FALLING') {
+                    ctx.rotate(this.rotation || 0);
+                }
+
                 // Render the animation at center
                 currentAnim.render(ctx, 0, 0);
 
@@ -4475,6 +4661,11 @@ class Enemy {
             if (!this.facingRight) {
                 ctx.scale(-1, 1);
             }
+        }
+
+        // Rotate for falling
+        if (this.scorpionState === 'FALLING') {
+            ctx.rotate(this.rotation || 0);
         }
 
         // Body
