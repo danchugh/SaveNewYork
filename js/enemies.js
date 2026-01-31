@@ -4703,7 +4703,10 @@ class Enemy {
             }
         }
 
-        // Procedural fallback
+        // Procedural fallback - DEBUG: Log when this is used
+        console.warn('Scorpion using procedural fallback! currentAnimName:', this.currentAnimName,
+            'animations:', this.animations ? Object.keys(this.animations) : 'null');
+
         // Note: ctx already translated to (this.x, this.y) by render()
         ctx.save();
 
@@ -4786,13 +4789,13 @@ class Enemy {
                 const carryOffsetX = this.facingRight ? 5 : -5;
                 const carryOffsetY = 25;
 
-                if (debrisSprite && debrisSprite.complete) {
-                    // Draw sprite (single frame, no rotation when carried)
-                    ctx.drawImage(debrisSprite, 0, 0, debrisSprite.width, debrisSprite.height,
+                if (debrisSprite) {
+                    // Draw single frame (128x128) from sprite sheet, no rotation when carried
+                    ctx.drawImage(debrisSprite, 0, 0, 128, 128,
                         carryOffsetX - debrisSize / 2, carryOffsetY - debrisSize / 2, debrisSize, debrisSize);
                 } else {
-                    // Fallback: RED circle to make it obvious sprite isn't loading
-                    ctx.fillStyle = '#FF0000';
+                    // Fallback: procedural debris
+                    ctx.fillStyle = '#888888';
                     ctx.beginPath();
                     ctx.arc(carryOffsetX, carryOffsetY, debrisSize / 2, 0, Math.PI * 2);
                     ctx.fill();
@@ -4825,13 +4828,13 @@ class Enemy {
                 ctx.translate(debrisX, debrisY);
                 ctx.rotate(this.debrisRotation); // Spinning effect
 
-                if (debrisSprite && debrisSprite.complete) {
-                    // Draw sprite with rotation
-                    ctx.drawImage(debrisSprite, 0, 0, debrisSprite.width, debrisSprite.height,
+                if (debrisSprite) {
+                    // Draw single frame (128x128) from sprite sheet with rotation
+                    ctx.drawImage(debrisSprite, 0, 0, 128, 128,
                         -debrisSize / 2, -debrisSize / 2, debrisSize, debrisSize);
                 } else {
-                    // Fallback: RED circle to make it obvious sprite isn't loading
-                    ctx.fillStyle = '#FF0000';
+                    // Fallback: procedural debris
+                    ctx.fillStyle = '#888888';
                     ctx.beginPath();
                     ctx.arc(0, 0, debrisSize / 2, 0, Math.PI * 2);
                     ctx.fill();

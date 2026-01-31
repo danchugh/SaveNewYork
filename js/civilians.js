@@ -271,7 +271,9 @@ class Civilian {
             }
         }
 
-        // Fallback: Try static sprite
+        // Fallback: Try static sprite - DEBUG: Log when animation fallback is used
+        console.warn('Civilian using fallback! currentAnimName:', this.currentAnimName,
+            'animations:', this.animations ? Object.keys(this.animations) : 'null');
         const sprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('civilian') : null;
         if (sprite) {
             const size = 32;
