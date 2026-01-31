@@ -3133,8 +3133,9 @@ class Enemy {
             this.projectileDelay -= deltaTime;
         }
 
-        // Fire projectiles after animation completes
-        if (animComplete && this.projectilesFired < 2 && this.projectileDelay <= 0) {
+        // Fire projectiles on the last frame of attack animation
+        const isLastFrame = anim && anim.currentFrame === anim.frameCount - 1;
+        if (isLastFrame && this.projectilesFired < 2 && this.projectileDelay <= 0) {
             // Fire projectile at player
             if (typeof player !== 'undefined' && typeof projectileManager !== 'undefined') {
                 const angle = Math.atan2(player.y - this.y, player.x - this.x) * 180 / Math.PI;

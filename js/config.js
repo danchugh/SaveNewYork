@@ -81,7 +81,7 @@ const CONFIG = {
 
     // Material/Repair System
     MAX_MATERIALS: 50,              // Cap per player
-    WAVE_COUNTDOWN_DURATION: 5,     // Seconds between waves
+    WAVE_COUNTDOWN_DURATION: 10,    // Seconds between waves
     // Material collection: 
     // - Drones (STANDARD/AGGRESSIVE): chance to DROP physical pickups
     // - Stronger enemies: 75% chance to AUTO-COLLECT directly to player
@@ -168,7 +168,7 @@ const CONFIG = {
     DUST_DEVIL_SPAWN_MIN: 1,
     DUST_DEVIL_SPAWN_MAX: 4,
     DUST_DEVIL_LIFETIME: 30,
-    DUST_DEVIL_SUCTION_RADIUS: 24,
+    DUST_DEVIL_SUCTION_RADIUS: 48,
     DUST_DEVIL_CAPTURE_DURATION: 2,
     DUST_DEVIL_THROW_VELOCITY: 750,
     DUST_DEVIL_THROW_BUILDING_DAMAGE: 10,
