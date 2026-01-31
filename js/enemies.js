@@ -944,18 +944,11 @@ class Enemy {
                 this.debrisReleased = false; // True when debris is falling (no longer carried)
                 this.debrisX = 0;
                 this.debrisY = 0;
-                this.debrisFallSpeed = 100; // Slower fall (was 200)
+                this.debrisFallSpeed = 600; // Fast drop speed
                 this.debrisTargetBuilding = null;
-                // Pre-calculate debris shape for consistency
-                this.debrisShape = [];
-                for (let i = 0; i < 5; i++) {
-                    this.debrisShape.push({
-                        x: (Math.random() - 0.5) * 30,
-                        y: (Math.random() - 0.5) * 20,
-                        r: 8 + Math.random() * 8,
-                        color: Math.random() > 0.5 ? '#8B7355' : '#6B5344'
-                    });
-                }
+                this.debrisRotation = 0; // Rotation angle for spinning effect
+                this.debrisRotationSpeed = 8 + Math.random() * 4; // Radians per second
+                this.debrisHitTarget = false; // Track if debris hit something (for explosion)
 
                 // Recovery properties
                 this.recoveryTimer = 0;
@@ -1748,6 +1741,7 @@ class Enemy {
             // Debris falls straight down from where it was dropped
             if (this.hasDebris && this.debrisReleased) {
                 this.debrisY += this.debrisFallSpeed * deltaTime;
+                this.debrisRotation += this.debrisRotationSpeed * deltaTime; // Spin effect
 
                 // Find which building (if any) the debris is actually over
                 let hitBuilding = null;
@@ -2777,8 +2771,20 @@ class Enemy {
         if (this.climbY <= currentRooftopY) {
             this.scorpionState = 'ROOFTOP_IDLE';
             this.currentAnimName = 'crawl';
-            this.y = currentRooftopY - this.height / 2 + 4;
-            this.rooftopX = this.climbSide === 'left' ? 0 : (building.widthBlocks * CONFIG.BLOCK_SIZE - this.width);
+            this.y = currentRooftopY - this.height / 2 + 8;
+
+            // Find nearest column with a block to land on (prevents immediate falling)
+            const validCol = this.findNearestTopBlockColumn(building, this.climbSide);
+            if (validCol >= 0) {
+                // Position scorpion centered on the valid block
+                this.rooftopX = validCol * CONFIG.BLOCK_SIZE + CONFIG.BLOCK_SIZE / 2 - this.width / 2;
+                // Clamp to building bounds
+                this.rooftopX = Math.max(0, Math.min(this.rooftopX, building.widthBlocks * CONFIG.BLOCK_SIZE - this.width));
+            } else {
+                // Fallback to climb side (building may be destroyed)
+                this.rooftopX = this.climbSide === 'left' ? 0 : (building.widthBlocks * CONFIG.BLOCK_SIZE - this.width);
+            }
+
             this.attackTimer = 4; // Reset attack timer
         }
     }
@@ -2916,6 +2922,39 @@ class Enemy {
     }
 
     /**
+     * Find the nearest column with a block in the current top row
+     * Used when scorpion reaches rooftop to ensure it lands on a valid position
+     * @param {Object} building - The target building
+     * @param {string} preferredSide - 'left' or 'right' - which side to prefer
+     * @returns {number} Column index with a block, or -1 if none found
+     */
+    findNearestTopBlockColumn(building, preferredSide) {
+        if (!building || !building.blocks) return -1;
+
+        const topRow = this.findCurrentTopRow(building);
+        if (topRow < 0) return -1;
+
+        // Start from the preferred side and search inward
+        if (preferredSide === 'left') {
+            // Search from left to right
+            for (let col = 0; col < building.widthBlocks; col++) {
+                if (building.blocks[topRow] && building.blocks[topRow][col]) {
+                    return col;
+                }
+            }
+        } else {
+            // Search from right to left
+            for (let col = building.widthBlocks - 1; col >= 0; col--) {
+                if (building.blocks[topRow] && building.blocks[topRow][col]) {
+                    return col;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    /**
      * Scorpion idle on rooftop - no movement, slow crawl animation
      * Waits for attack timer or civilian detection
      */
@@ -2940,7 +2979,7 @@ class Enemy {
         // Stay in place - update world position based on current rooftop height
         const currentRooftopY = this.getCurrentRooftopY(building);
         this.x = building.x + this.rooftopX + this.width / 2;
-        this.y = currentRooftopY - this.height / 2 + 4;
+        this.y = currentRooftopY - this.height / 2 + 8;
 
         // Check for civilians on this building
         if (typeof civilianManager !== 'undefined') {
@@ -3001,7 +3040,7 @@ class Enemy {
 
         // Keep scorpion on current rooftop height
         const currentRooftopY = this.getCurrentRooftopY(building);
-        this.y = currentRooftopY - this.height / 2 + 4;
+        this.y = currentRooftopY - this.height / 2 + 8;
 
         // Check if civilian is still valid
         if (!this.targetCivilian || !this.targetCivilian.active || this.targetCivilian.state !== 'waiting') {
@@ -3071,7 +3110,7 @@ class Enemy {
         // Keep scorpion on current rooftop height
         if (this.targetBuilding) {
             const currentRooftopY = this.getCurrentRooftopY(this.targetBuilding);
-            this.y = currentRooftopY - this.height / 2 + 4;
+            this.y = currentRooftopY - this.height / 2 + 8;
         }
 
         // Face toward player
@@ -4727,6 +4766,9 @@ class Enemy {
     renderVultureKing(ctx) {
         // RENDER DEBRIS (Carried or Falling)
         if (this.hasDebris && this.debrisTargetBuilding) {
+            // Get debris_metal sprite
+            const debrisSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('debris_metal') : null;
+            const debrisSize = 32; // Size to render the debris
 
             // 1. CARRIED DEBRIS (Not yet released)
             if (!this.debrisReleased) {
@@ -4735,17 +4777,21 @@ class Enemy {
                 const carryOffsetX = this.facingRight ? 5 : -5;
                 const carryOffsetY = 25;
 
-                // Draw boulder being carried
-                this.debrisShape.forEach(p => {
-                    ctx.fillStyle = p.color;
+                if (debrisSprite && debrisSprite.complete) {
+                    // Draw sprite (single frame, no rotation when carried)
+                    ctx.drawImage(debrisSprite, 0, 0, debrisSprite.width, debrisSprite.height,
+                        carryOffsetX - debrisSize / 2, carryOffsetY - debrisSize / 2, debrisSize, debrisSize);
+                } else {
+                    // Fallback: simple circle
+                    ctx.fillStyle = '#8B7355';
                     ctx.beginPath();
-                    ctx.arc(carryOffsetX + p.x, carryOffsetY + p.y, p.r, 0, Math.PI * 2);
+                    ctx.arc(carryOffsetX, carryOffsetY, debrisSize / 2, 0, Math.PI * 2);
                     ctx.fill();
-                });
+                }
 
                 ctx.restore();
             }
-            // 2. FALLING DEBRIS (After release - falls straight down)
+            // 2. FALLING DEBRIS (After release - falls straight down with spin)
             else {
                 ctx.save();
                 // Debris is in world coordinates, so we need to undo the translate to (this.x, this.y)
@@ -4765,18 +4811,29 @@ class Enemy {
                     ctx.fill();
                 }
 
-                // --- FALLING BOULDER CLUSTER ---
-                this.debrisShape.forEach(p => {
-                    ctx.fillStyle = p.color;
-                    ctx.beginPath();
-                    ctx.arc(debrisX + p.x, debrisY + p.y, p.r, 0, Math.PI * 2);
-                    ctx.fill();
-                });
+                // --- FALLING DEBRIS WITH ROTATION ---
+                ctx.save();
+                ctx.translate(debrisX, debrisY);
+                ctx.rotate(this.debrisRotation); // Spinning effect
 
-                // Dust trail
+                if (debrisSprite && debrisSprite.complete) {
+                    // Draw sprite with rotation
+                    ctx.drawImage(debrisSprite, 0, 0, debrisSprite.width, debrisSprite.height,
+                        -debrisSize / 2, -debrisSize / 2, debrisSize, debrisSize);
+                } else {
+                    // Fallback: simple circle
+                    ctx.fillStyle = '#8B7355';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, debrisSize / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+
+                // Dust trail (behind the debris)
                 ctx.fillStyle = 'rgba(180, 160, 130, 0.4)';
                 ctx.beginPath();
-                ctx.ellipse(debrisX, debrisY - 30, 30, 40, 0, 0, Math.PI * 2);
+                ctx.ellipse(debrisX, debrisY - 30, 20, 30, 0, 0, Math.PI * 2);
                 ctx.fill();
 
                 ctx.restore();

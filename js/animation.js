@@ -201,7 +201,12 @@ class AnimatedSprite {
      * @param {number} y - Center Y position
      */
     render(ctx, x, y) {
-        if (!this.sheet || this.isComplete) return;
+        // IMPORTANT: Only check for missing sheet, NOT isComplete!
+        // When a 'once' animation completes, we must continue showing the last frame.
+        // If we return early when isComplete=true, the sprite will DISAPPEAR between
+        // animation state transitions (e.g., scorpion attack->idle, civilian help->idle).
+        // This bug has been reintroduced multiple times - DO NOT add isComplete check here!
+        if (!this.sheet) return;
 
         // Get the actual frame index in the sprite sheet
         let sheetFrameIndex = this.currentFrame;
