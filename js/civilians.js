@@ -272,7 +272,13 @@ class Civilian {
 
         // Try to use AnimatedSprite for current animation
         if (this.animations) {
-            const currentAnim = this.animations[this.currentAnimName];
+            let currentAnim = this.animations[this.currentAnimName];
+
+            // Fix: Fallback to idle if help animation is done but state hasn't switched (prevents flickers)
+            if (this.currentAnimName === 'help' && currentAnim && currentAnim.isComplete) {
+                currentAnim = this.animations.idle;
+            }
+
             if (currentAnim) {
                 // AnimatedSprite.render expects center position, we're already translated
                 currentAnim.render(ctx, 0, 0);

@@ -212,7 +212,7 @@ const AbilityManager = {
                             EffectsManager.addExplosion(x, this.y, 30, '#ff6600');
                         }
                     }
-                    if (typeof SoundManager !== 'undefined') SoundManager.explosion();
+                    if (typeof SoundManager !== 'undefined') SoundManager.buildingCollapse();
                 }
             },
 
@@ -387,7 +387,7 @@ const AbilityManager = {
                     }
                 }
 
-                if (typeof SoundManager !== 'undefined') SoundManager.explosion();
+                if (typeof SoundManager !== 'undefined') SoundManager.buildingCollapse();
             }, delay * 1000);
         }
 

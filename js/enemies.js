@@ -4673,7 +4673,13 @@ class Enemy {
 
         // Try animated sprite first
         if (this.animations) {
-            const currentAnim = this.animations[this.currentAnimName];
+            let currentAnim = this.animations[this.currentAnimName];
+
+            // Fix: Fallback to crawl if attack is done but state hasn't switched yet (prevents flickering)
+            if (this.currentAnimName === 'attack' && currentAnim && currentAnim.isComplete) {
+                currentAnim = this.animations.crawl;
+            }
+
             if (currentAnim) {
                 ctx.save();
 
