@@ -2667,9 +2667,10 @@ class Enemy {
         }
 
         // Determine which side to climb based on approach direction
-        // Walking right (from left) → climb right side, Walking left (from right) → climb left side
+        // Walking right (from left) → arrive at left side → climb left side
+        // Walking left (from right) → arrive at right side → climb right side
         const buildingCenterX = this.targetBuilding.x + (this.targetBuilding.widthBlocks * CONFIG.BLOCK_SIZE) / 2;
-        this.climbSide = this.x < buildingCenterX ? 'right' : 'left';
+        this.climbSide = this.x < buildingCenterX ? 'left' : 'right';
     }
 
     /**
@@ -3043,6 +3044,12 @@ class Enemy {
         // Check if attack animation completed
         const anim = this.animations ? this.animations.attack : null;
         const animComplete = anim ? anim.isComplete : true;
+
+        // Switch to crawl animation once attack animation completes (prevents disappearing)
+        // Stay in RANGED_ATTACK state to continue firing projectiles
+        if (animComplete && this.currentAnimName === 'attack') {
+            this.currentAnimName = 'crawl';
+        }
 
         // Count down projectile delay
         if (this.projectileDelay > 0) {
