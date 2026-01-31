@@ -2750,11 +2750,11 @@ class Enemy {
         // Move up
         this.climbY -= climbSpeed * deltaTime;
 
-        // Position scorpion on building edge
+        // Position scorpion on building edge (outside the building)
         if (this.climbSide === 'left') {
-            this.x = building.x + this.width / 2;
+            this.x = building.x;
         } else {
-            this.x = building.x + building.widthBlocks * CONFIG.BLOCK_SIZE - this.width / 2;
+            this.x = building.x + building.widthBlocks * CONFIG.BLOCK_SIZE;
         }
         this.y = this.climbY - this.height / 2;
 
@@ -2765,7 +2765,7 @@ class Enemy {
         if (this.climbY <= currentRooftopY) {
             this.scorpionState = 'ROOFTOP_IDLE';
             this.currentAnimName = 'crawl';
-            this.y = currentRooftopY - this.height / 2;
+            this.y = currentRooftopY - this.height / 2 + 4;
             this.rooftopX = this.climbSide === 'left' ? 0 : (building.widthBlocks * CONFIG.BLOCK_SIZE - this.width);
             this.attackTimer = 4; // Reset attack timer
         }
@@ -2902,7 +2902,7 @@ class Enemy {
         // Stay in place - update world position based on current rooftop height
         const currentRooftopY = this.getCurrentRooftopY(building);
         this.x = building.x + this.rooftopX + this.width / 2;
-        this.y = currentRooftopY - this.height / 2;
+        this.y = currentRooftopY - this.height / 2 + 4;
 
         // Check for civilians on this building
         if (typeof civilianManager !== 'undefined') {
@@ -2963,7 +2963,7 @@ class Enemy {
 
         // Keep scorpion on current rooftop height
         const currentRooftopY = this.getCurrentRooftopY(building);
-        this.y = currentRooftopY - this.height / 2;
+        this.y = currentRooftopY - this.height / 2 + 4;
 
         // Check if civilian is still valid
         if (!this.targetCivilian || !this.targetCivilian.active || this.targetCivilian.state !== 'waiting') {
@@ -3033,7 +3033,7 @@ class Enemy {
         // Keep scorpion on current rooftop height
         if (this.targetBuilding) {
             const currentRooftopY = this.getCurrentRooftopY(this.targetBuilding);
-            this.y = currentRooftopY - this.height / 2;
+            this.y = currentRooftopY - this.height / 2 + 4;
         }
 
         // Face toward player
@@ -3049,6 +3049,10 @@ class Enemy {
         // Stay in RANGED_ATTACK state to continue firing projectiles
         if (animComplete && this.currentAnimName === 'attack') {
             this.currentAnimName = 'crawl';
+            // Reset crawl animation to ensure it's playing
+            if (this.animations && this.animations.crawl) {
+                this.animations.crawl.reset();
+            }
         }
 
         // Count down projectile delay
