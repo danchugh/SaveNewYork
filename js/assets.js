@@ -15,7 +15,7 @@ const AssetManager = {
         'enemy_missile',
         'boss_main', 'miniboss_charger', 'miniboss_gunner',
         'civilian', 'construction_vehicle', 'construction_worker',
-        'debris_concrete', 'debris_metal', 'debris_spark', 'debris_smoke',
+        'debris_concrete', 'debris_metal', 'debris_metal2', 'debris_spark', 'debris_smoke',
         'civilian_idle', 'civilian_help', 'civilian_fall',
         'drone_fly', 'drone_attack', 'drone_death',
         'drone_aggressive_fly', 'drone_aggressive_attack', 'drone_aggressive_death',
@@ -99,6 +99,7 @@ const AssetManager = {
             // Debris sprite sheets (for animated particles)
             'debris_concrete': 'assets/debris_concrete.png',
             'debris_metal': 'assets/debris_metal.png',
+            'debris_metal2': 'assets/debris_metal2.png',
             'debris_spark': 'assets/debris_spark.png',
             'debris_smoke': 'assets/debris_smoke.png',
 

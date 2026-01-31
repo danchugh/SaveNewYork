@@ -4793,19 +4793,8 @@ class Enemy {
     renderVultureKing(ctx) {
         // RENDER DEBRIS (Carried or Falling)
         if (this.hasDebris && this.debrisTargetBuilding) {
-            // Get debris_metal sprite
-            const debrisSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('debris_metal') : null;
-            // Debug log once per vulture
-            if (!this._debrisLogged) {
-                console.log('Vulture debris sprite:', debrisSprite ? {
-                    type: debrisSprite.constructor.name,
-                    width: debrisSprite.width,
-                    height: debrisSprite.height,
-                    isCanvas: debrisSprite instanceof HTMLCanvasElement,
-                    isImage: debrisSprite instanceof HTMLImageElement
-                } : 'NULL');
-                this._debrisLogged = true;
-            }
+            // Get debris_metal2 sprite (single static image)
+            const debrisSprite = typeof AssetManager !== 'undefined' ? AssetManager.getImage('debris_metal2') : null;
             const debrisSize = 32; // Size to render the debris
 
             // 1. CARRIED DEBRIS (Not yet released)
@@ -4816,13 +4805,9 @@ class Enemy {
                 const carryOffsetY = 25;
 
                 if (debrisSprite) {
-                    // Draw single frame (128x128) from sprite sheet, no rotation when carried
-                    ctx.drawImage(debrisSprite, 0, 0, 128, 128,
+                    // Draw the full image scaled to debrisSize
+                    ctx.drawImage(debrisSprite,
                         carryOffsetX - debrisSize / 2, carryOffsetY - debrisSize / 2, debrisSize, debrisSize);
-                    // DEBUG: Draw outline to verify position
-                    ctx.strokeStyle = '#00FF00';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(carryOffsetX - debrisSize / 2, carryOffsetY - debrisSize / 2, debrisSize, debrisSize);
                 } else {
                     // Fallback: procedural debris
                     ctx.fillStyle = '#888888';
@@ -4859,13 +4844,9 @@ class Enemy {
                 ctx.rotate(this.debrisRotation); // Spinning effect
 
                 if (debrisSprite) {
-                    // Draw single frame (128x128) from sprite sheet with rotation
-                    ctx.drawImage(debrisSprite, 0, 0, 128, 128,
+                    // Draw the full image scaled to debrisSize with rotation
+                    ctx.drawImage(debrisSprite,
                         -debrisSize / 2, -debrisSize / 2, debrisSize, debrisSize);
-                    // DEBUG: Draw outline to verify position
-                    ctx.strokeStyle = '#00FF00';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(-debrisSize / 2, -debrisSize / 2, debrisSize, debrisSize);
                 } else {
                     // Fallback: procedural debris
                     ctx.fillStyle = '#888888';
