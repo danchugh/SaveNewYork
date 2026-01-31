@@ -859,7 +859,7 @@ class Enemy {
                 this.height = 43;
 
                 // State machine
-                this.scorpionState = 'SPAWNING'; // SPAWNING, CRAWLING_TO_BUILDING, CLIMBING, ROOFTOP_CRAWL, CLAW_ATTACK, RANGED_ATTACK
+                this.scorpionState = 'SPAWNING'; // SPAWNING, CRAWLING_TO_BUILDING, CLIMBING, ROOFTOP_IDLE, CLAW_ATTACK, RANGED_ATTACK
 
                 // Spawn configuration
                 this.spawnSide = Math.random() < 0.5 ? 'left' : 'right';
@@ -1409,7 +1409,12 @@ class Enemy {
         if ((this.type === EnemyType.STANDARD || this.type === EnemyType.AGGRESSIVE || this.type === EnemyType.SPLITTER || this.type === EnemyType.TANK || this.type === EnemyType.SCORPION) && this.animations) {
             const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
-                currentAnim.update(deltaTime);
+                // Scorpion idle on rooftop: run crawl animation at 1/4 speed
+                if (this.type === EnemyType.SCORPION && this.scorpionState === 'ROOFTOP_IDLE') {
+                    currentAnim.update(deltaTime * 0.25);
+                } else {
+                    currentAnim.update(deltaTime);
+                }
             }
         }
 
@@ -2567,7 +2572,7 @@ class Enemy {
             if (enemy.targetBuilding === building) {
                 // Check if scorpion is climbing or on rooftop
                 if (enemy.scorpionState === 'CLIMBING' ||
-                    enemy.scorpionState === 'ROOFTOP_CRAWL' ||
+                    enemy.scorpionState === 'ROOFTOP_IDLE' ||
                     enemy.scorpionState === 'CLAW_ATTACK' ||
                     enemy.scorpionState === 'RANGED_ATTACK') {
                     return true;
@@ -2584,7 +2589,7 @@ class Enemy {
         const speedMod = this.bellSlowed ? 0.3 : 1.0;
 
         // Scuttle sound timer (during crawl/climb states)
-        if (this.scorpionState === 'CRAWLING_TO_BUILDING' || this.scorpionState === 'CLIMBING' || this.scorpionState === 'ROOFTOP_CRAWL') {
+        if (this.scorpionState === 'CRAWLING_TO_BUILDING' || this.scorpionState === 'CLIMBING' || this.scorpionState === 'ROOFTOP_IDLE') {
             this.scuttleSoundTimer -= deltaTime;
             if (this.scuttleSoundTimer <= 0) {
                 this.scuttleSoundTimer = 0.5 + Math.random() * 0.3;
@@ -2611,8 +2616,8 @@ class Enemy {
                 this.updateScorpionClimbing(deltaTime, speedMod);
                 break;
 
-            case 'ROOFTOP_CRAWL':
-                this.updateScorpionRooftop(deltaTime, speedMod);
+            case 'ROOFTOP_IDLE':
+                this.updateScorpionRooftopIdle(deltaTime, speedMod);
                 break;
 
             case 'CLAW_ATTACK':
@@ -2711,6 +2716,7 @@ class Enemy {
 
     /**
      * Scorpion climbing up building wall
+     * Scorpion always reaches the top regardless of missing blocks
      */
     updateScorpionClimbing(deltaTime, speedMod) {
         if (!this.targetBuilding) return;
@@ -2718,17 +2724,8 @@ class Enemy {
         const climbSpeed = 40 * speedMod * this.speedModifier; // 40 px/s base with variation
         const building = this.targetBuilding;
 
-        // Check if building blocks beneath scorpion are destroyed - fall and die
-        if (!this.checkBuildingSupportBeneath()) {
-            this.scorpionState = 'FALLING';
-            this.currentAnimName = 'death';
-            if (this.animations && this.animations.death) {
-                this.animations.death.reset();
-            }
-            this.fallSpeed = 0;
-            this.fallGravity = 800;
-            return;
-        }
+        // Face toward the building (left side = face right, right side = face left)
+        this.facingRight = (this.climbSide === 'left');
 
         // Handle intro animation transition to loop
         if (this.climbAnimPhase === 'intro') {
@@ -2761,42 +2758,12 @@ class Enemy {
 
         // Check if reached rooftop
         if (this.climbY <= building.y) {
-            this.scorpionState = 'ROOFTOP_CRAWL';
+            this.scorpionState = 'ROOFTOP_IDLE';
             this.currentAnimName = 'crawl';
             this.y = building.y - this.height / 2;
             this.rooftopX = this.climbSide === 'left' ? 0 : (building.widthBlocks * CONFIG.BLOCK_SIZE - this.width);
-            this.rooftopDirection = this.climbSide === 'left' ? 1 : -1;
             this.attackTimer = 4; // Reset attack timer
         }
-    }
-
-    /**
-     * Check if building has blocks beneath the scorpion to support it
-     */
-    checkBuildingSupportBeneath() {
-        if (!this.targetBuilding) return false;
-        const building = this.targetBuilding;
-
-        // Get the row the scorpion is currently at
-        const row = Math.floor((this.climbY - building.y) / CONFIG.BLOCK_SIZE);
-        if (row < 0 || row >= building.heightBlocks) return true; // Above or at rooftop is fine
-
-        // Check if there's a block at the scorpion's position on the climb side
-        const col = this.climbSide === 'left' ? 0 : building.widthBlocks - 1;
-
-        if (building.blocks && building.blocks[row] && building.blocks[row][col]) {
-            return true; // Block exists, scorpion is supported
-        }
-
-        // Also check adjacent column in case building is narrow
-        const adjCol = this.climbSide === 'left' ? 1 : building.widthBlocks - 2;
-        if (adjCol >= 0 && adjCol < building.widthBlocks) {
-            if (building.blocks && building.blocks[row] && building.blocks[row][adjCol]) {
-                return true;
-            }
-        }
-
-        return false; // No support, scorpion falls
     }
 
     /**
@@ -2858,33 +2825,35 @@ class Enemy {
 
     /**
      * Check if building has blocks to support scorpion on rooftop
+     * Returns false if: building has no blocks OR blocks beneath scorpion are destroyed
      */
     checkRooftopSupport() {
         if (!this.targetBuilding) return false;
         const building = this.targetBuilding;
 
-        // Check if the building has any blocks left in the top row
-        if (!building.blocks || building.blocks.length === 0) return false;
+        // Check if the building has any blocks left at all
+        if (!building.blocks || building.getBlockCount() === 0) return false;
 
         // Check for blocks in the top row beneath the scorpion's position
         const scorpionCol = Math.floor(this.rooftopX / CONFIG.BLOCK_SIZE);
         const topRow = 0; // Top row of the building
 
-        // Check a few columns around the scorpion's position
-        for (let col = Math.max(0, scorpionCol - 1); col <= Math.min(building.widthBlocks - 1, scorpionCol + 1); col++) {
+        // Check the column directly beneath the scorpion and adjacent columns
+        for (let col = Math.max(0, scorpionCol); col <= Math.min(building.widthBlocks - 1, scorpionCol + 1); col++) {
             if (building.blocks[topRow] && building.blocks[topRow][col]) {
                 return true; // Found support
             }
         }
 
-        // Also check if there are any blocks in the building at all
-        return building.getBlockCount() > 0;
+        // No blocks beneath scorpion - fall
+        return false;
     }
 
     /**
-     * Scorpion pacing on rooftop
+     * Scorpion idle on rooftop - no movement, slow crawl animation
+     * Waits for attack timer or civilian detection
      */
-    updateScorpionRooftop(deltaTime, speedMod) {
+    updateScorpionRooftopIdle(deltaTime, speedMod) {
         if (!this.targetBuilding) return;
 
         const building = this.targetBuilding;
@@ -2902,25 +2871,7 @@ class Enemy {
             return;
         }
 
-        const rooftopSpeed = 30 * speedMod; // 30 px/s
-        const margin = 10;
-        const minX = margin;
-        const maxX = building.widthBlocks * CONFIG.BLOCK_SIZE - margin - this.width;
-
-        // Pace back and forth
-        this.rooftopX += this.rooftopDirection * rooftopSpeed * deltaTime;
-        this.facingRight = this.rooftopDirection > 0;
-
-        // Bounce at edges
-        if (this.rooftopX <= minX) {
-            this.rooftopX = minX;
-            this.rooftopDirection = 1;
-        } else if (this.rooftopX >= maxX) {
-            this.rooftopX = maxX;
-            this.rooftopDirection = -1;
-        }
-
-        // Update world position
+        // Stay in place - update world position based on rooftopX (doesn't change)
         this.x = building.x + this.rooftopX + this.width / 2;
         this.y = building.y - this.height / 2;
 
@@ -2984,7 +2935,7 @@ class Enemy {
         // Check if civilian is still valid
         if (!this.targetCivilian || !this.targetCivilian.active || this.targetCivilian.state !== 'waiting') {
             this.targetCivilian = null;
-            this.scorpionState = 'ROOFTOP_CRAWL';
+            this.scorpionState = 'ROOFTOP_IDLE';
             this.currentAnimName = 'crawl';
             return;
         }
@@ -3012,7 +2963,7 @@ class Enemy {
             this.targetCivilian = null;
             // Return to rooftop crawl after claw animation completes
             if (this.animations && this.animations.claw && this.animations.claw.isComplete) {
-                this.scorpionState = 'ROOFTOP_CRAWL';
+                this.scorpionState = 'ROOFTOP_IDLE';
                 this.currentAnimName = 'crawl';
                 this.attackTimer = 4;
             }
@@ -3020,7 +2971,7 @@ class Enemy {
 
         // Check if claw animation completed
         if (this.animations && this.animations.claw && this.animations.claw.isComplete) {
-            this.scorpionState = 'ROOFTOP_CRAWL';
+            this.scorpionState = 'ROOFTOP_IDLE';
             this.currentAnimName = 'crawl';
             this.attackTimer = 4;
         }
@@ -3077,7 +3028,7 @@ class Enemy {
         if (this.projectilesFired >= 2) {
             this.projectileDelay -= deltaTime;
             if (this.projectileDelay <= -0.3) { // Wait 0.3s after second shot
-                this.scorpionState = 'ROOFTOP_CRAWL';
+                this.scorpionState = 'ROOFTOP_IDLE';
                 this.currentAnimName = 'crawl';
                 this.attackTimer = 4; // Reset for next attack cycle
             }
@@ -4610,22 +4561,6 @@ class Enemy {
                     ctx.scale(-1, 1);
                 }
 
-                // For climbing state, rotate 90 degrees to face upward along wall
-                if (this.scorpionState === 'CLIMBING') {
-                    // Rotate to face up the wall
-                    // If on left side of building, rotate -90 degrees (face right/up)
-                    // If on right side, rotate 90 degrees (face left/up)
-                    if (this.climbSide === 'left') {
-                        ctx.rotate(-Math.PI / 2); // -90 degrees
-                    } else {
-                        ctx.rotate(Math.PI / 2); // 90 degrees
-                    }
-                    // Undo the flip since rotation handles orientation
-                    if (!this.facingRight) {
-                        ctx.scale(-1, 1);
-                    }
-                }
-
                 // For falling state, apply tumble rotation
                 if (this.scorpionState === 'FALLING') {
                     ctx.rotate(this.rotation || 0);
@@ -4649,18 +4584,6 @@ class Enemy {
         // Apply flip for facing direction
         if (!this.facingRight) {
             ctx.scale(-1, 1);
-        }
-
-        // Rotate for climbing
-        if (this.scorpionState === 'CLIMBING') {
-            if (this.climbSide === 'left') {
-                ctx.rotate(-Math.PI / 2);
-            } else {
-                ctx.rotate(Math.PI / 2);
-            }
-            if (!this.facingRight) {
-                ctx.scale(-1, 1);
-            }
         }
 
         // Rotate for falling
