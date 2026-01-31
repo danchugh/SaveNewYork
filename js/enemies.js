@@ -1310,10 +1310,10 @@ class Enemy {
             });
         };
 
-        // Create animations
+        // Create animations (with frame count overrides where needed)
         this.animations.crawl = createAnim('z2_scorpion_crawl', 10, 'loop');
-        this.animations.claw = createAnim('z2_scorpion_claw', 12, 'once');
-        this.animations.attack = createAnim('z2_scorpion_attack', 10, 'once');
+        this.animations.claw = createAnim('z2_scorpion_claw', 12, 'once', 46);    // 46 frames total
+        this.animations.attack = createAnim('z2_scorpion_attack', 10, 'once', 13); // 13 frames total
         this.animations.death = createAnim('z2_scorpion_death', 10, 'once');
 
         // Climb animation needs special handling for intro (frames 1-12) and loop (frames 13-18)
