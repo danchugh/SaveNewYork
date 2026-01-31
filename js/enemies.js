@@ -4673,14 +4673,10 @@ class Enemy {
         }
 
         // Try animated sprite first
+        // IMPORTANT: Render should ONLY draw - never check animation state or make fallback decisions.
+        // State transitions happen in update(). Render just draws currentAnimName's current frame.
         if (this.animations) {
-            let currentAnim = this.animations[this.currentAnimName];
-
-            // Fix: Fallback to crawl if attack is done but state hasn't switched yet (prevents flickering)
-            if (this.currentAnimName === 'attack' && currentAnim && currentAnim.isComplete) {
-                currentAnim = this.animations.crawl;
-            }
-
+            const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
                 ctx.save();
 

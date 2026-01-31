@@ -271,14 +271,10 @@ class Civilian {
         ctx.translate(this.x, this.y);
 
         // Try to use AnimatedSprite for current animation
+        // IMPORTANT: Render should ONLY draw - never check animation state or make fallback decisions.
+        // State transitions happen in update(). Render just draws currentAnimName's current frame.
         if (this.animations) {
-            let currentAnim = this.animations[this.currentAnimName];
-
-            // Fix: Fallback to idle if help animation is done but state hasn't switched (prevents flickers)
-            if (this.currentAnimName === 'help' && currentAnim && currentAnim.isComplete) {
-                currentAnim = this.animations.idle;
-            }
-
+            const currentAnim = this.animations[this.currentAnimName];
             if (currentAnim) {
                 // AnimatedSprite.render expects center position, we're already translated
                 currentAnim.render(ctx, 0, 0);
